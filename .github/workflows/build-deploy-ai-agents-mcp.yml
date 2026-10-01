@@ -1,0 +1,33 @@
+name: CI & Pack GovUK.Dfe.AI.Agents.Mcp
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - "src/GovUK.Dfe.AI.Agents.Mcp/**"
+  pull_request:
+    branches: [ main ]
+    paths:
+      - "src/GovUK.Dfe.AI.Agents.Mcp/**"
+
+jobs:
+  build-and-test:
+    uses: ./.github/workflows/build-test-template.yml
+    with:
+      project_name: GovUK.Dfe.AI.Agents.Mcp
+      project_path: src/GovUK.Dfe.AI.Agents.Mcp
+    secrets:
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+  pack-and-release:
+    needs: build-and-test
+    if: needs.build-and-test.result == 'success'
+    permissions:
+      contents: write
+      packages: write
+    uses: ./.github/workflows/pack-template.yml
+    with:
+      project_name: GovUK.Dfe.AI.Agents.Mcp
+      project_path: src/GovUK.Dfe.AI.Agents.Mcp/GovUK.Dfe.AI.Agents.Mcp.csproj
+    secrets:
+      NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}

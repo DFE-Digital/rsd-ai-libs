@@ -1,0 +1,10 @@
+<Project>
+  <!--
+    GovUK.Dfe.AI.Agents exposes Azure AI Foundry types from the OpenAI SDK's Responses API, which the SDK marks experimental
+    (OPENAI001). Foundry agents can only be run through that API, so the warning is suppressed in every project that uses
+    this package. Remove this file when the OpenAI SDK marks the Responses API stable.
+  -->
+  <PropertyGroup>
+    <NoWarn>$(NoWarn);OPENAI001</NoWarn>
+  </PropertyGroup>
+</Project>

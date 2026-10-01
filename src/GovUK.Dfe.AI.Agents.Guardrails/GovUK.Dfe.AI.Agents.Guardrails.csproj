@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <PackageReadmeFile>readme.md</PackageReadmeFile>
+    <Title>GovUK.Dfe.AI.Agents.Guardrails</Title>
+    <Description>Azure AI Foundry guardrails for GovUK.Dfe.AI.Agents: apply content filters and Prompt Shields to the model deployments agents use, and check them at startup.</Description>
+    <Authors>DFE-Digital</Authors>
+    <NoWarn>$(NoWarn);OPENAI001</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="readme.md" Pack="true" PackagePath="\" />
+    <InternalsVisibleTo Include="GovUK.Dfe.AI.Agents.Guardrails.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Replace with <PackageReference Include="GovUK.Dfe.AI.Agents" Version="X.Y.Z" /> once core is on NuGet.org, then
+         delete the RequireCorePackageReference target below. -->
+    <ProjectReference Include="..\GovUK.Dfe.AI.Agents\GovUK.Dfe.AI.Agents.csproj" />
+  </ItemGroup>
+
+  <!-- Packed with a project reference, this package would depend on core at this package's own version, which may not
+       exist. Stop packing, so a package nobody can restore is never published. -->
+  <Target Name="RequireCorePackageReference" BeforeTargets="GenerateNuspec">
+    <Error Condition="'@(ProjectReference-&gt;AnyHaveMetadataValue('Filename', 'GovUK.Dfe.AI.Agents'))' == 'true'" Text="$(MSBuildProjectName) can't be packed while it references GovUK.Dfe.AI.Agents as a project: its package would depend on a core version that may not exist. Publish core, then replace the ProjectReference with a pinned PackageReference." />
+  </Target>
+
+  <ItemGroup>
+    <PackageReference Include="Azure.ResourceManager.CognitiveServices" Version="1.6.0" />
+  </ItemGroup>
+
+</Project>

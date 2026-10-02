@@ -7,6 +7,7 @@ using GovUK.Dfe.AI.Agents.Constants;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using System.Net;
+using GovUK.Dfe.AI.Agents.Diagnostics;
 
 namespace GovUK.Dfe.AI.Agents.Concurrency;
 
@@ -93,7 +94,7 @@ internal sealed class BlobRunSlotStore(BlobContainerClient container, int capaci
         {
             // Private: no anonymous access, whatever the account allows.
             await container.CreateAsync(PublicAccessType.None, cancellationToken: cancellationToken).ConfigureAwait(false);
-            _logger.LogInformation("Created the run slot container {Container}", container.Uri);
+            _logger.CreatedRunSlotContainer(container.Uri);
         }
         catch (RequestFailedException ex) when (ex.ErrorCode == BlobErrorCode.ContainerAlreadyExists)
         {

@@ -120,19 +120,19 @@ internal sealed class AgentService(IAgentRunnerService agentRunner, IAgentRuntim
         {
             if (!definition.IsManagedAgent)
             {
-                _logger.LogInformation("Skipping {AgentName}: ephemeral agents are created by the app that runs them", definition.Name);
+                _logger.SkippingEphemeralAgent(definition.Name);
                 continue;
             }
 
             var spec = await _specs.BuildAsync(definition, cancellationToken).ConfigureAwait(false);
             if (spec is null)
             {
-                _logger.LogInformation("Skipping {AgentName}: it's managed outside this app", definition.Name);
+                _logger.SkippingExternallyManagedAgent(definition.Name);
                 continue;
             }
 
             var agent = await factory.GetOrCreateAsync(spec, cancellationToken).ConfigureAwait(false);
-            _logger.LogInformation("Provisioned {AgentName} at version {Version}", agent.Name, agent.Version);
+            _logger.ProvisionedAgent(agent.Name, agent.Version);
             provisioned.Add(agent);
         }
 

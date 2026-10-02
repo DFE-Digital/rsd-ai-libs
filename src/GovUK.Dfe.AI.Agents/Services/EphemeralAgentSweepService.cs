@@ -2,6 +2,7 @@ using GovUK.Dfe.AI.Agents.Services.Interfaces;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using System.Security.Cryptography;
+using GovUK.Dfe.AI.Agents.Diagnostics;
 
 namespace GovUK.Dfe.AI.Agents.Services;
 
@@ -40,7 +41,7 @@ internal sealed class EphemeralAgentSweepService(IAgentRuntimeService runtime, T
             var deleted = await runtime.DeleteOrphanedEphemeralAgentsAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
             if (deleted.Count > 0)
             {
-                logger.LogInformation("Deleted {Count} orphaned ephemeral agent(s)", deleted.Count);
+                logger.DeletedOrphanedEphemeralAgents(deleted.Count);
             }
         }
         catch (Exception ex) when (ex is not OperationCanceledException)

@@ -14,6 +14,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json.Nodes;
 using GovUK.Dfe.AI.Agents.Options;
+using GovUK.Dfe.AI.Agents.Diagnostics;
 
 namespace GovUK.Dfe.AI.Agents.Factories;
 
@@ -133,7 +134,7 @@ public sealed class FoundryAgentFactory(AgentAdministrationClient administration
         catch (ClientResultException ex) when (ex.Status == (int)HttpStatusCode.NotFound)
         {
             // Already gone, e.g. another instance deleted it first: the goal is met.
-            _logger.LogDebug(ex, "Foundry agent {AgentName} was already deleted", name);
+            _logger.AgentAlreadyDeleted(ex, name);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -156,7 +157,7 @@ public sealed class FoundryAgentFactory(AgentAdministrationClient administration
         if (_versionPinning.GetPinnedVersion(name) is { } pinned)
         {
             // A pinned environment only uses the agent; its versions are managed where they're created.
-            _logger.LogInformation("Not pruning {AgentName}: this environment is pinned to version {Version}", name, pinned);
+            _logger.NotPruningPinnedAgent(name, pinned);
             return;
         }
 
@@ -173,7 +174,7 @@ public sealed class FoundryAgentFactory(AgentAdministrationClient administration
             {
                 if (_versionPinning.IsProtected(name, version))
                 {
-                    _logger.LogInformation("Keeping version {Version} of {AgentName} because it's protected", version, name);
+                    _logger.KeepingProtectedVersion(version, name);
                     continue;
                 }
 
@@ -215,13 +216,13 @@ public sealed class FoundryAgentFactory(AgentAdministrationClient administration
             catch (InvalidOperationException ex)
             {
                 // DeleteAgentAsync has logged it; carry on so one failure doesn't block the rest.
-                _logger.LogDebug(ex, "Skipping stale agent {AgentName} after a failed delete", name);
+                _logger.SkippingStaleAgent(ex, name);
             }
         }
 
         if (deleted.Count > 0)
         {
-            _logger.LogInformation("Deleted {Count} stale Foundry agent(s): {AgentNames}", deleted.Count, string.Join(", ", deleted));
+            _logger.DeletedStaleAgents(deleted.Count, deleted);
         }
 
         return deleted;
@@ -277,8 +278,7 @@ public sealed class FoundryAgentFactory(AgentAdministrationClient administration
         {
             if (Matches(spec, version.Definition))
             {
-                _logger.LogInformation("Reusing version {Version} of {AgentName}, which matches this spec but isn't the latest",
-                    version.Version, spec.Name);
+                _logger.ReusingMatchingVersion(version.Version, spec.Name);
                 return version;
             }
 
@@ -347,7 +347,7 @@ public sealed class FoundryAgentFactory(AgentAdministrationClient administration
         }
         catch (ClientResultException ex) when (ex.Status == (int)HttpStatusCode.NotFound)
         {
-            _logger.LogDebug(ex, "Version {Version} of {AgentName} was already deleted", version, name);   // another instance pruned it
+            _logger.AgentVersionAlreadyDeleted(ex, version, name);   // another instance pruned it
         }
     }
 

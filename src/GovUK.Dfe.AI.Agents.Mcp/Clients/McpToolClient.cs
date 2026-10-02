@@ -13,6 +13,7 @@ using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
 using OpenAI.Responses;
+using GovUK.Dfe.AI.Agents.Mcp.Diagnostics;
 
 namespace GovUK.Dfe.AI.Agents.Mcp.Clients;
 
@@ -403,7 +404,7 @@ public sealed class McpToolClient : IMcpToolClient, IDisposable
         }
         catch (Exception ex)
         {
-            _logger.LogDebug(ex, "Ignoring an error closing a failed connection to MCP server '{ServerLabel}'", _options.ServerLabel);
+            _logger.IgnoringCloseError(ex, _options.ServerLabel);
         }
     }
 

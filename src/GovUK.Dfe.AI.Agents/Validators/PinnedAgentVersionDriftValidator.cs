@@ -8,6 +8,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using GovUK.Dfe.AI.Agents.Options;
 using GovUK.Dfe.AI.Agents.Providers.Interfaces;
 using GovUK.Dfe.AI.Agents.Builders;
+using GovUK.Dfe.AI.Agents.Diagnostics;
 
 namespace GovUK.Dfe.AI.Agents.Validators;
 
@@ -47,7 +48,7 @@ internal sealed class PinnedAgentVersionDriftValidator(IAgentDefinitionProvider 
         var spec = await _specs.BuildAsync(definition, cancellationToken).ConfigureAwait(false);
         if (spec is null)
         {
-            _logger.LogInformation("Skipping pinned version drift check for '{AgentName}'; it's managed outside this app.", definition.Name);
+            _logger.SkippingPinnedDriftCheck(definition.Name);
             return;
         }
 

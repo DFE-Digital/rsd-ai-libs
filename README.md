@@ -45,8 +45,9 @@ dotnet test GovUK.Dfe.AI.Agents.slnx
 ## Releasing
 
 Each package has its own workflow, `.github/workflows/build-deploy-ai-agents[-{addon}].yml`, which runs when that
-package's folder changes. It builds, tests, runs SonarCloud analysis, packs and pushes to NuGet.org, and creates a
-GitHub release.
+package's folder changes. It builds, tests, packs and pushes to NuGet.org, and creates a GitHub release. SonarCloud
+analysis runs once for the whole solution, with coverage from every test project, in
+[sonarcloud.yml](.github/workflows/sonarcloud.yml).
 
 - **Pull request:** publishes a prerelease, e.g. `1.0.5-prerelease.3`.
 - **Merge to `main`:** publishes a release, e.g. `1.0.5`.

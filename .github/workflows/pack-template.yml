@@ -22,20 +22,23 @@ jobs:
     permissions:
       contents: write
       packages: write
+    env:
+      PROJECT_NAME: ${{ inputs.project_name }}
+      PROJECT_PATH: ${{ inputs.project_path }}
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0
 
       - name: Setup .NET SDK
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
         with:
           dotnet-version: '10.0.x'
 
       - name: Install GitVersion
-        uses: gittools/actions/gitversion/setup@v4.5.0
+        uses: gittools/actions/gitversion/setup@bc6623af8fc07d5a8903052dd46da33403eec8e8 # v4.5.0
         with:
           versionSpec: '6.7.x'
 
@@ -46,16 +49,16 @@ jobs:
         id: gitversion
         run: |
           BASE=$(dotnet-gitversion \
-            /overrideconfig tag-prefix="^${{ inputs.project_name }}-" \
+            /overrideconfig tag-prefix="^${PROJECT_NAME}-" \
             /showvariable MajorMinorPatch)
 
           RAW_TAG=$(dotnet-gitversion \
-            /overrideconfig tag-prefix="^${{ inputs.project_name }}-" \
+            /overrideconfig tag-prefix="^${PROJECT_NAME}-" \
             /showvariable PreReleaseTag)
 
           LABEL=${RAW_TAG%%[0-9]*}
           NUM=$(dotnet-gitversion \
-            /overrideconfig tag-prefix="^${{ inputs.project_name }}-" \
+            /overrideconfig tag-prefix="^${PROJECT_NAME}-" \
             /showvariable PreReleaseNumber)
 
           if [ -n "$LABEL" ]; then
@@ -68,10 +71,12 @@ jobs:
           echo "Determined version: $VERSION"
 
       - name: Add GitHub Packages source
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           dotnet nuget add source \
             --username USERNAME \
-            --password "${{ secrets.GITHUB_TOKEN }}" \
+            --password "$GITHUB_TOKEN" \
             --store-password-in-clear-text \
             --name github \
             https://nuget.pkg.github.com/DFE-Digital/index.json
@@ -83,15 +88,17 @@ jobs:
             https://api.nuget.org/v3/index.json || true
 
       - name: Build, pack and push
+        env:
+          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
         run: |
-          dotnet build ${{ inputs.project_path }} -c Release
-          dotnet pack ${{ inputs.project_path }} \
+          dotnet build "$PROJECT_PATH" -c Release
+          dotnet pack "$PROJECT_PATH" \
             -c Release \
-            -p:PackageVersion=${{ env.VERSION }} \
+            -p:PackageVersion="$VERSION" \
             --no-build \
             --output ./artifacts
           dotnet nuget push ./artifacts/*.nupkg \
-            --api-key "${{ secrets.NUGET_API_KEY }}" \
+            --api-key "$NUGET_API_KEY" \
             --source https://api.nuget.org/v3/index.json \
             --skip-duplicate
 
@@ -109,16 +116,18 @@ jobs:
               sed 's/~/\n/g')
           echo "RELEASE_NOTES<<EOF" >> $GITHUB_ENV
           echo "$NOTES"               >> $GITHUB_ENV
-          echo "EOF"                  >> $GITHUB_ENV          
+          echo "EOF"                  >> $GITHUB_ENV
           fi
 
+      # Values are read from the environment, never expanded into the script: release notes come from a commit message.
       - name: Create GitHub Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PRERELEASE: ${{ github.event_name == 'pull_request' }}
         run: |
-          TAG="${{ inputs.project_name }}-${{ env.VERSION }}"
+          TAG="${PROJECT_NAME}-${VERSION}"
           gh release create "$TAG" \
-            --title "Release ${{ env.VERSION }} for ${{ inputs.project_name }}" \
-            --notes "${{ env.RELEASE_NOTES }}" \
+            --title "Release ${VERSION} for ${PROJECT_NAME}" \
+            --notes "$RELEASE_NOTES" \
             --draft=false \
-            --prerelease=${{ github.event_name == 'pull_request' }}
+            --prerelease="$PRERELEASE"

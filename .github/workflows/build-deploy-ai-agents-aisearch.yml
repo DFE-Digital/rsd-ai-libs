@@ -16,8 +16,6 @@ jobs:
     with:
       project_name: GovUK.Dfe.AI.Agents.AISearch
       project_path: src/GovUK.Dfe.AI.Agents.AISearch
-    secrets:
-      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
   pack-and-release:
     needs: build-and-test

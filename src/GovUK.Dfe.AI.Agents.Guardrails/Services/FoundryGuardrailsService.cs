@@ -7,6 +7,7 @@ using GovUK.Dfe.AI.Agents.Guardrails.ValueObjects;
 using GovUK.Dfe.AI.Agents.Options;
 using Microsoft.Extensions.Logging;
 using System.Net;
+using GovUK.Dfe.AI.Agents.Guardrails.Diagnostics;
 
 namespace GovUK.Dfe.AI.Agents.Guardrails.Services;
 
@@ -32,8 +33,7 @@ internal sealed class FoundryGuardrailsService(IGuardrailStore store, AgentsOpti
                 if (exists && current != required.Name)
                 {
                     await store.AssignAsync(deployment, required.Name, cancellationToken).ConfigureAwait(false);
-                    logger.LogInformation("Gave deployment {Deployment} the guardrail {Guardrail} (was {Previous})", deployment, required.Name,
-                        current ?? "none");
+                    logger.AssignedGuardrail(deployment, required.Name, current ?? "none");
                 }
             }
         }

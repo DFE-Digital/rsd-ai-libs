@@ -1,4 +1,13 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": [ "github>DFE-Digital/rsd-renovate-config" ]
+  "extends": [ "github>DFE-Digital/rsd-renovate-config" ],
+  "osvVulnerabilityAlerts": true,
+  "packageRules": [
+    {
+      "description": "Packages declare the lowest dependency versions that work, so apps aren't forced to upgrade. Don't raise them for minor or patch releases; tests and tooling still update. Major releases still get a PR to review.",
+      "matchFileNames": [ "src/GovUK.Dfe.AI.Agents*/*.csproj" ],
+      "matchUpdateTypes": [ "minor", "patch" ],
+      "enabled": false
+    }
+  ]
 }

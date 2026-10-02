@@ -1,0 +1,21 @@
+#nullable enable
+GovUK.Dfe.AI.Agents.Guardrails.Services.Interfaces.IFoundryGuardrailsService
+GovUK.Dfe.AI.Agents.Guardrails.Services.Interfaces.IFoundryGuardrailsService.ApplyAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<GovUK.Dfe.AI.Agents.Guardrails.ValueObjects.GuardrailReport!>!
+GovUK.Dfe.AI.Agents.Guardrails.Services.Interfaces.IFoundryGuardrailsService.CheckAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<GovUK.Dfe.AI.Agents.Guardrails.ValueObjects.GuardrailReport!>!
+GovUK.Dfe.AI.Agents.Guardrails.ValueObjects.GuardrailReport
+GovUK.Dfe.AI.Agents.Guardrails.ValueObjects.GuardrailReport.<Clone>$() -> GovUK.Dfe.AI.Agents.Guardrails.ValueObjects.GuardrailReport!
+GovUK.Dfe.AI.Agents.Guardrails.ValueObjects.GuardrailReport.Deconstruct(out string! Guardrail, out System.Collections.Generic.IReadOnlyList<string!>! Problems) -> void
+GovUK.Dfe.AI.Agents.Guardrails.ValueObjects.GuardrailReport.Equals(GovUK.Dfe.AI.Agents.Guardrails.ValueObjects.GuardrailReport? other) -> bool
+GovUK.Dfe.AI.Agents.Guardrails.ValueObjects.GuardrailReport.Guardrail.get -> string!
+GovUK.Dfe.AI.Agents.Guardrails.ValueObjects.GuardrailReport.Guardrail.init -> void
+GovUK.Dfe.AI.Agents.Guardrails.ValueObjects.GuardrailReport.GuardrailReport(string! Guardrail, System.Collections.Generic.IReadOnlyList<string!>! Problems) -> void
+GovUK.Dfe.AI.Agents.Guardrails.ValueObjects.GuardrailReport.Passed.get -> bool
+GovUK.Dfe.AI.Agents.Guardrails.ValueObjects.GuardrailReport.Problems.get -> System.Collections.Generic.IReadOnlyList<string!>!
+GovUK.Dfe.AI.Agents.Guardrails.ValueObjects.GuardrailReport.Problems.init -> void
+Microsoft.Extensions.DependencyInjection.GuardrailsExtensions
+override GovUK.Dfe.AI.Agents.Guardrails.ValueObjects.GuardrailReport.Equals(object? obj) -> bool
+override GovUK.Dfe.AI.Agents.Guardrails.ValueObjects.GuardrailReport.GetHashCode() -> int
+override GovUK.Dfe.AI.Agents.Guardrails.ValueObjects.GuardrailReport.ToString() -> string!
+static GovUK.Dfe.AI.Agents.Guardrails.ValueObjects.GuardrailReport.operator !=(GovUK.Dfe.AI.Agents.Guardrails.ValueObjects.GuardrailReport? left, GovUK.Dfe.AI.Agents.Guardrails.ValueObjects.GuardrailReport? right) -> bool
+static GovUK.Dfe.AI.Agents.Guardrails.ValueObjects.GuardrailReport.operator ==(GovUK.Dfe.AI.Agents.Guardrails.ValueObjects.GuardrailReport? left, GovUK.Dfe.AI.Agents.Guardrails.ValueObjects.GuardrailReport? right) -> bool
+static Microsoft.Extensions.DependencyInjection.GuardrailsExtensions.AddGuardrails(this GovUK.Dfe.AI.Agents.Builders.AgentsBuilder! agents) -> GovUK.Dfe.AI.Agents.Builders.AgentsBuilder!

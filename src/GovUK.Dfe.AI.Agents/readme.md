@@ -67,6 +67,8 @@ If any setting is missing or invalid, startup fails with a single error that lis
 ### 4. Define agents
 
 ```csharp
+using GovUK.Dfe.AI.Agents.ValueObjects;
+
 public sealed record OfstedFindings(string Rating, IReadOnlyList<string> Strengths);
 
 public static class BriefingAgents
@@ -85,6 +87,9 @@ public static class BriefingAgents
 ### 5. Run
 
 ```csharp
+using GovUK.Dfe.AI.Agents.Extensions;            // ReadOutputAs
+using GovUK.Dfe.AI.Agents.Services.Interfaces;   // IAgentService
+
 public sealed class BriefingService(IAgentService agents)
 {
     public async Task<string> CreateAsync(string urn, string report, CancellationToken ct)
@@ -291,8 +296,9 @@ parallel and sequential runs, the agent gets a fallback result instead.
 ## Credentials
 
 `Authentication` is the default identity. `Foundry`, `Search`, each MCP server, `GlobalConcurrency`, `Guardrails` and
-`ExternallyManagedAgents` can each have their own `Authentication` block. Load each secret from Key Vault, e.g.
-`AI_AGENTS__Foundry__Authentication__ClientSecret`.
+`ExternallyManagedAgents` can each have their own `Authentication` block. Load each secret from Key Vault, e.g. the
+secret `AiAgents--Foundry--Authentication--ClientSecret` (or the environment variable
+`AiAgents__Foundry__Authentication__ClientSecret`).
 
 To use managed identities, set credentials in code:
 

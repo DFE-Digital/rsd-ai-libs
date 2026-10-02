@@ -1,0 +1,31 @@
+#nullable enable
+GovUK.Dfe.AI.Agents.AISearch.Context.AzureSearchContextRetriever
+GovUK.Dfe.AI.Agents.AISearch.Context.AzureSearchContextRetriever.AzureSearchContextRetriever(System.Collections.Generic.IReadOnlyDictionary<string!, Azure.Search.Documents.SearchClient!>! clients, GovUK.Dfe.AI.Agents.AISearch.Filters.Interfaces.IRelevanceFilter! relevanceFilter, Microsoft.Extensions.Logging.ILogger<GovUK.Dfe.AI.Agents.AISearch.Context.AzureSearchContextRetriever!>? logger = null, System.Collections.Generic.IReadOnlyDictionary<string!, System.Collections.Generic.IReadOnlyList<string!>!>? contentFields = null, System.Collections.Generic.IReadOnlyDictionary<string!, GovUK.Dfe.AI.Agents.AISearch.Options.AzureSearchIndexOptions!>? indexes = null) -> void
+GovUK.Dfe.AI.Agents.AISearch.Context.AzureSearchContextRetriever.GetContextAsync(string! scope, string! query, int size = 10, GovUK.Dfe.AI.Agents.Filters.ODataFilter filter = default(GovUK.Dfe.AI.Agents.Filters.ODataFilter), System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<GovUK.Dfe.AI.Agents.ValueObjects.ContextResult!>!
+GovUK.Dfe.AI.Agents.AISearch.Filters.Interfaces.IRelevanceFilter
+GovUK.Dfe.AI.Agents.AISearch.Filters.Interfaces.IRelevanceFilter.Filter(System.Collections.Generic.IReadOnlyList<GovUK.Dfe.AI.Agents.ValueObjects.SearchResultItem!>! results) -> System.Collections.Generic.IReadOnlyList<GovUK.Dfe.AI.Agents.ValueObjects.SearchResultItem!>!
+GovUK.Dfe.AI.Agents.AISearch.Filters.RelativeScoreRelevanceFilter
+GovUK.Dfe.AI.Agents.AISearch.Filters.RelativeScoreRelevanceFilter.Filter(System.Collections.Generic.IReadOnlyList<GovUK.Dfe.AI.Agents.ValueObjects.SearchResultItem!>! results) -> System.Collections.Generic.IReadOnlyList<GovUK.Dfe.AI.Agents.ValueObjects.SearchResultItem!>!
+GovUK.Dfe.AI.Agents.AISearch.Filters.RelativeScoreRelevanceFilter.RelativeScoreRelevanceFilter(double minRelativeScore = 0.5) -> void
+GovUK.Dfe.AI.Agents.AISearch.Options.AzureSearchContextRetrieverOptions
+GovUK.Dfe.AI.Agents.AISearch.Options.AzureSearchContextRetrieverOptions.AzureSearchContextRetrieverOptions() -> void
+GovUK.Dfe.AI.Agents.AISearch.Options.AzureSearchContextRetrieverOptions.Endpoint.get -> string!
+GovUK.Dfe.AI.Agents.AISearch.Options.AzureSearchContextRetrieverOptions.Endpoint.init -> void
+GovUK.Dfe.AI.Agents.AISearch.Options.AzureSearchContextRetrieverOptions.Indexes.get -> System.Collections.Generic.IReadOnlyList<GovUK.Dfe.AI.Agents.AISearch.Options.AzureSearchIndexOptions!>!
+GovUK.Dfe.AI.Agents.AISearch.Options.AzureSearchContextRetrieverOptions.Indexes.init -> void
+GovUK.Dfe.AI.Agents.AISearch.Options.AzureSearchContextRetrieverOptions.MaxRetryAttempts.get -> int
+GovUK.Dfe.AI.Agents.AISearch.Options.AzureSearchContextRetrieverOptions.MaxRetryAttempts.init -> void
+GovUK.Dfe.AI.Agents.AISearch.Options.AzureSearchContextRetrieverOptions.MinimumRelevanceFilter.get -> double
+GovUK.Dfe.AI.Agents.AISearch.Options.AzureSearchContextRetrieverOptions.MinimumRelevanceFilter.init -> void
+GovUK.Dfe.AI.Agents.AISearch.Options.AzureSearchIndexOptions
+GovUK.Dfe.AI.Agents.AISearch.Options.AzureSearchIndexOptions.AzureSearchIndexOptions() -> void
+GovUK.Dfe.AI.Agents.AISearch.Options.AzureSearchIndexOptions.ContentFields.get -> System.Collections.Generic.IReadOnlyList<string!>!
+GovUK.Dfe.AI.Agents.AISearch.Options.AzureSearchIndexOptions.ContentFields.init -> void
+GovUK.Dfe.AI.Agents.AISearch.Options.AzureSearchIndexOptions.Name.get -> string!
+GovUK.Dfe.AI.Agents.AISearch.Options.AzureSearchIndexOptions.Name.init -> void
+GovUK.Dfe.AI.Agents.AISearch.Options.AzureSearchIndexOptions.SemanticConfiguration.get -> string?
+GovUK.Dfe.AI.Agents.AISearch.Options.AzureSearchIndexOptions.SemanticConfiguration.init -> void
+GovUK.Dfe.AI.Agents.AISearch.Options.AzureSearchIndexOptions.VectorFields.get -> System.Collections.Generic.IReadOnlyList<string!>!
+GovUK.Dfe.AI.Agents.AISearch.Options.AzureSearchIndexOptions.VectorFields.init -> void
+Microsoft.Extensions.DependencyInjection.AISearchExtensions
+static Microsoft.Extensions.DependencyInjection.AISearchExtensions.AddAISearch(this GovUK.Dfe.AI.Agents.Builders.AgentsBuilder! agents) -> GovUK.Dfe.AI.Agents.Builders.AgentsBuilder!

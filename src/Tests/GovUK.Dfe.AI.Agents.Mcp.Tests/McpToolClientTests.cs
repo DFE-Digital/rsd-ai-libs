@@ -81,7 +81,7 @@ public sealed class McpToolClientTests
         var sessions = new Queue<IMcpSession>([broken, healthy]);
         var sut = new McpToolClient(Options("get_performance_data"), NullLogger<McpToolClient>.Instance, _ => Task.FromResult(sessions.Dequeue()));
 
-        var tools = await sut.GetToolsAsync(cancellationToken);
+        var tools = await sut.GetToolsAsync(cancellationToken: cancellationToken);
 
         Assert.Equal("get_performance_data", Assert.IsType<FunctionTool>(Assert.Single(tools)).FunctionName);
         Assert.True(broken.Disposed);
@@ -97,8 +97,8 @@ public sealed class McpToolClientTests
                 ? Task.FromException<IMcpSession>(new HttpRequestException("Server restarting."))
                 : Task.FromResult<IMcpSession>(new FakeSession(_ => ServerTools)));
 
-        await Assert.ThrowsAsync<HttpRequestException>(() => sut.GetToolsAsync(cancellationToken));
-        var tools = await sut.GetToolsAsync(cancellationToken);
+        await Assert.ThrowsAsync<HttpRequestException>(() => sut.GetToolsAsync(cancellationToken: cancellationToken));
+        var tools = await sut.GetToolsAsync(cancellationToken: cancellationToken);
 
         Assert.Single(tools);
         Assert.Equal(2, attempts);
@@ -125,7 +125,7 @@ public sealed class McpToolClientTests
         var session = new FakeSession(_ => ServerTools);
         var sut = new McpToolClient(Options("get_performance_data"), NullLogger<McpToolClient>.Instance, _ => Task.FromResult<IMcpSession>(session));
 
-        var described = await sut.GetToolsAsync(cancellationToken);
+        var described = await sut.GetToolsAsync(cancellationToken: cancellationToken);
         var viaExecutor = await sut.TryExecuteAsync(new ToolCallRequest("call-1", "update_school_record", "{}"), cancellationToken);
 
         Assert.DoesNotContain(described.OfType<FunctionTool>(), tool => tool.FunctionName == "update_school_record");
@@ -181,7 +181,7 @@ public sealed class McpToolClientTests
         var sut = new McpToolClient(Options("get_performance_data", "get_attendance"), NullLogger<McpToolClient>.Instance,
             _ => Task.FromResult<IMcpSession>(session));
 
-        var ex = await Assert.ThrowsAsync<McpToolConfigurationException>(() => sut.GetToolsAsync(cancellationToken));
+        var ex = await Assert.ThrowsAsync<McpToolConfigurationException>(() => sut.GetToolsAsync(cancellationToken: cancellationToken));
 
         Assert.Contains("get_attendance", ex.Message, StringComparison.Ordinal);
         Assert.DoesNotContain("get_performance_data", ex.Message, StringComparison.Ordinal);
@@ -211,7 +211,7 @@ public sealed class McpToolClientTests
         var sut = new McpToolClient(Options("get_performance_data") with { ToolListCacheDuration = TimeSpan.FromMinutes(5) },
             NullLogger<McpToolClient>.Instance, _ => Task.FromResult<IMcpSession>(session));
 
-        await sut.GetToolsAsync(cancellationToken);
+        await sut.GetToolsAsync(cancellationToken: cancellationToken);
         await Task.WhenAll(Enumerable.Range(0, 5).Select(_ => sut.CallToolAsync("get_performance_data", "{}", cancellationToken)));
 
         Assert.Equal(1, session.ListCalls);
@@ -275,7 +275,7 @@ public sealed class McpToolClientTests
         var sessions = new Queue<IMcpSession>([broken, healthy]);
         var sut = new McpToolClient(Options("get_performance_data"), NullLogger<McpToolClient>.Instance, _ => Task.FromResult(sessions.Dequeue()));
 
-        var tools = await sut.GetToolsAsync(cancellationToken);
+        var tools = await sut.GetToolsAsync(cancellationToken: cancellationToken);
 
         Assert.Single(tools);
         Assert.True(broken.Disposed);
@@ -290,7 +290,7 @@ public sealed class McpToolClientTests
         factory.CreateClient(Arg.Any<string>()).Returns(_ => new HttpClient());
         using var sut = new McpToolClient(options, factory, NullLogger<McpToolClient>.Instance);
 
-        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => sut.GetToolsAsync(cancellationToken));
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => sut.GetToolsAsync(cancellationToken: cancellationToken));
 
         Assert.Contains("school-performance-mcp", ex.Message, StringComparison.Ordinal);
         Assert.Contains("http://127.0.0.1:9/mcp", ex.Message, StringComparison.Ordinal);
@@ -333,13 +333,12 @@ public sealed class McpToolClientTests
             connects++;
             return Task.FromResult<IMcpSession>(session);
         });
-        await sut.GetToolsAsync(cancellationToken);
+        await sut.GetToolsAsync(cancellationToken: cancellationToken);
 
         await sut.DisposeAsync();
         await sut.DisposeAsync();
-#pragma warning disable S6966 // The synchronous Dispose, used by containers disposed synchronously, is part of what's tested.
-        sut.Dispose();
-#pragma warning restore S6966
+        IDisposable disposedByAContainer = sut;   // as a service provider disposed with Dispose() does
+        disposedByAContainer.Dispose();
 
         Assert.Equal(1, session.DisposeCalls);
         await Assert.ThrowsAsync<ObjectDisposedException>(() => sut.CallToolAsync("get_performance_data", "{}", cancellationToken));
@@ -353,7 +352,7 @@ public sealed class McpToolClientTests
         var session = new FakeSession(_ => ServerTools, closing: neverCloses.Task);
         var sut = new McpToolClient(Options("get_performance_data"), NullLogger<McpToolClient>.Instance,
             _ => Task.FromResult<IMcpSession>(session), disposeTimeout: TimeSpan.FromMilliseconds(100));
-        await sut.GetToolsAsync(cancellationToken);
+        await sut.GetToolsAsync(cancellationToken: cancellationToken);
 
         var shutdown = Task.Run(sut.Dispose, cancellationToken: TestContext.Current.CancellationToken);
 
@@ -368,7 +367,7 @@ public sealed class McpToolClientTests
         var lateSession = new FakeSession(_ => ServerTools);
         var sut = new McpToolClient(Options("get_performance_data"), NullLogger<McpToolClient>.Instance, _ => connecting.Task);
 
-        var call = sut.GetToolsAsync(cancellationToken);
+        var call = sut.GetToolsAsync(cancellationToken: cancellationToken);
         await sut.DisposeAsync();
         connecting.SetResult(lateSession);
 

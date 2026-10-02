@@ -1,0 +1,39 @@
+<Project>
+  <!--
+    Compatibility settings for the packages (not the test projects), following Microsoft's .NET library guidance:
+    https://learn.microsoft.com/dotnet/standard/library-guidance/
+
+    - Public API tracking: every public type and member is listed in PublicAPI.Shipped.txt / PublicAPI.Unshipped.txt next
+      to the project, and the build fails if the code and the lists disagree, so any change to the public API is
+      deliberate and visible in review. Add-ons rely only on core's public API, so this is what keeps them compatible.
+    - Package validation: dotnet pack checks the package. After a package's first release, set
+      PackageValidationBaselineVersion to its last released version, so pack fails on a breaking change that isn't a
+      new major version.
+    - Versions: AssemblyVersion changes only with the major version (major.0.0.0), so an add-on built against core 1.2
+      loads with core 1.5 without binding problems. FileVersion and InformationalVersion carry the full version.
+  -->
+  <PropertyGroup Condition="'$(IsPackable)' != 'false'">
+    <EnablePackageValidation>true</EnablePackageValidation>
+    <!-- Undeclared or removed public API, and overloads that would make adding parameters later a breaking change. -->
+    <WarningsAsErrors>$(WarningsAsErrors);RS0016;RS0017;RS0026;RS0027</WarningsAsErrors>
+    <!-- Dependency floors stay low (Renovate doesn't raise them), so restore checks the whole dependency graph for known
+         vulnerabilities and fails on high or critical ones; raise the affected floor when it does. -->
+    <NuGetAudit>true</NuGetAudit>
+    <NuGetAuditMode>all</NuGetAuditMode>
+    <WarningsAsErrors>$(WarningsAsErrors);NU1903;NU1904</WarningsAsErrors>
+
+    <_ReleaseVersion>$(PackageVersion)</_ReleaseVersion>
+    <_ReleaseVersion Condition="'$(_ReleaseVersion)' == ''">$(Version)</_ReleaseVersion>
+    <_ReleaseVersion Condition="'$(_ReleaseVersion)' == ''">1.0.0</_ReleaseVersion>
+    <_ReleaseNumbers>$([System.Text.RegularExpressions.Regex]::Match($(_ReleaseVersion), '^\d+(\.\d+){0,3}').Value)</_ReleaseNumbers>
+    <AssemblyVersion>$(_ReleaseNumbers.Split('.')[0]).0.0.0</AssemblyVersion>
+    <FileVersion>$(_ReleaseNumbers)</FileVersion>
+    <InformationalVersion>$(_ReleaseVersion)</InformationalVersion>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(IsPackable)' != 'false'">
+    <PackageReference Include="Microsoft.CodeAnalysis.PublicApiAnalyzers" Version="5.6.0" PrivateAssets="all" />
+    <AdditionalFiles Include="PublicAPI.Shipped.txt" />
+    <AdditionalFiles Include="PublicAPI.Unshipped.txt" />
+  </ItemGroup>
+</Project>

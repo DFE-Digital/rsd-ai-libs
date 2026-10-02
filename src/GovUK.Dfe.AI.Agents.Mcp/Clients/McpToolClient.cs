@@ -1,12 +1,13 @@
 using System.Text.Json;
 using System.Text;
-using GovUK.Dfe.AI.Agents.Constants;
 using GovUK.Dfe.AI.Agents.Mcp.Clients.Interfaces;
+using GovUK.Dfe.AI.Agents.Mcp.Constants;
 using GovUK.Dfe.AI.Agents.Mcp.Exceptions;
 using GovUK.Dfe.AI.Agents.Mcp.Options;
 using GovUK.Dfe.AI.Agents.Mcp.Providers;
 using GovUK.Dfe.AI.Agents.Mcp.Sessions.Interfaces;
 using GovUK.Dfe.AI.Agents.Mcp.Sessions;
+using GovUK.Dfe.AI.Agents.Tools.Interfaces;
 using GovUK.Dfe.AI.Agents.ValueObjects;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Client;
@@ -70,18 +71,19 @@ public sealed class McpToolClient : IMcpToolClient, IDisposable
     }
 
     /// <summary>
-    /// Describes the server's tools in <see cref="McpServerConnectionOptions.AllowedToolNames"/> as function
-    /// tools. Use the overload (e.g. via <see cref="McpAllowedToolsProvider"/>) to give an agent a subset.
+    /// Describes the server's tools in <see cref="McpServerConnectionOptions.AllowedToolNames"/> as function tools.
+    /// Implemented explicitly, so the public overload below is the only one with optional parameters.
     /// </summary>
-    public Task<IReadOnlyList<ResponseTool>> GetToolsAsync(CancellationToken cancellationToken = default)
-        => GetToolsAsync(_options.AllowedToolNames, cancellationToken);
+    Task<IReadOnlyList<ResponseTool>> IAgentToolProvider.GetToolsAsync(CancellationToken cancellationToken)
+        => GetToolsAsync(allowedToolNames: null, cancellationToken);
 
     /// <summary>
-    /// Describes <paramref name="allowedToolNames"/> as function tools. Every name must be in the server's
-    /// <see cref="McpServerConnectionOptions.AllowedToolNames"/>, which is the most any agent can have.
+    /// Describes <paramref name="allowedToolNames"/> as function tools, or all the server's allowed tools when none are given.
+    /// Every name must be in the server's <see cref="McpServerConnectionOptions.AllowedToolNames"/>, which is the most any
+    /// agent can have; <see cref="McpAllowedToolsProvider"/> gives an agent a subset.
     /// </summary>
     /// <param name="allowedToolNames">The tools to describe, or null/empty for all of the server's allowed tools.</param>
-    public async Task<IReadOnlyList<ResponseTool>> GetToolsAsync(IReadOnlyList<string>? allowedToolNames,
+    public async Task<IReadOnlyList<ResponseTool>> GetToolsAsync(IReadOnlyList<string>? allowedToolNames = null,
         CancellationToken cancellationToken = default)
     {
         var names = allowedToolNames is { Count: > 0 } requested ? requested : _options.AllowedToolNames ?? [];

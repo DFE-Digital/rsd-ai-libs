@@ -18,11 +18,11 @@ public interface IAgentRuntimeService
     Task<AgentReference> GetOrCreateAsync(string agentName, Func<CancellationToken, Task<AgentSpec>> buildSpec,
         CancellationToken cancellationToken = default);
 
-    /// <summary>Creates the agent under a unique name, runs it once, then deletes it.</summary>
-    Task<AgentResult> RunEphemeralAsync(AgentSpec spec, string prompt, CancellationToken cancellationToken = default);
-
-    /// <summary>As above, running its tool calls, sending <paramref name="evidence"/> fenced, and retrying one invalid answer.</summary>
-    Task<AgentResult> RunEphemeralAsync(AgentSpec spec, string prompt, ToolCallResolver? resolveToolCalls,
+    /// <summary>
+    /// Creates the agent under a unique name, runs it once, then deletes it: running its tool calls with
+    /// <paramref name="resolveToolCalls"/>, sending <paramref name="evidence"/> fenced, and retrying one invalid answer.
+    /// </summary>
+    Task<AgentResult> RunEphemeralAsync(AgentSpec spec, string prompt, ToolCallResolver? resolveToolCalls = null,
         string? evidence = null, Func<AgentResult, string?>? validateOutput = null, CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -30,9 +30,7 @@ public interface IAgentRuntimeService
     /// <c>agents.AddEphemeralAgentSweep()</c>. Only agents older than any run can be are deleted, never another app's;
     /// safe on every instance at once.
     /// </summary>
+    /// <param name="minimumAge">Only agents older than this; null (default) is the safe minimum, and less is refused.</param>
     /// <returns>The names deleted.</returns>
-    Task<IReadOnlyList<string>> DeleteOrphanedEphemeralAgentsAsync(CancellationToken cancellationToken = default);
-
-    /// <summary>As above, for agents older than <paramref name="minimumAge"/> (not less than the safe minimum).</summary>
-    Task<IReadOnlyList<string>> DeleteOrphanedEphemeralAgentsAsync(TimeSpan minimumAge, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<string>> DeleteOrphanedEphemeralAgentsAsync(TimeSpan? minimumAge = null, CancellationToken cancellationToken = default);
 }

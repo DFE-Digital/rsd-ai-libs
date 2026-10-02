@@ -51,7 +51,7 @@ public sealed class FoundryAgentRunnerTests
 
         var sut = CreateSut();
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => sut.RunAsync(spec, "prompt", cancellationToken: cancellationToken));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => sut.RunFromSpecAsync(spec, "prompt", cancellationToken: cancellationToken));
     }
 
     [Theory]
@@ -69,7 +69,7 @@ public sealed class FoundryAgentRunnerTests
 
         var sut = CreateSut();
 
-        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => sut.RunAsync(spec, "prompt", cancellationToken: cancellationToken));
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => sut.RunFromSpecAsync(spec, "prompt", cancellationToken: cancellationToken));
         Assert.Contains(expected, ex.InnerException!.Message, StringComparison.Ordinal);
     }
 
@@ -120,7 +120,7 @@ public sealed class FoundryAgentRunnerTests
         var sut = new FoundryAgentRunnerService(_agentFactory, _conversationClient,
             runOptions: new AgentRunOptions { MaxOutputTokensPerRun = maxOutputTokensPerRun });
 
-        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => sut.RunAsync(spec, "prompt", cancellationToken: cancellationToken,
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => sut.RunFromSpecAsync(spec, "prompt", cancellationToken: cancellationToken,
             resolveToolCalls: (calls, _) => Task.FromResult<IEnumerable<ToolCallOutput>>(
                 calls.Select(c => new ToolCallOutput(c.CallId, "42")))));
 
@@ -139,7 +139,7 @@ public sealed class FoundryAgentRunnerTests
 
         var sut = CreateSut();
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => sut.RunAsync(spec, "prompt", cancellationToken: cancellationToken));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => sut.RunFromSpecAsync(spec, "prompt", cancellationToken: cancellationToken));
     }
 
     [Fact]

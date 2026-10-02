@@ -109,7 +109,7 @@ public sealed class AgentOrchestratorTests
         };
 
         var sut = CreateSut();
-        var result = await sut.RunParallelAsync(steps, new AgentContext(), cancellationToken: cancellationToken);
+        var result = await sut.RunStepsInParallelAsync(steps, new AgentContext(), cancellationToken: cancellationToken);
 
         Assert.Contains("search result", result.FinalOutput);
         Assert.Contains("mcp result", result.FinalOutput);
@@ -131,7 +131,7 @@ public sealed class AgentOrchestratorTests
         };
 
         var sut = CreateSut();
-        var result = await sut.RunParallelAsync(steps, new AgentContext(), cancellationToken: cancellationToken);
+        var result = await sut.RunStepsInParallelAsync(steps, new AgentContext(), cancellationToken: cancellationToken);
 
         Assert.Contains(result.Results, r => r.Succeeded && r.AgentName == "ok");
         Assert.Contains(result.Results, r => !r.Succeeded && r.AgentName == "broken");
@@ -153,7 +153,7 @@ public sealed class AgentOrchestratorTests
         };
 
         var sut = CreateSut();
-        var result = await sut.RunParallelAsync(steps, new AgentContext(), cancellationToken: cancellationToken);
+        var result = await sut.RunStepsInParallelAsync(steps, new AgentContext(), cancellationToken: cancellationToken);
 
         Assert.Contains(result.Results, r => r.Succeeded && r.AgentName == "ok");
         Assert.Contains(result.Results, r => !r.Succeeded && r.AgentName == "unresolvable");
@@ -212,7 +212,7 @@ public sealed class AgentOrchestratorTests
             ResolveToolCalls = resolver,
         };
 
-        var result = await CreateSut().RunParallelAsync([step], new AgentContext(), cancellationToken: cancellationToken);
+        var result = await CreateSut().RunStepsInParallelAsync([step], new AgentContext(), cancellationToken: cancellationToken);
 
         Assert.Equal("done", Assert.Single(result.Results).Result!.Output);
     }

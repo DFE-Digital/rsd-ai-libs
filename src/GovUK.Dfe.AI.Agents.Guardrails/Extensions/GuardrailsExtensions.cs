@@ -31,11 +31,11 @@ public static class GuardrailsExtensions
     {
         public string Name => "Guardrails";
 
-        public void Register(AgentsRegistrationPackage registrationPackage)
+        public void Register(AgentsPackageContext context)
         {
-            var (services, _, options, _) = registrationPackage;
-            var settings = options.Guardrails!;
-            var credential = options.CredentialFor(nameof(AzureCredentialTarget.Guardrails), settings.Authentication);
+            var services = context.Services;
+            var settings = context.Options.Guardrails!;
+            var credential = context.CredentialFor(AzureCredentialTarget.Guardrails, settings.Authentication);
 
             services.AddSingleton(settings);
             services.AddSingleton<IGuardrailStore>(_ => new ArmGuardrailStore(new ArmClient(credential), new ResourceIdentifier(settings.AccountResourceId!)));

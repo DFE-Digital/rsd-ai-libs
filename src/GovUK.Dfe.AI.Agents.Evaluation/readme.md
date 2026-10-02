@@ -27,8 +27,8 @@ else to set up.
 ## What gets scored
 
 - **Live runs:** a sample (`sampleRate`, default 5%) is scored in the background, so runs aren't slowed down. Scores are
-  recorded as the `dfe.ai_agents.evaluation.score` metric, by agent, version and `gen_ai.evaluation.name`. Set `sampleRate: 0` to score only
-  release-gate tests.
+  recorded as the `dfe.ai_agents.evaluation.score` metric, by agent, version and `gen_ai.evaluation.name`. Set
+  `sampleRate: 0` to score only release-gate tests.
 - **Release gate:** every `IAgentTestRunner` test case is scored, so `report.BelowMinimum(...)` and
   `report.RegressionsFrom(baseline)` can fail the build. See
   [Release gate](https://github.com/DFE-Digital/rsd-ai-libs/blob/main/src/GovUK.Dfe.AI.Agents/readme.md#release-gate).
@@ -41,4 +41,3 @@ else to set up.
 - **Custom metrics:** pass your own `IEvaluator` as `evaluator`.
 - **Safety metrics aren't included,** because Microsoft's safety evaluators are preview-only. Use the Guardrails
   package to block harmful content instead.
-- **Don't add `Microsoft.Extensions.AI.OpenAI`** to your app: its versions conflict with this package's.

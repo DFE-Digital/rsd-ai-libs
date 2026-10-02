@@ -27,9 +27,11 @@ public sealed class AgentsBuilder
 
     internal IReadOnlyList<IAgentsPackage> Packages => _packages;
 
-    /// <summary>Adds an add-on package once, so calling its <c>Add…</c> method twice is harmless.</summary>
-    internal AgentsBuilder AddPackage(IAgentsPackage package)
+    /// <summary>Adds an add-on package once per <see cref="IAgentsPackage.Name"/>, so calling its <c>Add…</c> method twice is harmless.</summary>
+    public AgentsBuilder AddPackage(IAgentsPackage package)
     {
+        ArgumentNullException.ThrowIfNull(package);
+
         if (!_packages.Exists(existing => existing.Name == package.Name))
         {
             _packages.Add(package);

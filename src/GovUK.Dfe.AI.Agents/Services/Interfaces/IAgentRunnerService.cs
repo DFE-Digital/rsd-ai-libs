@@ -9,7 +9,7 @@ public interface IAgentRunnerService
     /// <param name="conversationId">A conversation to continue; null starts (and afterwards deletes) a new one.</param>
     /// <param name="additionalContext">Untrusted evidence, sent fenced as data.</param>
     /// <param name="validateOutput">Returns why an answer is invalid, or null. An invalid answer is retried once.</param>
-    Task<AgentResult> RunAsync(AgentSpec spec, string prompt, string? conversationId = null,
+    Task<AgentResult> RunFromSpecAsync(AgentSpec spec, string prompt, string? conversationId = null,
         string? additionalContext = null, ToolCallResolver? resolveToolCalls = null, Func<AgentResult, string?>? validateOutput = null,
         CancellationToken cancellationToken = default);
 

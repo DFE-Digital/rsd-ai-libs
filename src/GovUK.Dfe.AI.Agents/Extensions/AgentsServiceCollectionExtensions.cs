@@ -99,10 +99,10 @@ public static class AgentsServiceCollectionExtensions
 
         RegisterAgents(services, builder.Definitions, options, foundryCredential);
 
-        var registration = new AgentsRegistrationPackage(services, section, options, builder.Definitions);
+        var context = new AgentsPackageContext(services, section, options, builder.Definitions);
         foreach (var package in builder.Packages)
         {
-            package.Register(registration);
+            package.Register(context);
         }
 
         return services;

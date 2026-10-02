@@ -31,7 +31,7 @@ public sealed class FoundryAgentRunnerService(IAgentFactory agentFactory, IFound
     private readonly ILogger<FoundryAgentRunnerService> _logger = logger ?? NullLogger<FoundryAgentRunnerService>.Instance;
     private readonly AgentRunOptions _runOptions = runOptions ?? new AgentRunOptions();
 
-    public async Task<AgentResult> RunAsync(AgentSpec spec, string prompt, string? conversationId = null,
+    public async Task<AgentResult> RunFromSpecAsync(AgentSpec spec, string prompt, string? conversationId = null,
         string? additionalContext = null, ToolCallResolver? resolveToolCalls = null, Func<AgentResult, string?>? validateOutput = null,
         CancellationToken cancellationToken = default)
     {

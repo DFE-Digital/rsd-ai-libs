@@ -1,3 +1,4 @@
+using GovUK.Dfe.AI.Agents.AISearch.Constants;
 using Azure.Core;
 using Azure.Search.Documents;
 using GovUK.Dfe.AI.Agents.AISearch.Context;
@@ -5,7 +6,6 @@ using GovUK.Dfe.AI.Agents.AISearch.Filters.Interfaces;
 using GovUK.Dfe.AI.Agents.AISearch.Filters;
 using GovUK.Dfe.AI.Agents.AISearch.Options;
 using GovUK.Dfe.AI.Agents.Builders;
-using GovUK.Dfe.AI.Agents.Constants;
 using GovUK.Dfe.AI.Agents.Context.Interfaces;
 using GovUK.Dfe.AI.Agents.Enums;
 using GovUK.Dfe.AI.Agents.Packages.Interfaces;
@@ -57,11 +57,8 @@ public static class AISearchExtensions
     {
         public string Name => "AISearch";
 
-        public void Register(AgentsRegistrationPackage registrationPackage)
-        {
-            var options = registrationPackage.Options;
-            registrationPackage.Services.AddAzureSearchContextRetriever(registrationPackage.Section.GetSection("Search"),
-                options.CredentialFor(nameof(AzureCredentialTarget.Search), options.Search!.Authentication));
-        }
+        public void Register(AgentsPackageContext context)
+            => context.Services.AddAzureSearchContextRetriever(context.Section.GetSection("Search"),
+                context.CredentialFor(AzureCredentialTarget.Search, context.Options.Search!.Authentication));
     }
 }

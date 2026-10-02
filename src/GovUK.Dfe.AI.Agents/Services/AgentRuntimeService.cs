@@ -68,11 +68,8 @@ public sealed class AgentRuntimeService(IAgentFactory factory, IAgentRunnerServi
         return await factory.GetOrCreateAsync(spec, cancellationToken).ConfigureAwait(false);
     }
 
-    public Task<AgentResult> RunEphemeralAsync(AgentSpec spec, string prompt, CancellationToken cancellationToken = default)
-        => RunEphemeralAsync(spec, prompt, resolveToolCalls: null, evidence: null, cancellationToken: cancellationToken);
-
     public async Task<AgentResult> RunEphemeralAsync(AgentSpec spec, string prompt,
-        ToolCallResolver? resolveToolCalls,
+        ToolCallResolver? resolveToolCalls = null,
         string? evidence = null, Func<AgentResult, string?>? validateOutput = null, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(spec);
@@ -86,7 +83,7 @@ public sealed class AgentRuntimeService(IAgentFactory factory, IAgentRunnerServi
 
         try
         {
-            var result = await runner.RunAsync(ephemeralSpec, prompt, resolveToolCalls: resolveToolCalls, cancellationToken: cancellationToken,
+            var result = await runner.RunFromSpecAsync(ephemeralSpec, prompt, resolveToolCalls: resolveToolCalls, cancellationToken: cancellationToken,
                     additionalContext: evidence, validateOutput: validateOutput)
                 .ConfigureAwait(false);
             return result with { AgentName = reportedName, AgentVersion = null };
@@ -106,18 +103,16 @@ public sealed class AgentRuntimeService(IAgentFactory factory, IAgentRunnerServi
         }
     }
 
-    public Task<IReadOnlyList<string>> DeleteOrphanedEphemeralAgentsAsync(CancellationToken cancellationToken = default)
-        => DeleteOrphanedEphemeralAgentsAsync(MinimumOrphanAge, cancellationToken);
-
-    public Task<IReadOnlyList<string>> DeleteOrphanedEphemeralAgentsAsync(TimeSpan minimumAge, CancellationToken cancellationToken = default)
+    public Task<IReadOnlyList<string>> DeleteOrphanedEphemeralAgentsAsync(TimeSpan? minimumAge = null, CancellationToken cancellationToken = default)
     {
         // Every instance may run this sweep at once: deletes of an agent another instance already removed succeed.
-        ArgumentOutOfRangeException.ThrowIfLessThan(minimumAge, MinimumOrphanAge);
+        var age = minimumAge ?? MinimumOrphanAge;
+        ArgumentOutOfRangeException.ThrowIfLessThan(age, MinimumOrphanAge);
 
         var ownPrefix = ApplicationHash;
         return factory.DeleteStaleAgentsAsync(
             name => IsEphemeralName(name) && name[^EphemeralSuffixLength..].StartsWith(ownPrefix, StringComparison.Ordinal),
-            minimumAge, cancellationToken);
+            age, cancellationToken);
     }
 
     internal static string ApplicationHashOf(string applicationName)

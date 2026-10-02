@@ -26,7 +26,11 @@ dotnet add package GovUK.Dfe.AI.Agents.Mcp
 builder.Services.AddAgents(builder.Configuration, agents => agents
     .AddAgents(BriefingAgents.All)
     .AddMcpServers());
+```
 
+Then list the tools each agent may call:
+
+```csharp
 public static readonly AgentDefinition Ofsted = new("ofsted-agent", "Ofsted")
 {
     AllowedTools = ["get_performance_data"],

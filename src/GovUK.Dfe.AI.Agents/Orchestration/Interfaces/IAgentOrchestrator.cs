@@ -30,7 +30,7 @@ public interface IAgentOrchestrator
 
     /// <summary>Runs steps side by side, each resolving its own agent, prompt, evidence and tool calls.</summary>
     /// <param name="shouldSuppress">Which failures become fallback results.</param>
-    Task<OrchestrationResult> RunParallelAsync(IReadOnlyList<AgentOrchestrationStep> steps,
+    Task<OrchestrationResult> RunStepsInParallelAsync(IReadOnlyList<AgentOrchestrationStep> steps,
         AgentContext context, int? maxConcurrency = null, Func<Exception, bool>? shouldSuppress = null,
         CancellationToken cancellationToken = default);
 }

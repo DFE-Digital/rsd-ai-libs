@@ -22,11 +22,6 @@
 		<InternalsVisibleTo Include="GovUK.Dfe.AI.Agents.AISearch.Tests" />
 		<InternalsVisibleTo Include="GovUK.Dfe.AI.Agents.Evaluation.Tests" />
 		<InternalsVisibleTo Include="GovUK.Dfe.AI.Agents.Guardrails.Tests" />
-		<!-- The add-on packages plug into AddAiAgents through its internal registration hook. -->
-		<InternalsVisibleTo Include="GovUK.Dfe.AI.Agents.Mcp" />
-		<InternalsVisibleTo Include="GovUK.Dfe.AI.Agents.AISearch" />
-		<InternalsVisibleTo Include="GovUK.Dfe.AI.Agents.Evaluation" />
-		<InternalsVisibleTo Include="GovUK.Dfe.AI.Agents.Guardrails" />
 	  </ItemGroup>
 
 	  <ItemGroup>
@@ -34,13 +29,15 @@
 		<PackageReference Include="Azure.AI.Projects.Agents" Version="2.0.0" />
 		<PackageReference Include="Azure.AI.Extensions.OpenAI" Version="2.0.0" />
 		<PackageReference Include="Azure.Storage.Blobs" Version="12.30.0" />
-		<PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.12" />
-		<PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.12" />
-		<PackageReference Include="Microsoft.Extensions.Logging" Version="10.0.12" />
-		<PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="10.0.12" />
-		<PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.0.12" />
-		<!-- Bump Hosting.Abstractions to satisfy Azure.Core dependency (Azure.Core -> Microsoft.Extensions.Hosting.Abstractions >= 10.0.3) -->
-		<PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.12" />
+		<!-- Lowest versions that work, so apps aren't forced to upgrade (Microsoft's library guidance). Azure.Core 1.60
+		     requires Hosting.Abstractions >= 10.0.9, which needs Logging.Abstractions and DependencyInjection.Abstractions
+		     >= 10.0.9 too; the rest only need 10.0.0. Raise one only when the code or a dependency needs it. -->
+		<PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.9" />
+		<PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.9" />
+		<PackageReference Include="Microsoft.Extensions.Logging" Version="10.0.0" />
+		<PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="10.0.0" />
+		<PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.0.0" />
+		<PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.9" />
 	</ItemGroup>
 
 	  <ItemGroup>

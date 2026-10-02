@@ -57,9 +57,9 @@ public static class McpServersExtensions
     {
         public string Name => "Mcp";
 
-        public void Register(AgentsRegistrationPackage registrationPackage)
+        public void Register(AgentsPackageContext context)
         {
-            var (services, _, options, definitions) = registrationPackage;
+            var (services, options, definitions) = (context.Services, context.Options, context.Definitions);
             foreach (var (key, server) in options.McpServers)
             {
                 services.AddMcpClientServices(key, new McpServerConnectionOptions
@@ -68,7 +68,7 @@ public static class McpServersExtensions
                     ServerUri = new Uri(server.ServerUri!),
                     AllowedToolNames = server.AllowedToolNames,
                     ToolListCacheDuration = server.ToolListCacheDuration,
-                    Credential = options.CredentialFor(AgentsOptions.McpCredentialKey(key), server.Authentication),
+                    Credential = context.McpCredentialFor(key, server.Authentication),
                     Scope = server.Scope!,
                 });
 

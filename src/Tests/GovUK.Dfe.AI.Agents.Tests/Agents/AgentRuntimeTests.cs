@@ -27,13 +27,13 @@ public sealed class AgentRuntimeTests
     public async Task RunEphemeralAsync_StillDeletesTheAgent_AndPropagates_WhenTheRunFails()
     {
         AgentSpec? capturedSpec = null;
-        _agentRunner.RunAsync(Arg.Do<AgentSpec>(spec => capturedSpec = spec), "prompt", cancellationToken: Arg.Any<CancellationToken>())
+        _agentRunner.RunFromSpecAsync(Arg.Do<AgentSpec>(spec => capturedSpec = spec), "prompt", cancellationToken: Arg.Any<CancellationToken>())
             .Returns(Task.FromException<AgentResult>(new InvalidOperationException("boom")));
 
         var sut = new AgentRuntimeService(_agentFactory, _agentRunner, new AgentOrchestrator(_agentRunner));
         var spec = new AgentSpec { Name = "my-agent", Instructions = "Do the thing." };
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => sut.RunEphemeralAsync(spec, "prompt", cancellationToken));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => sut.RunEphemeralAsync(spec, "prompt", cancellationToken: cancellationToken));
 
         Assert.NotNull(capturedSpec);
         await _agentFactory.Received(1).DeleteAgentAsync(capturedSpec.Name, Arg.Any<CancellationToken>());
@@ -44,13 +44,13 @@ public sealed class AgentRuntimeTests
     {
         using var cancelled = new CancellationTokenSource();
         await cancelled.CancelAsync();
-        _agentRunner.RunAsync(Arg.Any<AgentSpec>(), "prompt", cancellationToken: Arg.Any<CancellationToken>())
+        _agentRunner.RunFromSpecAsync(Arg.Any<AgentSpec>(), "prompt", cancellationToken: Arg.Any<CancellationToken>())
             .Returns(Task.FromException<AgentResult>(new OperationCanceledException(cancelled.Token)));
 
         var sut = new AgentRuntimeService(_agentFactory, _agentRunner, new AgentOrchestrator(_agentRunner));
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
-            sut.RunEphemeralAsync(new AgentSpec { Name = "my-agent", Instructions = "x" }, "prompt", cancelled.Token));
+            sut.RunEphemeralAsync(new AgentSpec { Name = "my-agent", Instructions = "x" }, "prompt", cancellationToken: cancelled.Token));
 
         await _agentFactory.Received(1).DeleteAgentAsync(Arg.Is<string>(name => name.StartsWith("my-agent-")),
             Arg.Is<CancellationToken>(token => !token.IsCancellationRequested));
@@ -81,9 +81,9 @@ public sealed class AgentRuntimeTests
         var runtime = Substitute.For<IAgentRuntimeService>();
         await new EphemeralAgentSweepService(runtime, TimeSpan.FromMinutes(30), NullLogger<EphemeralAgentSweepService>.Instance)
             .SweepAsync(CancellationToken.None);
-        await runtime.Received(1).DeleteOrphanedEphemeralAgentsAsync(Arg.Any<CancellationToken>());
+        await runtime.Received(1).DeleteOrphanedEphemeralAgentsAsync(Arg.Any<TimeSpan?>(), Arg.Any<CancellationToken>());
 
-        runtime.DeleteOrphanedEphemeralAgentsAsync(Arg.Any<CancellationToken>()).Throws(new InvalidOperationException("Foundry unavailable."));
+        runtime.DeleteOrphanedEphemeralAgentsAsync(Arg.Any<TimeSpan?>(), Arg.Any<CancellationToken>()).Throws(new InvalidOperationException("Foundry unavailable."));
         runtime.ClearReceivedCalls();
         using var service = new EphemeralAgentSweepService(runtime, TimeSpan.FromMilliseconds(50), NullLogger<EphemeralAgentSweepService>.Instance);
         await service.StartAsync(CancellationToken.None);

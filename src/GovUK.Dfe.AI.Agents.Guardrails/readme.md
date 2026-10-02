@@ -70,8 +70,8 @@ themselves. Load sensitive terms from Key Vault, not appsettings.json.
 ## When Foundry blocks something
 
 The run fails, and its inner exception is an `AgentGuardrailException` whose `Stage` is `prompt` or `answer`. The
-`dfe.ai_agents.guardrail.blocks` metric counts each block. In parallel and sequential runs, the agent gets a fallback result
-instead. The core package does this reporting, with or without this package.
+`dfe.ai_agents.guardrail.blocks` metric counts each block. In parallel and sequential runs, the agent gets a fallback
+result instead. Core does this reporting, with or without this package.
 
 ## Not included
 

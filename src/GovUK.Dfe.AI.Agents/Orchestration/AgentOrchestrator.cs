@@ -64,10 +64,10 @@ public sealed class AgentOrchestrator(IAgentRunnerService agentRunner, ILogger<A
         {
             ResolveToolCalls = resolveToolCallsFor?.Invoke(agent),
         }).ToList();
-        return RunParallelAsync(steps, context, maxConcurrency, shouldSuppress, cancellationToken);
+        return RunStepsInParallelAsync(steps, context, maxConcurrency, shouldSuppress, cancellationToken);
     }
 
-    public async Task<OrchestrationResult> RunParallelAsync(IReadOnlyList<AgentOrchestrationStep> steps,
+    public async Task<OrchestrationResult> RunStepsInParallelAsync(IReadOnlyList<AgentOrchestrationStep> steps,
         AgentContext context, int? maxConcurrency = null, Func<Exception, bool>? shouldSuppress = null,
         CancellationToken cancellationToken = default)
     {

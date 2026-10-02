@@ -1,4 +1,4 @@
-using GovUK.Dfe.AI.Agents.Constants;
+using GovUK.Dfe.AI.Agents.Mcp.Constants;
 using GovUK.Dfe.AI.Agents.Mcp.Clients.Interfaces;
 using GovUK.Dfe.AI.Agents.Mcp.Exceptions;
 using GovUK.Dfe.AI.Agents.Mcp.Options;

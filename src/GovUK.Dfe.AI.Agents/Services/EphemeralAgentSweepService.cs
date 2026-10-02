@@ -37,7 +37,7 @@ internal sealed class EphemeralAgentSweepService(IAgentRuntimeService runtime, T
     {
         try
         {
-            var deleted = await runtime.DeleteOrphanedEphemeralAgentsAsync(cancellationToken).ConfigureAwait(false);
+            var deleted = await runtime.DeleteOrphanedEphemeralAgentsAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
             if (deleted.Count > 0)
             {
                 logger.LogInformation("Deleted {Count} orphaned ephemeral agent(s)", deleted.Count);

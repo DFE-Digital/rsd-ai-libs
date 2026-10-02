@@ -82,9 +82,9 @@ internal sealed class InMemoryBlobContainer : BlobContainerClient
 
     private sealed class Blob(InMemoryBlobContainer container, string name) : BlobClient
     {
-#pragma warning disable S4275 // A fake: it has no SDK state for the base property to read.
-        public override Uri Uri => new(container.Uri, $"{container.Uri.AbsolutePath}/{name}");
-#pragma warning restore S4275
+        private readonly Uri _uri = new(container.Uri, $"{container.Uri.AbsolutePath}/{name}");
+
+        public override Uri Uri => _uri;
 
         public override string Name => name;
 

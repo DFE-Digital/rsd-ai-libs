@@ -1,0 +1,86 @@
+name: SonarCloud
+
+# One analysis of the whole solution, with coverage from every test project. Per-package analyses would each
+# report core as untested and overwrite each other, because they share one SonarCloud project.
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - "src/**"
+      - "GovUK.Dfe.AI.Agents.slnx"
+      - ".github/workflows/sonarcloud.yml"
+  pull_request:
+    types: [ opened, synchronize, reopened ]
+    paths:
+      - "src/**"
+      - "GovUK.Dfe.AI.Agents.slnx"
+      - ".github/workflows/sonarcloud.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: sonarcloud-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOTNET_VERSION: '10.0.x'
+  JAVA_VERSION: '21'
+  SOLUTION: GovUK.Dfe.AI.Agents.slnx
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      with:
+        fetch-depth: 0
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+
+    - name: Setup JDK
+      uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4.8.0
+      with:
+        distribution: 'microsoft'
+        java-version: ${{ env.JAVA_VERSION }}
+
+    - name: Cache SonarCloud packages
+      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+      with:
+        path: ~/.sonar/cache
+        key: ${{ runner.os }}-sonar
+        restore-keys: ${{ runner.os }}-sonar
+
+    - name: Install SonarCloud scanner and report generator
+      run: |
+        dotnet tool install --global dotnet-sonarscanner
+        dotnet tool install --global dotnet-reportgenerator-globaltool
+
+    - name: Begin analysis
+      env:
+        SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      run: >
+        dotnet-sonarscanner begin
+        /k:"DFE-Digital_rsd-ai-libs"
+        /o:"dfe-digital"
+        /d:sonar.token="$SONAR_TOKEN"
+        /d:sonar.host.url="https://sonarcloud.io"
+        /d:sonar.coverageReportPaths=CoverageReport/SonarQube.xml
+
+    - name: Build
+      run: dotnet build -p:CI=true "$SOLUTION"
+
+    - name: Test with coverage
+      run: dotnet test --no-build --collect:"XPlat Code Coverage" --results-directory ./TestResults "$SOLUTION"
+
+    - name: Generate coverage report
+      run: reportgenerator -reports:"./TestResults/**/coverage.cobertura.xml" -targetdir:./CoverageReport -reporttypes:SonarQube
+
+    - name: End analysis
+      env:
+        SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      run: dotnet-sonarscanner end /d:sonar.token="$SONAR_TOKEN"

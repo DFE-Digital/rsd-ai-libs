@@ -1,0 +1,14 @@
+<Solution>
+  <Folder Name="/Tests/">
+    <Project Path="src/Tests/GovUK.Dfe.AI.Agents.AISearch.Tests/GovUK.Dfe.AI.Agents.AISearch.Tests.csproj" />
+    <Project Path="src/Tests/GovUK.Dfe.AI.Agents.Evaluation.Tests/GovUK.Dfe.AI.Agents.Evaluation.Tests.csproj" />
+    <Project Path="src/Tests/GovUK.Dfe.AI.Agents.Guardrails.Tests/GovUK.Dfe.AI.Agents.Guardrails.Tests.csproj" />
+    <Project Path="src/Tests/GovUK.Dfe.AI.Agents.Mcp.Tests/GovUK.Dfe.AI.Agents.Mcp.Tests.csproj" />
+    <Project Path="src/Tests/GovUK.Dfe.AI.Agents.Tests/GovUK.Dfe.AI.Agents.Tests.csproj" />
+  </Folder>
+  <Project Path="src/GovUK.Dfe.AI.Agents.AISearch/GovUK.Dfe.AI.Agents.AISearch.csproj" />
+  <Project Path="src/GovUK.Dfe.AI.Agents.Evaluation/GovUK.Dfe.AI.Agents.Evaluation.csproj" />
+  <Project Path="src/GovUK.Dfe.AI.Agents.Guardrails/GovUK.Dfe.AI.Agents.Guardrails.csproj" />
+  <Project Path="src/GovUK.Dfe.AI.Agents.Mcp/GovUK.Dfe.AI.Agents.Mcp.csproj" />
+  <Project Path="src/GovUK.Dfe.AI.Agents/GovUK.Dfe.AI.Agents.csproj" />
+</Solution>

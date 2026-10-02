@@ -1,0 +1,34 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <PackageReadmeFile>readme.md</PackageReadmeFile>
+    <Title>GovUK.Dfe.AI.Agents.Mcp</Title>
+    <Description>Tools from your own MCP servers for GovUK.Dfe.AI.Agents: run in your app with your credential, deny by default, checked at startup.</Description>
+    <Authors>DFE-Digital</Authors>
+    <NoWarn>$(NoWarn);OPENAI001</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="readme.md" Pack="true" PackagePath="\" />
+    <InternalsVisibleTo Include="GovUK.Dfe.AI.Agents.Mcp.Tests" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <!-- The lowest core version this add-on needs: its package depends on core >= this. Set it after core's first
+         release, and raise it only when the add-on starts using something newer from core. -->
+    <CoreMinimumVersion>0.0.1-prerelease.31</CoreMinimumVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\GovUK.Dfe.AI.Agents\GovUK.Dfe.AI.Agents.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="ModelContextProtocol.Core" Version="2.2.0" />
+    <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.0" />
+  </ItemGroup>
+
+</Project>

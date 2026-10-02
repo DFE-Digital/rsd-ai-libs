@@ -14,7 +14,7 @@ using GovUK.Dfe.AI.Agents.Factories;
 using GovUK.Dfe.AI.Agents.Options;
 using GovUK.Dfe.AI.Agents.Orchestration.Interfaces;
 using GovUK.Dfe.AI.Agents.Orchestration;
-using GovUK.Dfe.AI.Agents.Packages;
+using GovUK.Dfe.AI.Agents.Extensibility;
 using GovUK.Dfe.AI.Agents.Prompts.Interfaces;
 using GovUK.Dfe.AI.Agents.Prompts;
 using GovUK.Dfe.AI.Agents.Providers.Interfaces;

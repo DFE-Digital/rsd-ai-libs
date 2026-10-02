@@ -11,7 +11,7 @@ GovUK.Dfe.AI.Agents.Builders.AgentsBuilder
 GovUK.Dfe.AI.Agents.Builders.AgentsBuilder.AddAgentProvider<TProvider>() -> GovUK.Dfe.AI.Agents.Builders.AgentsBuilder!
 GovUK.Dfe.AI.Agents.Builders.AgentsBuilder.AddAgents(params GovUK.Dfe.AI.Agents.ValueObjects.AgentDefinition![]! definitions) -> GovUK.Dfe.AI.Agents.Builders.AgentsBuilder!
 GovUK.Dfe.AI.Agents.Builders.AgentsBuilder.AddEphemeralAgentSweep(System.TimeSpan? interval = null) -> GovUK.Dfe.AI.Agents.Builders.AgentsBuilder!
-GovUK.Dfe.AI.Agents.Builders.AgentsBuilder.AddPackage(GovUK.Dfe.AI.Agents.Packages.Interfaces.IAgentsPackage! package) -> GovUK.Dfe.AI.Agents.Builders.AgentsBuilder!
+GovUK.Dfe.AI.Agents.Builders.AgentsBuilder.AddPackage(GovUK.Dfe.AI.Agents.Extensibility.Interfaces.IAgentsPackage! package) -> GovUK.Dfe.AI.Agents.Builders.AgentsBuilder!
 GovUK.Dfe.AI.Agents.Builders.AgentsBuilder.AddQualityEvaluation(System.Func<System.IServiceProvider!, GovUK.Dfe.AI.Agents.Quality.Interfaces.IAgentRunEvaluator!>! evaluator, double sampleRate = 0.05) -> GovUK.Dfe.AI.Agents.Builders.AgentsBuilder!
 GovUK.Dfe.AI.Agents.Builders.AgentsBuilder.AddTools(string! agentName, GovUK.Dfe.AI.Agents.Tools.Interfaces.IAgentToolProvider! provider) -> GovUK.Dfe.AI.Agents.Builders.AgentsBuilder!
 GovUK.Dfe.AI.Agents.Builders.AgentsBuilder.Configure(System.Action<GovUK.Dfe.AI.Agents.Options.AgentsOptions!>! configure) -> GovUK.Dfe.AI.Agents.Builders.AgentsBuilder!
@@ -272,16 +272,16 @@ GovUK.Dfe.AI.Agents.Orchestration.Interfaces.IAgentOrchestrator
 GovUK.Dfe.AI.Agents.Orchestration.Interfaces.IAgentOrchestrator.RunParallelAsync(System.Collections.Generic.IReadOnlyList<GovUK.Dfe.AI.Agents.ValueObjects.AgentReference!>! agents, string! input, GovUK.Dfe.AI.Agents.Context.AgentContext! context, int? maxConcurrency = null, System.Func<System.Exception!, bool>? shouldSuppress = null, System.Func<GovUK.Dfe.AI.Agents.ValueObjects.AgentReference!, GovUK.Dfe.AI.Agents.ValueObjects.ToolCallResolver?>? resolveToolCallsFor = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<GovUK.Dfe.AI.Agents.ValueObjects.OrchestrationResult!>!
 GovUK.Dfe.AI.Agents.Orchestration.Interfaces.IAgentOrchestrator.RunSequentialAsync(System.Collections.Generic.IReadOnlyList<GovUK.Dfe.AI.Agents.ValueObjects.AgentReference!>! agents, string! initialInput, GovUK.Dfe.AI.Agents.Context.AgentContext! context, System.Func<System.Exception!, bool>? shouldSuppress = null, System.Func<GovUK.Dfe.AI.Agents.ValueObjects.AgentReference!, GovUK.Dfe.AI.Agents.ValueObjects.ToolCallResolver?>? resolveToolCallsFor = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<GovUK.Dfe.AI.Agents.ValueObjects.OrchestrationResult!>!
 GovUK.Dfe.AI.Agents.Orchestration.Interfaces.IAgentOrchestrator.RunStepsInParallelAsync(System.Collections.Generic.IReadOnlyList<GovUK.Dfe.AI.Agents.ValueObjects.AgentOrchestrationStep!>! steps, GovUK.Dfe.AI.Agents.Context.AgentContext! context, int? maxConcurrency = null, System.Func<System.Exception!, bool>? shouldSuppress = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<GovUK.Dfe.AI.Agents.ValueObjects.OrchestrationResult!>!
-GovUK.Dfe.AI.Agents.Packages.AgentsPackageContext
-GovUK.Dfe.AI.Agents.Packages.AgentsPackageContext.CredentialFor(GovUK.Dfe.AI.Agents.Enums.AzureCredentialTarget target, GovUK.Dfe.AI.Agents.Options.AgentsOptions.ServicePrincipalSettings? authentication) -> Azure.Core.TokenCredential!
-GovUK.Dfe.AI.Agents.Packages.AgentsPackageContext.Definitions.get -> System.Collections.Generic.IReadOnlyList<GovUK.Dfe.AI.Agents.ValueObjects.AgentDefinition!>!
-GovUK.Dfe.AI.Agents.Packages.AgentsPackageContext.McpCredentialFor(string! serverName, GovUK.Dfe.AI.Agents.Options.AgentsOptions.ServicePrincipalSettings? authentication) -> Azure.Core.TokenCredential!
-GovUK.Dfe.AI.Agents.Packages.AgentsPackageContext.Options.get -> GovUK.Dfe.AI.Agents.Options.AgentsOptions!
-GovUK.Dfe.AI.Agents.Packages.AgentsPackageContext.Section.get -> Microsoft.Extensions.Configuration.IConfigurationSection!
-GovUK.Dfe.AI.Agents.Packages.AgentsPackageContext.Services.get -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
-GovUK.Dfe.AI.Agents.Packages.Interfaces.IAgentsPackage
-GovUK.Dfe.AI.Agents.Packages.Interfaces.IAgentsPackage.Name.get -> string!
-GovUK.Dfe.AI.Agents.Packages.Interfaces.IAgentsPackage.Register(GovUK.Dfe.AI.Agents.Packages.AgentsPackageContext! context) -> void
+GovUK.Dfe.AI.Agents.Extensibility.AgentsPackageContext
+GovUK.Dfe.AI.Agents.Extensibility.AgentsPackageContext.CredentialFor(GovUK.Dfe.AI.Agents.Enums.AzureCredentialTarget target, GovUK.Dfe.AI.Agents.Options.AgentsOptions.ServicePrincipalSettings? authentication) -> Azure.Core.TokenCredential!
+GovUK.Dfe.AI.Agents.Extensibility.AgentsPackageContext.Definitions.get -> System.Collections.Generic.IReadOnlyList<GovUK.Dfe.AI.Agents.ValueObjects.AgentDefinition!>!
+GovUK.Dfe.AI.Agents.Extensibility.AgentsPackageContext.McpCredentialFor(string! serverName, GovUK.Dfe.AI.Agents.Options.AgentsOptions.ServicePrincipalSettings? authentication) -> Azure.Core.TokenCredential!
+GovUK.Dfe.AI.Agents.Extensibility.AgentsPackageContext.Options.get -> GovUK.Dfe.AI.Agents.Options.AgentsOptions!
+GovUK.Dfe.AI.Agents.Extensibility.AgentsPackageContext.Section.get -> Microsoft.Extensions.Configuration.IConfigurationSection!
+GovUK.Dfe.AI.Agents.Extensibility.AgentsPackageContext.Services.get -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+GovUK.Dfe.AI.Agents.Extensibility.Interfaces.IAgentsPackage
+GovUK.Dfe.AI.Agents.Extensibility.Interfaces.IAgentsPackage.Name.get -> string!
+GovUK.Dfe.AI.Agents.Extensibility.Interfaces.IAgentsPackage.Register(GovUK.Dfe.AI.Agents.Extensibility.AgentsPackageContext! context) -> void
 GovUK.Dfe.AI.Agents.Prompts.DelegatingPromptTemplateStore
 GovUK.Dfe.AI.Agents.Prompts.DelegatingPromptTemplateStore.DelegatingPromptTemplateStore(System.Func<string!, string!>! getTemplate) -> void
 GovUK.Dfe.AI.Agents.Prompts.DelegatingPromptTemplateStore.GetTemplate(string! key) -> string!

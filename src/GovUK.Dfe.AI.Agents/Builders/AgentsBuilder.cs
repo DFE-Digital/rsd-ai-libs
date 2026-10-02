@@ -2,7 +2,7 @@ using Azure.Core;
 using GovUK.Dfe.AI.Agents.Services.Interfaces;
 using GovUK.Dfe.AI.Agents.Enums;
 using GovUK.Dfe.AI.Agents.Options;
-using GovUK.Dfe.AI.Agents.Packages.Interfaces;
+using GovUK.Dfe.AI.Agents.Extensibility.Interfaces;
 using GovUK.Dfe.AI.Agents.Providers.Interfaces;
 using GovUK.Dfe.AI.Agents.Tools;
 using GovUK.Dfe.AI.Agents.Tools.Interfaces;

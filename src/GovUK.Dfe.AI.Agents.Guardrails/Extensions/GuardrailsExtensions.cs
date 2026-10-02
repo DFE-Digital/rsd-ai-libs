@@ -7,8 +7,8 @@ using GovUK.Dfe.AI.Agents.Guardrails.Services;
 using GovUK.Dfe.AI.Agents.Guardrails.Stores;
 using GovUK.Dfe.AI.Agents.Guardrails.Stores.Interfaces;
 using GovUK.Dfe.AI.Agents.Guardrails.Validators;
-using GovUK.Dfe.AI.Agents.Packages;
-using GovUK.Dfe.AI.Agents.Packages.Interfaces;
+using GovUK.Dfe.AI.Agents.Extensibility;
+using GovUK.Dfe.AI.Agents.Extensibility.Interfaces;
 
 // In Microsoft.Extensions.DependencyInjection, as Microsoft recommends for libraries' Add... methods, so apps can
 // call them without extra usings.

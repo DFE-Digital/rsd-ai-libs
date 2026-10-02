@@ -328,20 +328,20 @@ public sealed class McpToolClientTests
     {
         var session = new FakeSession(_ => ServerTools);
         var connects = 0;
-        var sut = new McpToolClient(Options("get_performance_data"), NullLogger<McpToolClient>.Instance, _ =>
+        var mcpToolClient = new McpToolClient(Options("get_performance_data"), NullLogger<McpToolClient>.Instance, _ =>
         {
             connects++;
             return Task.FromResult<IMcpSession>(session);
         });
-        await sut.GetToolsAsync(cancellationToken: cancellationToken);
+        await mcpToolClient.GetToolsAsync(cancellationToken: cancellationToken);
 
-        await sut.DisposeAsync();
-        await sut.DisposeAsync();
-        IDisposable disposedByAContainer = sut;   // as a service provider disposed with Dispose() does
+        await mcpToolClient.DisposeAsync();
+        await mcpToolClient.DisposeAsync();
+        McpToolClient disposedByAContainer = mcpToolClient;   // as a service provider disposed with Dispose() does
         disposedByAContainer.Dispose();
 
         Assert.Equal(1, session.DisposeCalls);
-        await Assert.ThrowsAsync<ObjectDisposedException>(() => sut.CallToolAsync("get_performance_data", "{}", cancellationToken));
+        await Assert.ThrowsAsync<ObjectDisposedException>(() => mcpToolClient.CallToolAsync("get_performance_data", "{}", cancellationToken));
         Assert.Equal(1, connects);
     }
 

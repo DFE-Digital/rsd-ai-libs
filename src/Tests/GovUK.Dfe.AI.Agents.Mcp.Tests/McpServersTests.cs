@@ -21,6 +21,7 @@ namespace GovUK.Dfe.AI.Agents.Mcp.Tests;
 public sealed class McpServersTests : IDisposable
 {
     private readonly string _prompt = Path.GetTempFileName();
+    private static readonly string[] second = ["get_performance_data"];
 
     public void Dispose() => File.Delete(_prompt);
 
@@ -133,7 +134,7 @@ public sealed class McpServersTests : IDisposable
         Assert.Equal("72% met the expected standard.", result.Output);
         Assert.IsType<McpAllowedToolsProvider>(Assert.Single(provider.GetServices<AgentToolBinding>()).Provider);
         await server.Received().GetToolsAsync(   // not get_absence_data, which the server also allows
-            Arg.Is<IReadOnlyList<string>?>(names => names != null && names.SequenceEqual(new[] { "get_performance_data" })), Arg.Any<CancellationToken>());
+            Arg.Is<IReadOnlyList<string>?>(names => names != null && names.SequenceEqual(second)), Arg.Any<CancellationToken>());
         await server.Received(1).CallToolAsync("get_performance_data", Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 

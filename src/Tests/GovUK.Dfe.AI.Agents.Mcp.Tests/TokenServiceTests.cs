@@ -82,24 +82,29 @@ public sealed class TokenServiceTests
     }
 
     /// <summary>Outages and throttling are worth another try; a wrong secret or missing permission never succeeds on retry.</summary>
-    public static TheoryData<Exception, bool> Failures => new()
+    /// <remarks>Keyed by name: theory data must be serializable for Test Explorer to list each case, and exceptions aren't.</remarks>
+    private static readonly Dictionary<string, (Func<Exception> Create, bool Retried)> FailureCases = new()
     {
-        { new RequestFailedException(503, "Service unavailable."), true },
-        { new RequestFailedException(429, "Too many requests."), true },
-        { new RequestFailedException(0, "Network unreachable."), true },
-        { new HttpRequestException("Connection reset."), true },
-        { new HttpRequestException("Bad gateway.", null, System.Net.HttpStatusCode.BadGateway), true },
-        { new RequestFailedException(403, "Forbidden."), false },
-        { new HttpRequestException("Unauthorized.", null, System.Net.HttpStatusCode.Unauthorized), false },
-        { new AuthenticationFailedException("Wrong secret."), false },
-        { new CredentialUnavailableException("No managed identity here."), false },
-        { new InvalidOperationException("Unexpected."), false },
+        ["503 service unavailable"] = (() => new RequestFailedException(503, "Service unavailable."), true),
+        ["429 too many requests"] = (() => new RequestFailedException(429, "Too many requests."), true),
+        ["network unreachable"] = (() => new RequestFailedException(0, "Network unreachable."), true),
+        ["connection reset"] = (() => new HttpRequestException("Connection reset."), true),
+        ["502 bad gateway"] = (() => new HttpRequestException("Bad gateway.", null, System.Net.HttpStatusCode.BadGateway), true),
+        ["403 forbidden"] = (() => new RequestFailedException(403, "Forbidden."), false),
+        ["401 unauthorized"] = (() => new HttpRequestException("Unauthorized.", null, System.Net.HttpStatusCode.Unauthorized), false),
+        ["wrong secret"] = (() => new AuthenticationFailedException("Wrong secret."), false),
+        ["no managed identity"] = (() => new CredentialUnavailableException("No managed identity here."), false),
+        ["unexpected error"] = (() => new InvalidOperationException("Unexpected."), false),
     };
+
+    public static TheoryData<string> Failures => [.. FailureCases.Keys];
 
     [Theory]
     [MemberData(nameof(Failures))]
-    public async Task RetriesOnlyFailuresThatCanSucceedNextTime(Exception failure, bool retried)
+    public async Task RetriesOnlyFailuresThatCanSucceedNextTime(string failureCase)
     {
+        var (create, retried) = FailureCases[failureCase];
+        var failure = create();
         var credential = new FakeCredential(TimeSpan.FromHours(1), failures: 1, failWith: failure);
         var sut = new TokenService(credential, Scope);
 

@@ -54,7 +54,7 @@ public sealed class TokenServiceTests
         var token = await new TokenService(credential, Scope).GetAccessTokenAsync(cancellationToken);
 
         Assert.Equal("token-1", token);
-        Assert.Equal([Scope], credential.Scopes);
+        Assert.Equal(new[] { Scope }, credential.Scopes);
     }
 
     [Fact]
@@ -97,7 +97,15 @@ public sealed class TokenServiceTests
         ["unexpected error"] = (() => new InvalidOperationException("Unexpected."), false),
     };
 
-    public static TheoryData<string> Failures => [.. FailureCases.Keys];
+    public static TheoryData<string> Failures
+    {
+        get
+        {
+            var data = new TheoryData<string>();
+            data.AddRange(FailureCases.Keys);
+            return data;
+        }
+    }
 
     [Theory]
     [MemberData(nameof(Failures))]

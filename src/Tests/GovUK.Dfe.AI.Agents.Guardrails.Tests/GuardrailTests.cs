@@ -25,14 +25,16 @@ namespace GovUK.Dfe.AI.Agents.Guardrails.Tests;
 /// <summary>A Foundry guardrail: applied by a provisioning job, checked by every app at startup.</summary>
 public sealed class GuardrailTests
 {
-    private const string Account = "/subscriptions/sub-1/resourceGroups/rg-1/providers/Microsoft.CognitiveServices/accounts/foundry-1";
+    private const string Subscription = "6d0e3f4a-1b2c-4d5e-8f90-123456789abc";
+    private const string FoundryEndpoint = "https://foundry-1.services.ai.azure.com/api/projects/test";
 
     private readonly InMemoryGuardrailStore _store = new();
     private readonly CollectingLoggerProvider _logs = new();
 
     private static GuardrailSettings Settings(bool requireAtStartup = true) => new()
     {
-        AccountResourceId = Account,
+        SubscriptionId = Subscription,
+        ResourceGroup = "rg-1",
         Name = "briefing-guardrail",
         Deployments = ["gpt-5.1", "gpt-4o"],
         RequireAtStartup = requireAtStartup,
@@ -172,7 +174,7 @@ public sealed class GuardrailTests
 
     private static Dictionary<string, string?> ValidGuardrail() => new()
     {
-        ["AccountResourceId"] = Account, ["Name"] = "briefing-guardrail", ["Deployments:0"] = "gpt-5.1",
+        ["SubscriptionId"] = Subscription, ["ResourceGroup"] = "rg-1", ["Name"] = "briefing-guardrail", ["Deployments:0"] = "gpt-5.1",
     };
 
     /// <summary>Registers with these <c>AiAgents:Guardrails</c> settings; by default every service signs in with one code credential.</summary>
@@ -180,7 +182,7 @@ public sealed class GuardrailTests
     {
         var settings = new Dictionary<string, string?>
         {
-            ["AiAgents:Foundry:Endpoint"] = "https://example.services.ai.azure.com/api/projects/test",
+            ["AiAgents:Foundry:Endpoint"] = FoundryEndpoint,
             ["AiAgents:Foundry:DefaultModel"] = "myconnection/gpt-5.1",
         };
         foreach (var (key, value) in guardrails)
@@ -198,10 +200,30 @@ public sealed class GuardrailTests
     [InlineData(new string[] { }, new[] { "CASE-(" }, "has a pattern that isn't a valid regular expression")]
     public void AnInvalidBlocklist_IsReported_WithWhatsWrong(string[] terms, string[] patterns, string expected)
     {
-        var settings = new GuardrailSettings { AccountResourceId = Account, Name = "briefing-guardrail", Deployments = ["gpt-5.1"] };
+        var settings = new GuardrailSettings { SubscriptionId = Subscription, ResourceGroup = "rg-1", Name = "briefing-guardrail", Deployments = ["gpt-5.1"] };
         settings.Blocklists["case-references"] = new GuardrailBlocklistSettings { Terms = [.. terms], Patterns = [.. patterns] };
 
-        Assert.Equal([$"Blocklists:case-references ({expected})"], settings.Problems());
+        Assert.Equal([$"Blocklists:case-references ({expected})"], settings.Problems(FoundryEndpoint));
+    }
+
+    [Theory]
+    [InlineData(null, "https://foundry-1.services.ai.azure.com/api/projects/test", "foundry-1")]
+    [InlineData("foundry-models", "https://foundry-1.services.ai.azure.com/api/projects/test", "foundry-models")]   // deployments on another resource
+    public void TheFoundryResource_IsTheOneInFoundryEndpoint_UnlessAccountNameIsSet(string? accountName, string foundryEndpoint, string expected)
+    {
+        var settings = new GuardrailSettings { SubscriptionId = Subscription, ResourceGroup = "rg-1", AccountName = accountName };
+
+        settings.ResolveResourceId(foundryEndpoint);
+
+        Assert.Equal($"/subscriptions/{Subscription}/resourceGroups/rg-1/providers/Microsoft.CognitiveServices/accounts/{expected}", settings.ResourceId);
+    }
+
+    [Fact]
+    public void AnEndpointThatDoesntNameTheResource_AsksForAccountName()
+    {
+        var settings = new GuardrailSettings { SubscriptionId = Subscription, ResourceGroup = "rg-1", Name = "g", Deployments = ["gpt-5.1"] };
+
+        Assert.Equal(["AccountName (Foundry:Endpoint doesn't name the resource, so set it here)"], settings.Problems("https://localhost:5001/project"));
     }
 
     [Fact]
@@ -240,7 +262,7 @@ public sealed class GuardrailTests
         var valid = Build(ValidGuardrail());
         var ex = Assert.Throws<InvalidOperationException>(() => Build(new()
         {
-            ["AccountResourceId"] = "foundry-1",
+            ["SubscriptionId"] = "sub-1",
             ["Blocklists:case refs:Terms:0"] = "Project Falcon",
             ["Blocklists:case-references:Patterns:0"] = "CASE-(",
         }));
@@ -249,7 +271,8 @@ public sealed class GuardrailTests
         Assert.Contains(valid, service => service.ImplementationType == typeof(GuardrailStartupValidator));
         foreach (var problem in new[]
                  {
-                     "AiAgents:Guardrails:AccountResourceId", "AiAgents:Guardrails:Name", "AiAgents:Guardrails:Deployments",
+                     "AiAgents:Guardrails:SubscriptionId (the subscription's ID, a GUID)", "AiAgents:Guardrails:ResourceGroup",
+                     "AiAgents:Guardrails:Name", "AiAgents:Guardrails:Deployments",
                      "AiAgents:Guardrails:Blocklists:case refs (a name of letters, digits",
                      "AiAgents:Guardrails:Blocklists:case-references (has a pattern that isn't a valid regular expression)",
                  })

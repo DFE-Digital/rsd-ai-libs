@@ -10,8 +10,12 @@ GovUK.Dfe.AI.Agents.Guardrails.Options.GuardrailBlocklistSettings.Patterns.set -
 GovUK.Dfe.AI.Agents.Guardrails.Options.GuardrailBlocklistSettings.Terms.get -> System.Collections.Generic.List<string!>!
 GovUK.Dfe.AI.Agents.Guardrails.Options.GuardrailBlocklistSettings.Terms.set -> void
 GovUK.Dfe.AI.Agents.Guardrails.Options.GuardrailSettings
-GovUK.Dfe.AI.Agents.Guardrails.Options.GuardrailSettings.AccountResourceId.get -> string?
-GovUK.Dfe.AI.Agents.Guardrails.Options.GuardrailSettings.AccountResourceId.set -> void
+GovUK.Dfe.AI.Agents.Guardrails.Options.GuardrailSettings.AccountName.get -> string?
+GovUK.Dfe.AI.Agents.Guardrails.Options.GuardrailSettings.AccountName.set -> void
+GovUK.Dfe.AI.Agents.Guardrails.Options.GuardrailSettings.ResourceGroup.get -> string?
+GovUK.Dfe.AI.Agents.Guardrails.Options.GuardrailSettings.ResourceGroup.set -> void
+GovUK.Dfe.AI.Agents.Guardrails.Options.GuardrailSettings.SubscriptionId.get -> string?
+GovUK.Dfe.AI.Agents.Guardrails.Options.GuardrailSettings.SubscriptionId.set -> void
 GovUK.Dfe.AI.Agents.Guardrails.Options.GuardrailSettings.Authentication.get -> GovUK.Dfe.AI.Agents.Options.AgentsOptions.ServicePrincipalSettings?
 GovUK.Dfe.AI.Agents.Guardrails.Options.GuardrailSettings.Authentication.set -> void
 GovUK.Dfe.AI.Agents.Guardrails.Options.GuardrailSettings.BlockFrom.get -> GovUK.Dfe.AI.Agents.Guardrails.Enums.GuardrailSeverity

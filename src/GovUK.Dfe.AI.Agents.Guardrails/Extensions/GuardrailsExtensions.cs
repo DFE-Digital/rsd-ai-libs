@@ -51,7 +51,7 @@ public static class GuardrailsExtensions
             }
 
             var settings = section.Get<GuardrailSettings>() ?? new GuardrailSettings();
-            var problems = settings.Problems().ToList();
+            var problems = settings.Problems(context.Options.Foundry.Endpoint).ToList();
             problems.ForEach(problem => context.ReportProblem($"{SectionName}:{problem}"));
             var credential = context.CredentialFor(SectionName, settings.Authentication, $"{SectionName}:Authentication");
             if (problems.Count > 0)
@@ -59,9 +59,10 @@ public static class GuardrailsExtensions
                 return;
             }
 
+            settings.ResolveResourceId(context.Options.Foundry.Endpoint);
             var services = context.Services;
             services.AddSingleton(settings);
-            services.AddSingleton<IGuardrailStore>(_ => new ArmGuardrailStore(new ArmClient(credential), new ResourceIdentifier(settings.AccountResourceId!)));
+            services.AddSingleton<IGuardrailStore>(_ => new ArmGuardrailStore(new ArmClient(credential), new ResourceIdentifier(settings.ResourceId!)));
             services.AddSingleton<IFoundryGuardrailsService, FoundryGuardrailsService>();
             services.AddHostedService<GuardrailStartupValidator>();
         }

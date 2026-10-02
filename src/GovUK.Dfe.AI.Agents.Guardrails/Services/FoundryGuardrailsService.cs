@@ -93,5 +93,5 @@ internal sealed class FoundryGuardrailsService(IGuardrailStore store, GuardrailS
     }
 
     private InvalidOperationException AccessDenied(string role, RequestFailedException ex)
-        => new(string.Format(Constants.ErrorMessages.GuardrailAccessDenied, role, settings.AccountResourceId), ex);
+        => new(string.Format(Constants.ErrorMessages.GuardrailAccessDenied, role, settings.ResourceId), ex);
 }

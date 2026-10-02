@@ -18,7 +18,8 @@ dotnet add package GovUK.Dfe.AI.Agents.Guardrails
 ```json
 "AiAgents": {
   "Guardrails": {
-    "AccountResourceId": "/subscriptions/<id>/resourceGroups/<group>/providers/Microsoft.CognitiveServices/accounts/<foundry>",
+    "SubscriptionId": "<subscription id>",
+    "ResourceGroup": "<resource group>",
     "Name": "briefing-guardrail",
     "Deployments": [ "gpt-5.1" ]
   }

@@ -27,17 +27,6 @@ public sealed partial class AgentsOptions
     /// <summary>Foundry client retries on a transient failure. A retried call may be billed twice.</summary>
     public int MaxRetries { get; set; } = 3;
 
-    // ===== Add-on packages =====
-
-    /// <summary>MCP servers, keyed by a name you choose. Needs the .Mcp package.</summary>
-    public Dictionary<string, McpServerSettings> McpServers { get; set; } = [];
-
-    /// <summary>Azure AI Search, for the .AISearch package. Only its <c>Authentication</c> is read here; null without a <c>Search</c> section.</summary>
-    public SearchSettings? Search { get; set; }
-
-    /// <summary>The Foundry guardrail the model deployments agents use must carry. Needs the .Guardrails package.</summary>
-    public GuardrailSettings? Guardrails { get; set; }
-
     // ===== Each run =====
 
     /// <summary>The longest one run may take, tool rounds included. Unset: no limit.</summary>

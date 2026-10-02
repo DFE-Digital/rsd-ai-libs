@@ -2,6 +2,7 @@ using Azure.Core;
 using Azure.Identity;
 using GovUK.Dfe.AI.Agents.Builders;
 using GovUK.Dfe.AI.Agents.Clients.Interfaces;
+using GovUK.Dfe.AI.Agents.Enums;
 using GovUK.Dfe.AI.Agents.Services.Interfaces;
 using GovUK.Dfe.AI.Agents.Mcp.Clients;
 using GovUK.Dfe.AI.Agents.Mcp.Clients.Interfaces;
@@ -104,6 +105,68 @@ public sealed class McpServersTests : IDisposable
         var ex = Assert.Throws<InvalidOperationException>(() => Services(settings));
 
         Assert.Contains("AiAgents:McpServers (agents.AddMcpServers() needs this section)", ex.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AddMcpServers_CalledTwice_ConnectsEachServerOnce()
+    {
+        var services = Services(Settings(), agents => agents.AddMcpServers());
+
+        Assert.Single(services, service => service.ServiceType == typeof(IMcpToolClient));
+    }
+
+    [Fact]
+    public void InvalidServerSettings_AreListedWithCoreSettings_InOneError()
+    {
+        var settings = Settings();
+        settings.Remove("AiAgents:Foundry:Endpoint");
+        settings["AiAgents:McpServers:school-performance:ServerUri"] = "not a uri";
+        settings["AiAgents:McpServers:news:ServerUri"] = "https://news.example/mcp";   // no Scope or AllowedToolNames
+
+        var ex = Assert.Throws<InvalidOperationException>(() => Services(settings));
+
+        foreach (var setting in new[]
+                 {
+                     "AiAgents:Foundry:Endpoint", "AiAgents:McpServers:school-performance:ServerUri",
+                     "AiAgents:McpServers:news:Scope", "AiAgents:McpServers:news:AllowedToolNames",
+                 })
+        {
+            Assert.Contains(setting, ex.Message, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
+    public void UseMcpCredential_ForAServerThatIsntConfigured_FailsStartup()
+    {
+        var ex = Assert.Throws<InvalidOperationException>(() => Services(Settings(),
+            agents => agents.UseMcpCredential("school-performnce", Substitute.For<TokenCredential>())));
+
+        Assert.Contains("AiAgents:McpServers:school-performnce (UseMcpCredential names a server that isn't configured)", ex.Message,
+            StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(false, "AiAgents:McpServers:school-performance:Authentication:ClientSecret")]   // its own block is incomplete
+    [InlineData(true, "AiAgents:Authentication:ClientId")]   // no block of its own, so it needs the default
+    public void AServersSignIn_IsChecked_AtStartup(bool useDefault, string reported)
+    {
+        var settings = Settings();
+        foreach (var key in settings.Keys.Where(key => key.StartsWith("AiAgents:Authentication:", StringComparison.Ordinal)).ToList())
+        {
+            settings.Remove(key);
+        }
+
+        if (!useDefault)
+        {
+            settings["AiAgents:McpServers:school-performance:Authentication:TenantId"] = "partner-tenant";
+            settings["AiAgents:McpServers:school-performance:Authentication:ClientId"] = "partner-client";
+        }
+
+        // Foundry has a credential in code, so only the server's sign-in is in question.
+        var ex = Assert.Throws<InvalidOperationException>(() => Services(settings,
+            agents => agents.UseCredentialFor(AzureCredentialTarget.Foundry, Substitute.For<TokenCredential>())));
+
+        Assert.Contains(reported, ex.Message, StringComparison.Ordinal);
     }
 
     [Fact]

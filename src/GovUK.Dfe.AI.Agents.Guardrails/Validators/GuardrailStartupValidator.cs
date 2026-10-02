@@ -1,9 +1,9 @@
 using GovUK.Dfe.AI.Agents.Guardrails.Constants;
 using GovUK.Dfe.AI.Agents.Guardrails.Services.Interfaces;
 using GovUK.Dfe.AI.Agents.Guardrails.ValueObjects;
-using GovUK.Dfe.AI.Agents.Options;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using GovUK.Dfe.AI.Agents.Guardrails.Options;
 
 namespace GovUK.Dfe.AI.Agents.Guardrails.Validators;
 
@@ -11,7 +11,7 @@ namespace GovUK.Dfe.AI.Agents.Guardrails.Validators;
 /// At startup, checks every deployment in <c>Deployments</c> carries the guardrail. A missing or weaker guardrail fails
 /// startup (or warns, with <c>RequireAtStartup: false</c>); an unreachable Resource Manager only warns.
 /// </summary>
-internal sealed class GuardrailStartupValidator(IFoundryGuardrailsService guardrails, AgentsOptions.GuardrailSettings settings,
+internal sealed class GuardrailStartupValidator(IFoundryGuardrailsService guardrails, GuardrailSettings settings,
     ILogger<GuardrailStartupValidator> logger) : IHostedService
 {
     public async Task StartAsync(CancellationToken cancellationToken)

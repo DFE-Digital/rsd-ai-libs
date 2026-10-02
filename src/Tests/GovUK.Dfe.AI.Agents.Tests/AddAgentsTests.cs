@@ -2,6 +2,8 @@ using Azure.Core;
 using GovUK.Dfe.AI.Agents.Builders;
 using GovUK.Dfe.AI.Agents.Concurrency;
 using GovUK.Dfe.AI.Agents.Context.Interfaces;
+using GovUK.Dfe.AI.Agents.Extensibility;
+using GovUK.Dfe.AI.Agents.Extensibility.Interfaces;
 using GovUK.Dfe.AI.Agents.Factories;
 using GovUK.Dfe.AI.Agents.Options;
 using GovUK.Dfe.AI.Agents.Providers.Interfaces;
@@ -40,26 +42,10 @@ public sealed class AddAgentsTests
         return services.BuildServiceProvider();
     }
 
-    [Theory]
-    [InlineData("McpServers:school-performance:ServerUri", "https://mcp.internal.example/mcp", "McpServers (add GovUK.Dfe.AI.Agents.Mcp and call agents.AddMcpServers())")]
-    [InlineData("Search:Endpoint", "https://example.search.windows.net", "Search (add GovUK.Dfe.AI.Agents.AISearch and call agents.AddAISearch())")]
-    [InlineData("Guardrails:Name", "briefing-guardrail", "Guardrails (add GovUK.Dfe.AI.Agents.Guardrails and call agents.AddGuardrails())")]
-    public void ASectionWhosePackageIsntAdded_FailsStartup_NamingThePackage(string key, string value, string expected)
+    private static Dictionary<string, string?> WithGlobalConcurrency(Dictionary<string, string?> settings)
     {
-        var settings = ValidSettings();
-        settings[$"AiAgents:{key}"] = value;
-
-        var ex = Assert.Throws<InvalidOperationException>(() => Build(settings));
-
-        Assert.Contains($"AiAgents:{expected}", ex.Message, StringComparison.Ordinal);
-    }
-
-    private static Dictionary<string, string?> WithMcpServer(Dictionary<string, string?> settings)
-    {
-        settings["AiAgents:McpServers:school-performance:ServerUri"] = "https://mcp.internal.example/mcp";
-        settings["AiAgents:McpServers:school-performance:Scope"] = "api://school-performance/.default";
-        settings["AiAgents:McpServers:school-performance:AllowedToolNames:0"] = "get_performance_data";
-        settings["AiAgents:McpServers:school-performance:AllowedToolNames:1"] = "get_absence_data";
+        settings["AiAgents:GlobalConcurrency:MaxConcurrentRuns"] = "20";
+        settings["AiAgents:GlobalConcurrency:BlobContainerUri"] = "https://account.blob.core.windows.net/run-slots";
         return settings;
     }
 
@@ -85,8 +71,8 @@ public sealed class AddAgentsTests
     [Fact]
     public void AServiceWithoutItsOwnBlock_FallsBackToTheDefault_SoTheDefaultIsRequired()
     {
-        var settings = WithoutDefaultPrincipal(WithMcpServer(ValidSettings()));
-        OwnPrincipal(settings, "Foundry");   // the MCP server has no block of its own
+        var settings = WithoutDefaultPrincipal(WithGlobalConcurrency(ValidSettings()));
+        OwnPrincipal(settings, "Foundry");   // the run-slot store has no block of its own
 
         var ex = Assert.Throws<InvalidOperationException>(() => Build(settings));
 
@@ -96,24 +82,79 @@ public sealed class AddAgentsTests
     [Fact]
     public void AnIncompleteServiceBlock_IsNamedInTheError()
     {
-        var settings = ValidSettings();
-        settings["AiAgents:Search:Endpoint"] = "https://example.search.windows.net";
-        settings["AiAgents:Search:Indexes:0:Name"] = "ofsted_index";
-        settings["AiAgents:Search:Authentication:TenantId"] = "tenant-1";
-        settings["AiAgents:Search:Authentication:ClientId"] = "search-client";   // no secret
+        var settings = WithGlobalConcurrency(ValidSettings());
+        settings["AiAgents:GlobalConcurrency:Authentication:TenantId"] = "tenant-1";
+        settings["AiAgents:GlobalConcurrency:Authentication:ClientId"] = "slots-client";   // no secret
 
         var ex = Assert.Throws<InvalidOperationException>(() => Build(settings));
 
-        Assert.Contains("AiAgents:Search:Authentication:ClientSecret", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("AiAgents:GlobalConcurrency:Authentication:ClientSecret", ex.Message, StringComparison.Ordinal);
+    }
+
+    // ===================== Add-on packages =====================
+
+    /// <summary>An add-on built as the real ones are: it reads its own block, signs in through core, and reports problems.</summary>
+    private sealed class FakePackage : IAgentsPackage
+    {
+        public string Name => "Fake";
+
+        public int Registrations { get; private set; }
+
+        public TokenCredential? Credential { get; private set; }
+
+        public IReadOnlyCollection<string> CodeCredentials { get; private set; } = [];
+
+        public void Register(AgentsPackageContext context)
+        {
+            Registrations++;
+            CodeCredentials = [.. context.CodeCredentials];
+            var section = context.Section.GetSection("Fake");
+            if (string.IsNullOrWhiteSpace(section["Endpoint"]))
+            {
+                context.ReportProblem("Fake:Endpoint");
+            }
+
+            Credential = context.CredentialFor("Fake", section.GetSection("Authentication").Get<AgentsOptions.ServicePrincipalSettings>(),
+                "Fake:Authentication");
+        }
     }
 
     [Fact]
-    public void UseMcpCredential_ForAServerThatIsntConfigured_FailsStartup()
+    public void AnAddOnsProblems_AreListedWithCoresProblems_InOneError()
     {
-        var ex = Assert.Throws<InvalidOperationException>(() => Build(ValidSettings(),
-            agents => agents.UseMcpCredential("school-performnce", Substitute.For<TokenCredential>())));
+        var settings = WithoutDefaultPrincipal(ValidSettings());
+        settings.Remove("AiAgents:Foundry:Endpoint");
+        var package = new FakePackage();
 
-        Assert.Contains("school-performnce", ex.Message, StringComparison.Ordinal);
+        var ex = Assert.Throws<InvalidOperationException>(() => Build(settings, agents => agents.AddPackage(package)));
+
+        foreach (var setting in new[] { "AiAgents:Foundry:Endpoint", "AiAgents:Fake:Endpoint", "AiAgents:Authentication:ClientId" })
+        {
+            Assert.Contains(setting, ex.Message, StringComparison.Ordinal);
+        }
+
+        // Core and the add-on both fall back to the missing default; it's listed once.
+        Assert.Single(ex.Message.Split(", "), problem => problem.Contains("AiAgents:Authentication:TenantId", StringComparison.Ordinal));
+        // The add-on gets a credential that can't be used by accident; startup has already failed anyway.
+        var request = new TokenRequestContext(["scope"]);
+        Assert.Throws<InvalidOperationException>(() => package.Credential!.GetToken(request, TestContext.Current.CancellationToken));
+        Assert.Throws<InvalidOperationException>(() => package.Credential!.GetTokenAsync(request, TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public void AnAddOn_IsRegisteredOnce_AndSignsInWithItsCodeCredential()
+    {
+        var settings = ValidSettings();
+        settings["AiAgents:Fake:Endpoint"] = "https://fake.example";
+        var credential = Substitute.For<TokenCredential>();
+        var package = new FakePackage();
+
+        using var provider = Build(settings, agents => agents.AddPackage(package).AddPackage(new FakePackage())
+            .UseCredentialFor("Fake", credential));
+
+        Assert.Equal(1, package.Registrations);
+        Assert.Same(credential, package.Credential);
+        Assert.Equal(["Fake"], package.CodeCredentials);
     }
 
     [Fact]
@@ -246,16 +287,12 @@ public sealed class AddAgentsTests
     [Fact]
     public void ListsEveryMissingSetting_InOneError()
     {
-        var ex = Assert.Throws<InvalidOperationException>(() => Build(new Dictionary<string, string?>
-        {
-            ["AiAgents:McpServers:school-performance:ServerUri"] = "https://mcp.internal.example/mcp",
-        }));
+        var ex = Assert.Throws<InvalidOperationException>(() => Build([]));
 
         foreach (var setting in new[]
                  {
                      "AiAgents:Foundry:Endpoint", "AiAgents:Foundry:DefaultModel", "AiAgents:Authentication:TenantId",
                      "AiAgents:Authentication:ClientId", "AiAgents:Authentication:ClientSecret",
-                     "AiAgents:McpServers:school-performance:Scope", "AiAgents:McpServers:school-performance:AllowedToolNames",
                  })
         {
             Assert.Contains(setting, ex.Message, StringComparison.Ordinal);

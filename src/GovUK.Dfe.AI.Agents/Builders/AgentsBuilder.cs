@@ -119,19 +119,19 @@ public sealed class AgentsBuilder
         return Configure(options => options.Credential = credential);
     }
 
-    /// <summary>A credential for one service, e.g. <c>AgentsService.Foundry</c>. Overrides its block and the default.</summary>
+    /// <summary>A credential for one of core's services, e.g. <c>AzureCredentialTarget.Foundry</c>. Overrides its block and the default.</summary>
     public AgentsBuilder UseCredentialFor(AzureCredentialTarget service, TokenCredential credential)
-    {
-        ArgumentNullException.ThrowIfNull(credential);
-        return Configure(options => options.CredentialOverrides[service.ToString()] = credential);
-    }
+        => UseCredentialFor(service.ToString(), credential);
 
-    /// <summary>A credential for one MCP server (its key under <c>McpServers</c>). Overrides its block and the default.</summary>
-    public AgentsBuilder UseMcpCredential(string serverName, TokenCredential credential)
+    /// <summary>
+    /// A credential for a service by key, e.g. an add-on's (each add-on wraps this, e.g. <c>UseMcpCredential</c>).
+    /// Overrides the service's block and the default.
+    /// </summary>
+    public AgentsBuilder UseCredentialFor(string serviceKey, TokenCredential credential)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(serverName);
+        ArgumentException.ThrowIfNullOrWhiteSpace(serviceKey);
         ArgumentNullException.ThrowIfNull(credential);
-        return Configure(options => options.CredentialOverrides[AgentsOptions.McpCredentialKey(serverName)] = credential);
+        return Configure(options => options.CredentialOverrides[serviceKey] = credential);
     }
 
     /// <summary>A credential for the <c>ExternallyManagedAgents</c> project (needs its <c>Endpoint</c>). Overrides its <c>Authentication</c> and this app's Foundry credential.</summary>

@@ -7,10 +7,11 @@ using GovUK.Dfe.AI.Agents.Mcp.Providers;
 using GovUK.Dfe.AI.Agents.Mcp.Services;
 using GovUK.Dfe.AI.Agents.Mcp.Services.Interfaces;
 using GovUK.Dfe.AI.Agents.Mcp.Validators;
-using GovUK.Dfe.AI.Agents.Options;
 using GovUK.Dfe.AI.Agents.Extensibility;
 using GovUK.Dfe.AI.Agents.Extensibility.Interfaces;
 using GovUK.Dfe.AI.Agents.Tools;
+using Azure.Core;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
@@ -21,6 +22,9 @@ namespace Microsoft.Extensions.DependencyInjection;
 /// <summary>Adds MCP servers to <c>AddAgents</c>.</summary>
 public static class McpServersExtensions
 {
+    private const string SectionName = "McpServers";
+    private const string CredentialPrefix = "Mcp:";
+
     /// <summary>
     /// Connects the servers under <c>AiAgents:McpServers</c> and gives each agent the tools named in its <c>AllowedTools</c>.
     /// Tools run in this app with its credential; Foundry only sees their definitions.
@@ -29,6 +33,14 @@ public static class McpServersExtensions
     {
         ArgumentNullException.ThrowIfNull(agents);
         return agents.AddPackage(new McpPackage());
+    }
+
+    /// <summary>A credential for one MCP server (its key under <c>McpServers</c>). Overrides its <c>Authentication</c> and the default.</summary>
+    public static AgentsBuilder UseMcpCredential(this AgentsBuilder agents, string serverName, TokenCredential credential)
+    {
+        ArgumentNullException.ThrowIfNull(agents);
+        ArgumentException.ThrowIfNullOrWhiteSpace(serverName);
+        return agents.UseCredentialFor(CredentialPrefix + serverName, credential);
     }
 
     /// <summary>One MCP server, keyed by <paramref name="serverKey"/>: its connection, sign-in and startup check.</summary>
@@ -59,28 +71,53 @@ public static class McpServersExtensions
 
         public void Register(AgentsPackageContext context)
         {
-            var (services, options, definitions) = (context.Services, context.Options, context.Definitions);
-            foreach (var (key, server) in options.McpServers)
+            var servers = context.Section.GetSection(SectionName).Get<Dictionary<string, McpServerSettings>>() ?? [];
+            if (servers.Count == 0)
             {
-                services.AddMcpClientServices(key, new McpServerConnectionOptions
-                {
-                    ServerLabel = key,
-                    ServerUri = new Uri(server.ServerUri!),
-                    AllowedToolNames = server.AllowedToolNames,
-                    ToolListCacheDuration = server.ToolListCacheDuration,
-                    Credential = context.McpCredentialFor(key, server.Authentication),
-                    Scope = server.Scope!,
-                });
+                context.ReportProblem($"{SectionName} (agents.AddMcpServers() needs this section)");
+                return;
+            }
 
-                // Each agent gets only the tools its AllowedTools names, from the server that allows them.
-                foreach (var definition in definitions)
+            // A code credential for a server that isn't configured is almost certainly a typo in its name.
+            foreach (var key in context.CodeCredentials.Where(key => key.StartsWith(CredentialPrefix, StringComparison.Ordinal)
+                         && !servers.ContainsKey(key[CredentialPrefix.Length..])))
+            {
+                context.ReportProblem($"{SectionName}:{key[CredentialPrefix.Length..]} (UseMcpCredential names a server that isn't configured)");
+            }
+
+            foreach (var (key, server) in servers)
+            {
+                var problems = server.Problems().ToList();
+                problems.ForEach(problem => context.ReportProblem($"{SectionName}:{key}:{problem}"));
+                var credential = context.CredentialFor(CredentialPrefix + key, server.Authentication, $"{SectionName}:{key}:Authentication");
+                if (problems.Count == 0)
                 {
-                    var tools = server.AllowedToolNames.Where(name => definition.AllowedTools.Contains(McpToolClient.ToFunctionName(name))).ToList();
-                    if (tools.Count > 0)
-                    {
-                        services.AddSingleton(sp => new AgentToolBinding(definition.Name,
-                            new McpAllowedToolsProvider(sp.GetRequiredKeyedService<IMcpToolClient>(key), tools)));
-                    }
+                    Register(context, key, server, credential);
+                }
+            }
+        }
+
+        private static void Register(AgentsPackageContext context, string key, McpServerSettings server, TokenCredential credential)
+        {
+            var (services, definitions) = (context.Services, context.Definitions);
+            services.AddMcpClientServices(key, new McpServerConnectionOptions
+            {
+                ServerLabel = key,
+                ServerUri = new Uri(server.ServerUri!),
+                AllowedToolNames = server.AllowedToolNames,
+                ToolListCacheDuration = server.ToolListCacheDuration,
+                Credential = credential,
+                Scope = server.Scope!,
+            });
+
+            // Each agent gets only the tools its AllowedTools names, from the server that allows them.
+            foreach (var definition in definitions)
+            {
+                var tools = server.AllowedToolNames.Where(name => definition.AllowedTools.Contains(McpToolClient.ToFunctionName(name))).ToList();
+                if (tools.Count > 0)
+                {
+                    services.AddSingleton(sp => new AgentToolBinding(definition.Name,
+                        new McpAllowedToolsProvider(sp.GetRequiredKeyedService<IMcpToolClient>(key), tools)));
                 }
             }
         }

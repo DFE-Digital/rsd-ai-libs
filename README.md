@@ -59,11 +59,25 @@ analysis runs once for the whole solution, with coverage from every test project
 After each release, move the package's `PublicAPI.Unshipped.txt` entries into `PublicAPI.Shipped.txt`, and set its
 `PackageValidationBaselineVersion` to the version just released.
 
+### Releasing an add-on on its own
+
+Add-ons reference core as a project, so you can change both in one pull request and test them together. When an add-on
+is packed, it's built against the **published** core at the version in its `.csproj`:
+
+```xml
+<CoreMinimumVersion>1.2.0</CoreMinimumVersion>
+```
+
+Its package then depends on `GovUK.Dfe.AI.Agents >= 1.2.0`, so:
+
+- **An add-on change** releases only that add-on.
+- **A core change** releases only core. Released add-ons keep working with it.
+- **An add-on that needs something new in core** needs core released first, then `CoreMinimumVersion` raised to that
+  version. That's the only case with two releases.
+
 > [!IMPORTANT]
-> **Before the first release of core:** the add-ons reference core as a project, so their pack step is blocked on
-> purpose (the `RequireCorePackageReference` target in each add-on `.csproj`). Once core is on NuGet.org, in each
-> add-on, replace the `ProjectReference` with `<PackageReference Include="GovUK.Dfe.AI.Agents" Version="X.Y.Z" />`
-> (the lowest core version it needs) and delete that target.
+> **Before core's first release,** add-ons can't be packed: `CoreMinimumVersion` is empty, and packing stops with an
+> error rather than publish a package nobody can restore. Release core, then set `CoreMinimumVersion` in each add-on.
 
 ## Compatibility rules
 
@@ -72,6 +86,8 @@ Apps can upgrade any package on its own because the packages follow Microsoft's
 [src/Directory.Build.targets](src/Directory.Build.targets).
 
 - **Add-ons use only core's public API.** They plug in through `IAgentsPackage` and `AgentsPackageContext`.
+- **Add-ons own their settings.** Each one reads, checks and documents its own block under `AiAgents` (e.g.
+  `AiAgents:Guardrails`), so a new add-on setting never needs a core release.
 - **Public API is tracked.** Each package lists its public API in `PublicAPI.Shipped.txt` / `PublicAPI.Unshipped.txt`,
   and the build fails if the code doesn't match. After changing public API, run
   `dotnet format analyzers <project> --diagnostics RS0016 RS0017` and review the diff. A breaking change needs a new
@@ -85,6 +101,9 @@ Apps can upgrade any package on its own because the packages follow Microsoft's
    finds tests by this name), and add both to [GovUK.Dfe.AI.Agents.slnx](GovUK.Dfe.AI.Agents.slnx).
 2. Implement `IAgentsPackage`, and add an `Add{Name}(this AgentsBuilder agents)` method in the
    `Microsoft.Extensions.DependencyInjection` namespace that calls `agents.AddPackage(...)`. Use only core's public API.
+   In `Register`, read your settings from `context.Section`, report problems with `context.ReportProblem(...)`, and get
+   credentials with `context.CredentialFor(...)`. Set `CoreMinimumVersion` in the `.csproj` to the core version you
+   build on.
 3. Add `PublicAPI.Shipped.txt` and `PublicAPI.Unshipped.txt` (each starting with `#nullable enable`), then run
    `dotnet format analyzers <project> --diagnostics RS0016`.
 4. Copy an add-on workflow to `.github/workflows/build-deploy-ai-agents-{name}.yml` and change the package name and paths.

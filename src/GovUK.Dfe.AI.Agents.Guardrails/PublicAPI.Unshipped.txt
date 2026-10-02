@@ -1,4 +1,36 @@
 #nullable enable
+GovUK.Dfe.AI.Agents.Guardrails.Enums.GuardrailSeverity
+GovUK.Dfe.AI.Agents.Guardrails.Enums.GuardrailSeverity.High = 2 -> GovUK.Dfe.AI.Agents.Guardrails.Enums.GuardrailSeverity
+GovUK.Dfe.AI.Agents.Guardrails.Enums.GuardrailSeverity.Low = 0 -> GovUK.Dfe.AI.Agents.Guardrails.Enums.GuardrailSeverity
+GovUK.Dfe.AI.Agents.Guardrails.Enums.GuardrailSeverity.Medium = 1 -> GovUK.Dfe.AI.Agents.Guardrails.Enums.GuardrailSeverity
+GovUK.Dfe.AI.Agents.Guardrails.Options.GuardrailBlocklistSettings
+GovUK.Dfe.AI.Agents.Guardrails.Options.GuardrailBlocklistSettings.GuardrailBlocklistSettings() -> void
+GovUK.Dfe.AI.Agents.Guardrails.Options.GuardrailBlocklistSettings.Patterns.get -> System.Collections.Generic.List<string!>!
+GovUK.Dfe.AI.Agents.Guardrails.Options.GuardrailBlocklistSettings.Patterns.set -> void
+GovUK.Dfe.AI.Agents.Guardrails.Options.GuardrailBlocklistSettings.Terms.get -> System.Collections.Generic.List<string!>!
+GovUK.Dfe.AI.Agents.Guardrails.Options.GuardrailBlocklistSettings.Terms.set -> void
+GovUK.Dfe.AI.Agents.Guardrails.Options.GuardrailSettings
+GovUK.Dfe.AI.Agents.Guardrails.Options.GuardrailSettings.AccountResourceId.get -> string?
+GovUK.Dfe.AI.Agents.Guardrails.Options.GuardrailSettings.AccountResourceId.set -> void
+GovUK.Dfe.AI.Agents.Guardrails.Options.GuardrailSettings.Authentication.get -> GovUK.Dfe.AI.Agents.Options.AgentsOptions.ServicePrincipalSettings?
+GovUK.Dfe.AI.Agents.Guardrails.Options.GuardrailSettings.Authentication.set -> void
+GovUK.Dfe.AI.Agents.Guardrails.Options.GuardrailSettings.BlockFrom.get -> GovUK.Dfe.AI.Agents.Guardrails.Enums.GuardrailSeverity
+GovUK.Dfe.AI.Agents.Guardrails.Options.GuardrailSettings.BlockFrom.set -> void
+GovUK.Dfe.AI.Agents.Guardrails.Options.GuardrailSettings.Blocklists.get -> System.Collections.Generic.Dictionary<string!, GovUK.Dfe.AI.Agents.Guardrails.Options.GuardrailBlocklistSettings!>!
+GovUK.Dfe.AI.Agents.Guardrails.Options.GuardrailSettings.Blocklists.set -> void
+GovUK.Dfe.AI.Agents.Guardrails.Options.GuardrailSettings.Deployments.get -> System.Collections.Generic.List<string!>!
+GovUK.Dfe.AI.Agents.Guardrails.Options.GuardrailSettings.Deployments.set -> void
+GovUK.Dfe.AI.Agents.Guardrails.Options.GuardrailSettings.GuardrailSettings() -> void
+GovUK.Dfe.AI.Agents.Guardrails.Options.GuardrailSettings.IndirectAttacks.get -> bool
+GovUK.Dfe.AI.Agents.Guardrails.Options.GuardrailSettings.IndirectAttacks.set -> void
+GovUK.Dfe.AI.Agents.Guardrails.Options.GuardrailSettings.Name.get -> string?
+GovUK.Dfe.AI.Agents.Guardrails.Options.GuardrailSettings.Name.set -> void
+GovUK.Dfe.AI.Agents.Guardrails.Options.GuardrailSettings.PromptShields.get -> bool
+GovUK.Dfe.AI.Agents.Guardrails.Options.GuardrailSettings.PromptShields.set -> void
+GovUK.Dfe.AI.Agents.Guardrails.Options.GuardrailSettings.ProtectedMaterial.get -> bool
+GovUK.Dfe.AI.Agents.Guardrails.Options.GuardrailSettings.ProtectedMaterial.set -> void
+GovUK.Dfe.AI.Agents.Guardrails.Options.GuardrailSettings.RequireAtStartup.get -> bool
+GovUK.Dfe.AI.Agents.Guardrails.Options.GuardrailSettings.RequireAtStartup.set -> void
 GovUK.Dfe.AI.Agents.Guardrails.Services.Interfaces.IFoundryGuardrailsService
 GovUK.Dfe.AI.Agents.Guardrails.Services.Interfaces.IFoundryGuardrailsService.ApplyAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<GovUK.Dfe.AI.Agents.Guardrails.ValueObjects.GuardrailReport!>!
 GovUK.Dfe.AI.Agents.Guardrails.Services.Interfaces.IFoundryGuardrailsService.CheckAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<GovUK.Dfe.AI.Agents.Guardrails.ValueObjects.GuardrailReport!>!
@@ -19,3 +51,4 @@ override GovUK.Dfe.AI.Agents.Guardrails.ValueObjects.GuardrailReport.ToString() 
 static GovUK.Dfe.AI.Agents.Guardrails.ValueObjects.GuardrailReport.operator !=(GovUK.Dfe.AI.Agents.Guardrails.ValueObjects.GuardrailReport? left, GovUK.Dfe.AI.Agents.Guardrails.ValueObjects.GuardrailReport? right) -> bool
 static GovUK.Dfe.AI.Agents.Guardrails.ValueObjects.GuardrailReport.operator ==(GovUK.Dfe.AI.Agents.Guardrails.ValueObjects.GuardrailReport? left, GovUK.Dfe.AI.Agents.Guardrails.ValueObjects.GuardrailReport? right) -> bool
 static Microsoft.Extensions.DependencyInjection.GuardrailsExtensions.AddGuardrails(this GovUK.Dfe.AI.Agents.Builders.AgentsBuilder! agents) -> GovUK.Dfe.AI.Agents.Builders.AgentsBuilder!
+static Microsoft.Extensions.DependencyInjection.GuardrailsExtensions.UseGuardrailsCredential(this GovUK.Dfe.AI.Agents.Builders.AgentsBuilder! agents, Azure.Core.TokenCredential! credential) -> GovUK.Dfe.AI.Agents.Builders.AgentsBuilder!

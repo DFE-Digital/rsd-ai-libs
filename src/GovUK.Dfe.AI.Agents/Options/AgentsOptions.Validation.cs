@@ -4,11 +4,9 @@ namespace GovUK.Dfe.AI.Agents.Options;
 
 public sealed partial class AgentsOptions
 {
-    /// <summary>Lists every missing or invalid setting, so startup fails once with the whole picture.</summary>
-    /// <param name="packages">The names of the add-on packages the app added.</param>
-    internal IReadOnlyList<string> MissingSettings(IReadOnlyCollection<string>? packages = null)
-        => [.. FoundryProblems(), .. LimitProblems(), .. CredentialProblems(), .. VersionProblems(), .. McpServerProblems(),
-            .. ExternallyManagedProblems(), .. GuardrailProblems(), .. PackageProblems(packages ?? [])];
+    /// <summary>Lists every missing or invalid core setting; add-ons report their own through <c>AgentsPackageContext</c>.</summary>
+    internal IReadOnlyList<string> MissingSettings()
+        => [.. FoundryProblems(), .. LimitProblems(), .. CredentialProblems(), .. VersionProblems(), .. ExternallyManagedProblems()];
 
     private static IEnumerable<string> Missing(string? value, string name)
         => string.IsNullOrWhiteSpace(value) ? [$"{SectionName}:{name}"] : [];
@@ -32,40 +30,31 @@ public sealed partial class AgentsOptions
             .Concat(GlobalConcurrency.Problems().Select(static problem => $"{SectionName}:GlobalConcurrency:{problem}"));
     }
 
-    /// <summary>Each service needs a code credential, its own complete block, or the default; the default only if used.</summary>
     private IEnumerable<string> CredentialProblems()
     {
-        List<(string ServiceKey, ServicePrincipalSettings? Own, string Path)> services =
-            [(nameof(AzureCredentialTarget.Foundry), Foundry.Authentication, "Foundry:Authentication")];
-        if (Search is not null)
+        var problems = CredentialProblems(nameof(AzureCredentialTarget.Foundry), Foundry.Authentication, "Foundry:Authentication");
+        return GlobalConcurrency.IsEnabled
+            ? problems.Concat(CredentialProblems(nameof(AzureCredentialTarget.RunSlots), GlobalConcurrency.Authentication,
+                "GlobalConcurrency:Authentication"))
+            : problems;
+    }
+
+    /// <summary>
+    /// A service needs a code credential, its own complete block, or the default; the default is checked only when used.
+    /// </summary>
+    internal IEnumerable<string> CredentialProblems(string serviceKey, ServicePrincipalSettings? own, string path)
+    {
+        if (CredentialOverrides.ContainsKey(serviceKey))
         {
-            services.Add((nameof(AzureCredentialTarget.Search), Search.Authentication, "Search:Authentication"));
+            return [];
         }
 
-        if (GlobalConcurrency.IsEnabled)
+        if (own is not null)
         {
-            services.Add((nameof(AzureCredentialTarget.RunSlots), GlobalConcurrency.Authentication, "GlobalConcurrency:Authentication"));
+            return PrincipalProblems(own, path);
         }
 
-        if (Guardrails is not null)
-        {
-            services.Add((nameof(AzureCredentialTarget.Guardrails), Guardrails.Authentication, "Guardrails:Authentication"));
-        }
-
-        services.AddRange(McpServers.Select(server => (McpCredentialKey(server.Key), server.Value.Authentication, $"McpServers:{server.Key}:Authentication")));
-
-        var needingOwn = services.Where(service => !CredentialOverrides.ContainsKey(service.ServiceKey)).ToList();
-        var problems = needingOwn.Where(static service => service.Own is not null)
-            .SelectMany(static service => PrincipalProblems(service.Own!, service.Path));
-
-        if (Credential is null && needingOwn.Exists(static service => service.Own is null))
-        {
-            problems = problems.Concat(PrincipalProblems(Authentication, "Authentication"));
-        }
-
-        return problems.Concat(CredentialOverrides.Keys
-            .Where(key => key.StartsWith("Mcp:", StringComparison.Ordinal) && !McpServers.ContainsKey(key[4..]))
-            .Select(static key => $"{SectionName}:McpServers:{key[4..]} (UseMcpCredential names a server that isn't configured)"));
+        return Credential is null ? PrincipalProblems(Authentication, "Authentication") : [];
     }
 
     private static IEnumerable<string> PrincipalProblems(ServicePrincipalSettings principal, string path)
@@ -76,14 +65,6 @@ public sealed partial class AgentsOptions
     private IEnumerable<string> VersionProblems()
         => ExternallyManagedAgents.Agents.Keys.Where(VersionPins.ContainsKey)
             .Select(static agent => $"{SectionName}:VersionPins:{agent} (already versioned under ExternallyManagedAgents; remove one)");
-
-    private IEnumerable<string> McpServerProblems()
-        => McpServers.SelectMany(static server => (IEnumerable<string>)
-        [
-            .. Missing(server.Value.ServerUri, $"McpServers:{server.Key}:ServerUri"),
-            .. Missing(server.Value.Scope, $"McpServers:{server.Key}:Scope"),
-            .. server.Value.AllowedToolNames.Count == 0 ? [$"{SectionName}:McpServers:{server.Key}:AllowedToolNames"] : Array.Empty<string>(),
-        ]);
 
     private List<string> ExternallyManagedProblems()
     {
@@ -114,32 +95,5 @@ public sealed partial class AgentsOptions
         }
 
         return problems;
-    }
-
-    private IEnumerable<string> GuardrailProblems()
-        => Guardrails is null ? [] : Guardrails.Problems().Select(static problem => $"{SectionName}:Guardrails:{problem}");
-
-    /// <summary>A section without its package, or a package without its section, would otherwise do nothing without a word.</summary>
-    private IEnumerable<string> PackageProblems(IReadOnlyCollection<string> packages)
-    {
-        (bool Configured, string Section, string Package, string Method)[] needs =
-        [
-            (McpServers.Count > 0, "McpServers", "Mcp", "AddMcpServers()"),
-            (Search is not null, "Search", "AISearch", "AddAISearch()"),
-            (Guardrails is not null, "Guardrails", "Guardrails", "AddGuardrails()"),
-        ];
-
-        foreach (var (configured, section, package, method) in needs)
-        {
-            var added = packages.Contains(package);
-            if (configured && !added)
-            {
-                yield return $"{SectionName}:{section} (add GovUK.Dfe.AI.Agents.{package} and call agents.{method})";
-            }
-            else if (added && !configured)
-            {
-                yield return $"{SectionName}:{section} (agents.{method} needs this section)";
-            }
-        }
     }
 }

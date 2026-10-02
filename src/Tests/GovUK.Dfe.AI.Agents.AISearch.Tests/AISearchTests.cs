@@ -88,4 +88,42 @@ public sealed class AISearchTests
 
         Assert.Contains("AiAgents:Search (agents.AddAISearch() needs this section)", ex.Message, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void AnIncompleteSearchServicePrincipal_FailsStartup_NamingTheMissingSetting()
+    {
+        var settings = Settings();
+        settings["AiAgents:Search:Authentication:TenantId"] = "tenant-1";
+        settings["AiAgents:Search:Authentication:ClientId"] = "search-client";   // no secret
+
+        var ex = Assert.Throws<InvalidOperationException>(() => Build(settings));
+
+        Assert.Contains("AiAgents:Search:Authentication:ClientSecret", ex.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void UseAISearchCredential_ReplacesTheSearchServicePrincipal()
+    {
+        var settings = Settings();
+        settings["AiAgents:Search:Authentication:TenantId"] = "tenant-1";   // incomplete, but the code credential wins
+
+        var services = new ServiceCollection();
+        services.AddAgents(new ConfigurationBuilder().AddInMemoryCollection(settings).Build(), agents => agents
+            .AddAISearch()
+            .UseCredential(Substitute.For<TokenCredential>())
+            .UseAISearchCredential(Substitute.For<TokenCredential>()));
+        using var provider = services.BuildServiceProvider();
+
+        Assert.IsType<AzureSearchContextRetriever>(provider.GetRequiredService<IContextRetriever>());
+    }
+
+    [Fact]
+    public void AddAISearch_CalledTwice_RegistersOneRetriever()
+    {
+        var services = new ServiceCollection();
+        services.AddAgents(new ConfigurationBuilder().AddInMemoryCollection(Settings()).Build(), agents => agents
+            .AddAISearch().AddAISearch().UseCredential(Substitute.For<TokenCredential>()));
+
+        Assert.Single(services, service => service.ServiceType == typeof(IContextRetriever));
+    }
 }

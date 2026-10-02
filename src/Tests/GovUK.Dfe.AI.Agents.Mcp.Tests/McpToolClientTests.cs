@@ -337,7 +337,7 @@ public sealed class McpToolClientTests
 
         await mcpToolClient.DisposeAsync();
         await mcpToolClient.DisposeAsync();
-        McpToolClient disposedByAContainer = mcpToolClient;   // as a service provider disposed with Dispose() does
+        IDisposable disposedByAContainer = mcpToolClient;   // as a service provider disposed with Dispose() does
         disposedByAContainer.Dispose();
 
         Assert.Equal(1, session.DisposeCalls);

@@ -4,14 +4,14 @@ using GovUK.Dfe.AI.Agents.Guardrails.Services.Interfaces;
 using GovUK.Dfe.AI.Agents.Guardrails.Policies;
 using GovUK.Dfe.AI.Agents.Guardrails.Stores.Interfaces;
 using GovUK.Dfe.AI.Agents.Guardrails.ValueObjects;
-using GovUK.Dfe.AI.Agents.Options;
 using Microsoft.Extensions.Logging;
 using System.Net;
 using GovUK.Dfe.AI.Agents.Guardrails.Diagnostics;
+using GovUK.Dfe.AI.Agents.Guardrails.Options;
 
 namespace GovUK.Dfe.AI.Agents.Guardrails.Services;
 
-internal sealed class FoundryGuardrailsService(IGuardrailStore store, AgentsOptions.GuardrailSettings settings, ILogger<FoundryGuardrailsService> logger)
+internal sealed class FoundryGuardrailsService(IGuardrailStore store, GuardrailSettings settings, ILogger<FoundryGuardrailsService> logger)
     : IFoundryGuardrailsService
 {
     public async Task<GuardrailReport> ApplyAsync(CancellationToken cancellationToken = default)

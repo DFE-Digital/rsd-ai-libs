@@ -16,17 +16,15 @@
     <InternalsVisibleTo Include="GovUK.Dfe.AI.Agents.Mcp.Tests" />
   </ItemGroup>
 
+  <PropertyGroup>
+    <!-- The lowest core version this add-on needs: its package depends on core >= this. Set it after core's first
+         release, and raise it only when the add-on starts using something newer from core. -->
+    <CoreMinimumVersion></CoreMinimumVersion>
+  </PropertyGroup>
+
   <ItemGroup>
-    <!-- Replace with <PackageReference Include="GovUK.Dfe.AI.Agents" Version="X.Y.Z" /> once core is on NuGet.org, then
-         delete the RequireCorePackageReference target below. -->
     <ProjectReference Include="..\GovUK.Dfe.AI.Agents\GovUK.Dfe.AI.Agents.csproj" />
   </ItemGroup>
-
-  <!-- Packed with a project reference, this package would depend on core at this package's own version, which may not
-       exist. Stop packing, so a package nobody can restore is never published. -->
-  <Target Name="RequireCorePackageReference" BeforeTargets="GenerateNuspec">
-    <Error Condition="'@(ProjectReference-&gt;AnyHaveMetadataValue('Filename', 'GovUK.Dfe.AI.Agents'))' == 'true'" Text="$(MSBuildProjectName) can't be packed while it references GovUK.Dfe.AI.Agents as a project: its package would depend on a core version that may not exist. Publish core, then replace the ProjectReference with a pinned PackageReference." />
-  </Target>
 
   <ItemGroup>
     <PackageReference Include="ModelContextProtocol.Core" Version="2.2.0" />

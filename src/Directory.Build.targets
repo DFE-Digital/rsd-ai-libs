@@ -36,4 +36,32 @@
     <AdditionalFiles Include="PublicAPI.Shipped.txt" />
     <AdditionalFiles Include="PublicAPI.Unshipped.txt" />
   </ItemGroup>
+
+  <!--
+    Add-ons and core: each add-on references core as a project, so they're developed and tested together. When packed
+    (pack-template.yml passes -p:UseCorePackage=true) an add-on is built against the published core at its
+    CoreMinimumVersion instead, so its package depends on "core >= CoreMinimumVersion" and is proven to work with it.
+    An add-on is then released on its own, and apps upgrade core or the add-on separately.
+  -->
+  <PropertyGroup>
+    <_CoreProject>$(MSBuildThisFileDirectory)GovUK.Dfe.AI.Agents\GovUK.Dfe.AI.Agents.csproj</_CoreProject>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(UseCorePackage)' == 'true' and '$(CoreMinimumVersion)' != ''">
+    <ProjectReference Remove="$(_CoreProject)" />
+    <PackageReference Include="GovUK.Dfe.AI.Agents" Version="$(CoreMinimumVersion)" />
+  </ItemGroup>
+
+  <!--
+    A package packed with core restored as a project would depend on core at the add-on's own version, which may not
+    exist. The check reads what restore resolved, which is what pack writes into the package's dependencies.
+  -->
+  <Target Name="RequireCorePackageReference" BeforeTargets="GenerateNuspec"
+          Condition="'$(IsPackable)' != 'false' and Exists('$(ProjectAssetsFile)')">
+    <PropertyGroup>
+      <_CoreRestoredAsProject>$([System.Text.RegularExpressions.Regex]::IsMatch($([System.IO.File]::ReadAllText('$(ProjectAssetsFile)')), '"GovUK\.Dfe\.AI\.Agents/[^"]+"\s*:\s*\{\s*"type"\s*:\s*"project"'))</_CoreRestoredAsProject>
+    </PropertyGroup>
+    <Error Condition="'$(_CoreRestoredAsProject)' == 'true'"
+           Text="$(MSBuildProjectName) must be packed against the published core: set CoreMinimumVersion in its .csproj to the lowest core version it needs, then build and pack with -p:UseCorePackage=true (pack-template.yml does)." />
+  </Target>
 </Project>

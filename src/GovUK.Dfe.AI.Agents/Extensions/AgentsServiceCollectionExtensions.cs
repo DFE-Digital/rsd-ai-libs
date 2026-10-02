@@ -59,13 +59,14 @@ public static class AgentsServiceCollectionExtensions
         options.ExternallyManagedAgents.ReadAgents(section.GetSection(nameof(AgentsOptions.ExternallyManagedAgents)));
         builder.ApplyTo(options);
 
-        // A Search section with only Endpoint and Indexes binds no SearchSettings property; it's still in use.
-        if (section.GetSection("Search").Exists())
+        // Each package reads and checks its own settings, so startup fails once with every problem.
+        var context = new AgentsPackageContext(services, section, options, builder.Definitions);
+        foreach (var package in builder.Packages)
         {
-            options.Search ??= new AgentsOptions.SearchSettings();
+            package.Register(context);
         }
 
-        var missing = options.MissingSettings([.. builder.Packages.Select(static package => package.Name)]);
+        var missing = options.MissingSettings().Concat(context.Problems).Distinct(StringComparer.Ordinal).ToList();
         if (missing.Count > 0)
         {
             throw new InvalidOperationException(string.Format(ErrorMessages.AiAgentsSettingsMissing, string.Join(", ", missing)));
@@ -98,13 +99,6 @@ public static class AgentsServiceCollectionExtensions
         }
 
         RegisterAgents(services, builder.Definitions, options, foundryCredential);
-
-        var context = new AgentsPackageContext(services, section, options, builder.Definitions);
-        foreach (var package in builder.Packages)
-        {
-            package.Register(context);
-        }
-
         return services;
     }
 

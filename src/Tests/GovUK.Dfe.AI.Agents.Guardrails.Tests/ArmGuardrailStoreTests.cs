@@ -4,7 +4,7 @@ using Azure.ResourceManager;
 using Azure.ResourceManager.CognitiveServices;
 using Azure.ResourceManager.CognitiveServices.Mocking;
 using Azure.ResourceManager.CognitiveServices.Models;
-using GovUK.Dfe.AI.Agents.Enums;
+using GovUK.Dfe.AI.Agents.Guardrails.Enums;
 using GovUK.Dfe.AI.Agents.Guardrails.Policies;
 using GovUK.Dfe.AI.Agents.Guardrails.Stores;
 using NSubstitute;

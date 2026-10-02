@@ -29,3 +29,4 @@ GovUK.Dfe.AI.Agents.AISearch.Options.AzureSearchIndexOptions.VectorFields.get ->
 GovUK.Dfe.AI.Agents.AISearch.Options.AzureSearchIndexOptions.VectorFields.init -> void
 Microsoft.Extensions.DependencyInjection.AISearchExtensions
 static Microsoft.Extensions.DependencyInjection.AISearchExtensions.AddAISearch(this GovUK.Dfe.AI.Agents.Builders.AgentsBuilder! agents) -> GovUK.Dfe.AI.Agents.Builders.AgentsBuilder!
+static Microsoft.Extensions.DependencyInjection.AISearchExtensions.UseAISearchCredential(this GovUK.Dfe.AI.Agents.Builders.AgentsBuilder! agents, Azure.Core.TokenCredential! credential) -> GovUK.Dfe.AI.Agents.Builders.AgentsBuilder!

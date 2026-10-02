@@ -25,7 +25,7 @@ builder.Services.AddAgents(builder.Configuration, agents => agents
 ```
 
 Give the app's identity the **Search Index Data Reader** role. To use a different identity for search, add
-`Search:Authentication`.
+`Search:Authentication`, or set one in code with `agents.UseAISearchCredential(credential)`.
 
 ## Use
 

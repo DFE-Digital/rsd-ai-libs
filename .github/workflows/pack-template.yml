@@ -91,11 +91,15 @@ jobs:
         env:
           NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
         run: |
-          dotnet build "$PROJECT_PATH" -c Release
+          # Add-ons build against the published core at their CoreMinimumVersion (see src/Directory.Build.targets).
+          # The version goes to the build too: AssemblyVersion and FileVersion are derived from it.
+          dotnet build "$PROJECT_PATH" -c Release -p:UseCorePackage=true -p:PackageVersion="$VERSION"
           dotnet pack "$PROJECT_PATH" \
             -c Release \
+            -p:UseCorePackage=true \
             -p:PackageVersion="$VERSION" \
             --no-build \
+            --no-restore \
             --output ./artifacts
           dotnet nuget push ./artifacts/*.nupkg \
             --api-key "$NUGET_API_KEY" \

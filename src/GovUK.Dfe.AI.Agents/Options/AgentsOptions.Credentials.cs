@@ -9,10 +9,8 @@ public sealed partial class AgentsOptions
 
     private TokenCredential? _defaultCredential;
 
-    /// <summary>Code only: per-service credentials, set with <c>UseCredentialFor</c> and <c>UseMcpCredential</c>.</summary>
+    /// <summary>Code only: per-service credentials, set with <c>UseCredentialFor</c> (add-ons wrap it, e.g. <c>UseMcpCredential</c>).</summary>
     internal Dictionary<string, TokenCredential> CredentialOverrides { get; } = new(StringComparer.Ordinal);
-
-    internal static string McpCredentialKey(string serverName) => $"Mcp:{serverName}";
 
     /// <summary>A service's credential: its code override, else its own <c>Authentication</c> block, else the default.</summary>
     internal TokenCredential CredentialFor(string serviceKey, ServicePrincipalSettings? own)

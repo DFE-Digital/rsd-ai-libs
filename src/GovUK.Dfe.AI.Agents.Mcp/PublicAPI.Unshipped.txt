@@ -32,6 +32,18 @@ GovUK.Dfe.AI.Agents.Mcp.Options.McpServerConnectionOptions.ServerUri.init -> voi
 GovUK.Dfe.AI.Agents.Mcp.Options.McpServerConnectionOptions.ToolListCacheDuration.get -> System.TimeSpan
 GovUK.Dfe.AI.Agents.Mcp.Options.McpServerConnectionOptions.ToolListCacheDuration.init -> void
 GovUK.Dfe.AI.Agents.Mcp.Options.McpServerConnectionOptions.Validate(string! serverKey) -> void
+GovUK.Dfe.AI.Agents.Mcp.Options.McpServerSettings
+GovUK.Dfe.AI.Agents.Mcp.Options.McpServerSettings.AllowedToolNames.get -> System.Collections.Generic.List<string!>!
+GovUK.Dfe.AI.Agents.Mcp.Options.McpServerSettings.AllowedToolNames.set -> void
+GovUK.Dfe.AI.Agents.Mcp.Options.McpServerSettings.Authentication.get -> GovUK.Dfe.AI.Agents.Options.AgentsOptions.ServicePrincipalSettings?
+GovUK.Dfe.AI.Agents.Mcp.Options.McpServerSettings.Authentication.set -> void
+GovUK.Dfe.AI.Agents.Mcp.Options.McpServerSettings.McpServerSettings() -> void
+GovUK.Dfe.AI.Agents.Mcp.Options.McpServerSettings.Scope.get -> string?
+GovUK.Dfe.AI.Agents.Mcp.Options.McpServerSettings.Scope.set -> void
+GovUK.Dfe.AI.Agents.Mcp.Options.McpServerSettings.ServerUri.get -> string?
+GovUK.Dfe.AI.Agents.Mcp.Options.McpServerSettings.ServerUri.set -> void
+GovUK.Dfe.AI.Agents.Mcp.Options.McpServerSettings.ToolListCacheDuration.get -> System.TimeSpan
+GovUK.Dfe.AI.Agents.Mcp.Options.McpServerSettings.ToolListCacheDuration.set -> void
 GovUK.Dfe.AI.Agents.Mcp.Providers.McpAllowedToolsProvider
 GovUK.Dfe.AI.Agents.Mcp.Providers.McpAllowedToolsProvider.GetToolsAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<OpenAI.Responses.ResponseTool!>!>!
 GovUK.Dfe.AI.Agents.Mcp.Providers.McpAllowedToolsProvider.McpAllowedToolsProvider(GovUK.Dfe.AI.Agents.Mcp.Clients.Interfaces.IMcpToolClient! client, System.Collections.Generic.IReadOnlyList<string!>! allowedToolNames) -> void
@@ -53,3 +65,4 @@ override GovUK.Dfe.AI.Agents.Mcp.Options.McpServerConnectionOptions.ToString() -
 static GovUK.Dfe.AI.Agents.Mcp.Options.McpServerConnectionOptions.operator !=(GovUK.Dfe.AI.Agents.Mcp.Options.McpServerConnectionOptions? left, GovUK.Dfe.AI.Agents.Mcp.Options.McpServerConnectionOptions? right) -> bool
 static GovUK.Dfe.AI.Agents.Mcp.Options.McpServerConnectionOptions.operator ==(GovUK.Dfe.AI.Agents.Mcp.Options.McpServerConnectionOptions? left, GovUK.Dfe.AI.Agents.Mcp.Options.McpServerConnectionOptions? right) -> bool
 static Microsoft.Extensions.DependencyInjection.McpServersExtensions.AddMcpServers(this GovUK.Dfe.AI.Agents.Builders.AgentsBuilder! agents) -> GovUK.Dfe.AI.Agents.Builders.AgentsBuilder!
+static Microsoft.Extensions.DependencyInjection.McpServersExtensions.UseMcpCredential(this GovUK.Dfe.AI.Agents.Builders.AgentsBuilder! agents, string! serverName, Azure.Core.TokenCredential! credential) -> GovUK.Dfe.AI.Agents.Builders.AgentsBuilder!

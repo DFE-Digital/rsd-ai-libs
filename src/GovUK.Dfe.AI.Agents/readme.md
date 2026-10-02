@@ -119,7 +119,7 @@ Put your instructions in `prompt`. Put untrusted material (documents, search res
 | `.Context` / `.Context.Interfaces` | `AgentContext` / `IContextRetriever` |
 | `.Filters` | `ODataFilter` |
 | `.Quality` / `.Quality.Interfaces` | `AgentTestCase`, `AgentEvaluationReport` / `IAgentTestRunner`, `IAgentRunEvaluator` |
-| `.Enums` | `AzureCredentialTarget`, `AgentTestTarget`, `GuardrailSeverity` |
+| `.Enums` | `AzureCredentialTarget`, `AgentTestTarget` |
 | `.Diagnostics` | `AgentTelemetry` |
 | `.Exceptions` | `AgentGuardrailException` |
 
@@ -295,18 +295,20 @@ parallel and sequential runs, the agent gets a fallback result instead.
 
 ## Credentials
 
-`Authentication` is the default identity. `Foundry`, `Search`, each MCP server, `GlobalConcurrency`, `Guardrails` and
-`ExternallyManagedAgents` can each have their own `Authentication` block. Load each secret from Key Vault, e.g. the
+`Authentication` is the default identity. `Foundry`, `GlobalConcurrency` and `ExternallyManagedAgents` can each have
+their own `Authentication` block, and so can each add-on's section (`Search`, each MCP server, `Guardrails`). Load each secret from Key Vault, e.g. the
 secret `AiAgents--Foundry--Authentication--ClientSecret` (or the environment variable
 `AiAgents__Foundry__Authentication__ClientSecret`).
 
 To use managed identities, set credentials in code:
 
 ```csharp
-agents.UseCredential(new ManagedIdentityCredential())                  // default for every service
-      .UseCredentialFor(AzureCredentialTarget.Search, searchCredential) // one service
-      .UseMcpCredential("school-performance", partnerCredential)       // one MCP server
-      .UseExternallyManagedAgentsCredential(centralCredential);        // the central agents' project
+agents.UseCredential(new ManagedIdentityCredential())                   // default for every service
+      .UseCredentialFor(AzureCredentialTarget.Foundry, foundryCredential) // one of core's services
+      .UseExternallyManagedAgentsCredential(centralCredential)          // the central agents' project
+      .UseAISearchCredential(searchCredential)                          // add-ons: AI Search,
+      .UseMcpCredential("school-performance", partnerCredential)        // one MCP server,
+      .UseGuardrailsCredential(armCredential);                          // and Resource Manager
 ```
 
 Each service uses, in order: its code credential, its own `Authentication` block, then the default. Give each identity

@@ -1,14 +1,16 @@
 using Azure.Core;
 using Azure.ResourceManager.CognitiveServices.Models;
 using Azure;
+using GovUK.Dfe.AI.Agents.Builders;
 using GovUK.Dfe.AI.Agents.Enums;
+using GovUK.Dfe.AI.Agents.Guardrails.Enums;
+using GovUK.Dfe.AI.Agents.Guardrails.Options;
 using GovUK.Dfe.AI.Agents.Guardrails.Policies;
 using GovUK.Dfe.AI.Agents.Guardrails.Services.Interfaces;
 using GovUK.Dfe.AI.Agents.Guardrails.Services;
 using GovUK.Dfe.AI.Agents.Guardrails.Stores.Interfaces;
 using GovUK.Dfe.AI.Agents.Guardrails.Stores;
 using GovUK.Dfe.AI.Agents.Guardrails.Validators;
-using GovUK.Dfe.AI.Agents.Options;
 using GovUK.Dfe.AI.Agents.Tests.Integration.Fakes;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -28,7 +30,7 @@ public sealed class GuardrailTests
     private readonly InMemoryGuardrailStore _store = new();
     private readonly CollectingLoggerProvider _logs = new();
 
-    private static AgentsOptions.GuardrailSettings Settings(bool requireAtStartup = true) => new()
+    private static GuardrailSettings Settings(bool requireAtStartup = true) => new()
     {
         AccountResourceId = Account,
         Name = "briefing-guardrail",
@@ -37,10 +39,10 @@ public sealed class GuardrailTests
         Blocklists = { ["case-references"] = new() { Terms = ["Project Falcon"], Patterns = [@"CASE-\d{6}"] } },
     };
 
-    private FoundryGuardrailsService Guardrails(AgentsOptions.GuardrailSettings? settings = null)
+    private FoundryGuardrailsService Guardrails(GuardrailSettings? settings = null)
         => new(_store, settings ?? Settings(), NullLogger<FoundryGuardrailsService>.Instance);
 
-    private GuardrailStartupValidator StartupCheck(AgentsOptions.GuardrailSettings settings)
+    private GuardrailStartupValidator StartupCheck(GuardrailSettings settings)
     {
         var loggers = LoggerFactory.Create(builder => builder.AddProvider(_logs));
         return new GuardrailStartupValidator(Guardrails(settings), settings, loggers.CreateLogger<GuardrailStartupValidator>());
@@ -168,26 +170,74 @@ public sealed class GuardrailTests
         Assert.Contains("harm filters block from nothing, not Medium", read.WeakerThan(GuardrailPolicy.From(Settings())));
     }
 
+    private static Dictionary<string, string?> ValidGuardrail() => new()
+    {
+        ["AccountResourceId"] = Account, ["Name"] = "briefing-guardrail", ["Deployments:0"] = "gpt-5.1",
+    };
+
+    /// <summary>Registers with these <c>AiAgents:Guardrails</c> settings; by default every service signs in with one code credential.</summary>
+    private static IServiceCollection Build(Dictionary<string, string?> guardrails, Action<AgentsBuilder>? configure = null)
+    {
+        var settings = new Dictionary<string, string?>
+        {
+            ["AiAgents:Foundry:Endpoint"] = "https://example.services.ai.azure.com/api/projects/test",
+            ["AiAgents:Foundry:DefaultModel"] = "myconnection/gpt-5.1",
+        };
+        foreach (var (key, value) in guardrails)
+        {
+            settings[$"AiAgents:Guardrails:{key}"] = value;
+        }
+
+        return new ServiceCollection().AddAgents(new ConfigurationBuilder().AddInMemoryCollection(settings).Build(),
+            agents => (configure ?? (builder => builder.UseCredential(Substitute.For<TokenCredential>())))(agents.AddGuardrails()));
+    }
+
+    [Theory]
+    [InlineData(new string[] { }, new string[] { }, "needs at least one term or pattern")]
+    [InlineData(new[] { "Project Falcon", " " }, new string[] { }, "has an empty term or pattern")]
+    [InlineData(new string[] { }, new[] { "CASE-(" }, "has a pattern that isn't a valid regular expression")]
+    public void AnInvalidBlocklist_IsReported_WithWhatsWrong(string[] terms, string[] patterns, string expected)
+    {
+        var settings = new GuardrailSettings { AccountResourceId = Account, Name = "briefing-guardrail", Deployments = ["gpt-5.1"] };
+        settings.Blocklists["case-references"] = new GuardrailBlocklistSettings { Terms = [.. terms], Patterns = [.. patterns] };
+
+        Assert.Equal([$"Blocklists:case-references ({expected})"], settings.Problems());
+    }
+
+    [Fact]
+    public void AddGuardrails_CalledTwice_RegistersTheCheckOnce()
+    {
+        var services = Build(ValidGuardrail(), agents => agents.AddGuardrails().UseCredential(Substitute.For<TokenCredential>()));
+
+        Assert.Single(services, service => service.ImplementationType == typeof(GuardrailStartupValidator));
+    }
+
+    [Fact]
+    public void AddGuardrails_WithoutAGuardrailsSection_FailsStartup()
+    {
+        var ex = Assert.Throws<InvalidOperationException>(() => Build([]));
+
+        Assert.Contains("AiAgents:Guardrails (agents.AddGuardrails() needs this section)", ex.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ResourceManagerSignIn_UsesTheGuardrailsCredential_OrFailsStartupWhenItsBlockIsIncomplete()
+    {
+        var guardrails = ValidGuardrail();
+        guardrails["Authentication:TenantId"] = "tenant-1";   // no ClientId or ClientSecret
+        Action<AgentsBuilder> foundryOnly = agents => agents.UseCredentialFor(AzureCredentialTarget.Foundry, Substitute.For<TokenCredential>());
+
+        var ex = Assert.Throws<InvalidOperationException>(() => Build(guardrails, foundryOnly));
+        var withCode = Build(guardrails, agents => foundryOnly(agents.UseGuardrailsCredential(Substitute.For<TokenCredential>())));
+
+        Assert.Contains("AiAgents:Guardrails:Authentication:ClientSecret", ex.Message, StringComparison.Ordinal);
+        Assert.Contains(withCode, service => service.ServiceType == typeof(IFoundryGuardrailsService));
+    }
+
     [Fact]
     public void AddGuardrails_RegistersTheCheck_AndInvalidSettingsFailStartupInOneError()
     {
-        static IServiceCollection Build(Dictionary<string, string?> guardrails)
-        {
-            var settings = new Dictionary<string, string?>
-            {
-                ["AiAgents:Foundry:Endpoint"] = "https://example.services.ai.azure.com/api/projects/test",
-                ["AiAgents:Foundry:DefaultModel"] = "myconnection/gpt-5.1",
-            };
-            foreach (var (key, value) in guardrails)
-            {
-                settings[$"AiAgents:Guardrails:{key}"] = value;
-            }
-
-            return new ServiceCollection().AddAgents(new ConfigurationBuilder().AddInMemoryCollection(settings).Build(),
-                agents => agents.UseCredential(Substitute.For<TokenCredential>()).AddGuardrails());
-        }
-
-        var valid = Build(new() { ["AccountResourceId"] = Account, ["Name"] = "briefing-guardrail", ["Deployments:0"] = "gpt-5.1" });
+        var valid = Build(ValidGuardrail());
         var ex = Assert.Throws<InvalidOperationException>(() => Build(new()
         {
             ["AccountResourceId"] = "foundry-1",

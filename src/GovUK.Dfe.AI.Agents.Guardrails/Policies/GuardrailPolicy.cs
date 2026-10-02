@@ -1,5 +1,5 @@
-using GovUK.Dfe.AI.Agents.Enums;
-using GovUK.Dfe.AI.Agents.Options;
+using GovUK.Dfe.AI.Agents.Guardrails.Enums;
+using GovUK.Dfe.AI.Agents.Guardrails.Options;
 
 namespace GovUK.Dfe.AI.Agents.Guardrails.Policies;
 
@@ -10,12 +10,12 @@ namespace GovUK.Dfe.AI.Agents.Guardrails.Policies;
 internal sealed record GuardrailPolicy(string Name, GuardrailSeverity? BlockFrom, bool PromptShields, bool IndirectAttacks,
     bool ProtectedMaterial, IReadOnlyList<string> Blocklists)
 {
-    public static GuardrailPolicy From(AgentsOptions.GuardrailSettings settings)
+    public static GuardrailPolicy From(GuardrailSettings settings)
         => new(settings.Name!, settings.BlockFrom, settings.PromptShields, settings.IndirectAttacks, settings.ProtectedMaterial,
             [.. settings.Blocklists.Keys.Order(StringComparer.Ordinal)]);
 
     /// <summary>A blocklist's entries as configured: its terms as written, then its patterns.</summary>
-    public static IReadOnlySet<GuardrailBlocklistEntry> EntriesOf(AgentsOptions.GuardrailBlocklistSettings blocklist)
+    public static IReadOnlySet<GuardrailBlocklistEntry> EntriesOf(GuardrailBlocklistSettings blocklist)
         => blocklist.Terms.Select(static term => new GuardrailBlocklistEntry(term, IsRegex: false))
             .Concat(blocklist.Patterns.Select(static pattern => new GuardrailBlocklistEntry(pattern, IsRegex: true)))
             .ToHashSet();

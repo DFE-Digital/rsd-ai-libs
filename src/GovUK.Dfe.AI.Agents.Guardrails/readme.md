@@ -51,7 +51,7 @@ warning instead. If Azure Resource Manager can't be reached, startup only logs a
 | `ProtectedMaterial` | `true` | Blocks answers that reproduce protected text or code |
 | `Blocklists` | None | Your own blocked terms and patterns (see below) |
 | `RequireAtStartup` | `true` | Fails startup when a deployment lacks the guardrail |
-| `Authentication` | The default identity | A separate identity for Resource Manager |
+| `Authentication` | The default identity | A separate identity for Resource Manager (or `agents.UseGuardrailsCredential(...)` in code) |
 
 ## Blocklists
 

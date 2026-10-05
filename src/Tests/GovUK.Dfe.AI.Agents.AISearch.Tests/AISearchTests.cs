@@ -126,4 +126,93 @@ public sealed class AISearchTests
 
         Assert.Single(services, service => service.ServiceType == typeof(IContextRetriever));
     }
+
+    [Theory]
+    [InlineData("0")]
+    [InlineData("-5")]
+    public void AnEvidenceLimitBelowOne_FailsValidation(string limit)
+    {
+        var settings = Settings();
+        settings["AiAgents:Search:MaxEvidenceCharacters"] = limit;
+        using var provider = Build(settings);
+
+        var ex = Assert.Throws<OptionsValidationException>(() => provider.GetRequiredService<IOptions<AzureSearchContextRetrieverOptions>>().Value);
+
+        Assert.Contains("Search:MaxEvidenceCharacters", ex.Message, StringComparison.Ordinal);
+    }
+
+    // ===================== On its own, without agents =====================
+
+    /// <summary>Only the Search section: no Foundry settings at all.</summary>
+    private static Dictionary<string, string?> SearchOnly() => new()
+    {
+        ["AiAgents:Search:Endpoint"] = "https://example.search.windows.net",
+        ["AiAgents:Search:Indexes:0:Name"] = "ofsted_index",
+    };
+
+    private static ServiceProvider BuildSearchOnly(Dictionary<string, string?> settings, TokenCredential? credential = null)
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddAISearch(new ConfigurationBuilder().AddInMemoryCollection(settings).Build(), credential);
+        return services.BuildServiceProvider();
+    }
+
+    [Fact]
+    public void OnItsOwn_AnAppCanSearch_WithNoFoundrySettingsAndNoAgents()
+    {
+        using var provider = BuildSearchOnly(SearchOnly(), Substitute.For<TokenCredential>());
+
+        Assert.IsType<AzureSearchContextRetriever>(provider.GetRequiredService<IContextRetriever>());
+        Assert.Null(provider.GetService<GovUK.Dfe.AI.Agents.Services.Interfaces.IAgentService>());
+    }
+
+    [Fact]
+    public void OnItsOwn_ItCanSignInWithTheSectionsServicePrincipal()
+    {
+        var settings = SearchOnly();
+        settings["AiAgents:Search:Authentication:TenantId"] = "tenant-1";
+        settings["AiAgents:Search:Authentication:ClientId"] = "search-client";
+        settings["AiAgents:Search:Authentication:ClientSecret"] = "search-secret";
+
+        using var provider = BuildSearchOnly(settings);
+
+        Assert.IsType<AzureSearchContextRetriever>(provider.GetRequiredService<IContextRetriever>());
+    }
+
+    [Theory]
+    [InlineData(false, "AddAISearch needs a credential: pass one, or set AiAgents:Search:Authentication.")]
+    [InlineData(true, "AddAISearch needs a credential: pass one, or set AiAgents:Search:Authentication:ClientSecret.")]
+    public void OnItsOwn_WithoutACredential_FailsAtRegistration_NamingWhatToSet(bool partialBlock, string expected)
+    {
+        var settings = SearchOnly();
+        if (partialBlock)
+        {
+            settings["AiAgents:Search:Authentication:TenantId"] = "tenant-1";
+            settings["AiAgents:Search:Authentication:ClientId"] = "search-client";
+        }
+
+        var ex = Assert.Throws<InvalidOperationException>(() => BuildSearchOnly(settings));
+
+        Assert.Equal(expected, ex.Message);
+    }
+
+    [Fact]
+    public void OnItsOwn_WithoutASearchSection_FailsAtRegistration()
+    {
+        var ex = Assert.Throws<InvalidOperationException>(() => BuildSearchOnly([], Substitute.For<TokenCredential>()));
+
+        Assert.Equal("AddAISearch needs the AiAgents:Search section (Endpoint and Indexes).", ex.Message);
+    }
+
+    [Fact]
+    public void BothForms_RegisterSearchOnce()
+    {
+        var services = new ServiceCollection();
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(Settings()).Build();
+        services.AddAISearch(configuration, Substitute.For<TokenCredential>());
+        services.AddAgents(configuration, agents => agents.AddAISearch().UseCredential(Substitute.For<TokenCredential>()));
+
+        Assert.Single(services, service => service.ServiceType == typeof(IContextRetriever));
+    }
 }

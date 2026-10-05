@@ -250,4 +250,85 @@ public sealed class McpServersTests : IDisposable
             return Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.OK));
         }
     }
+
+    // ===================== On their own, without agents =====================
+
+    /// <summary>Only the McpServers section: no Foundry settings at all.</summary>
+    private static Dictionary<string, string?> ServersOnly() => Settings()
+        .Where(setting => setting.Key.StartsWith("AiAgents:McpServers:", StringComparison.Ordinal))
+        .ToDictionary(setting => setting.Key, setting => setting.Value);
+
+    private static ServiceProvider BuildServersOnly(Dictionary<string, string?> settings, TokenCredential? credential = null)
+    {
+        var services = new ServiceCollection();
+        services.AddMcpServers(new ConfigurationBuilder().AddInMemoryCollection(settings).Build(), credential);
+        return services.BuildServiceProvider();
+    }
+
+    [Fact]
+    public void OnTheirOwn_AnAppCanCallTools_WithNoFoundrySettingsAndNoAgents()
+    {
+        var credential = Substitute.For<TokenCredential>();
+
+        using var provider = BuildServersOnly(ServersOnly(), credential);
+
+        Assert.IsType<McpToolClient>(provider.GetRequiredKeyedService<IMcpToolClient>("school-performance"));
+        Assert.Same(credential, provider.GetRequiredKeyedService<McpServerConnectionOptions>("school-performance").Credential);
+        Assert.Null(provider.GetService<IAgentService>());
+    }
+
+    [Fact]
+    public void OnTheirOwn_AServersOwnServicePrincipal_IsUsedBeforeThePassedCredential()
+    {
+        var settings = ServersOnly();
+        settings["AiAgents:McpServers:school-performance:Authentication:TenantId"] = "partner-tenant";
+        settings["AiAgents:McpServers:school-performance:Authentication:ClientId"] = "partner-client";
+        settings["AiAgents:McpServers:school-performance:Authentication:ClientSecret"] = "partner-secret";
+
+        using var provider = BuildServersOnly(settings);   // no credential needed: the server has its own
+
+        Assert.IsType<ClientSecretCredential>(provider.GetRequiredKeyedService<McpServerConnectionOptions>("school-performance").Credential);
+    }
+
+    [Fact]
+    public void OnTheirOwn_EveryProblem_FailsRegistration_InOneError()
+    {
+        var settings = ServersOnly();
+        settings.Remove("AiAgents:McpServers:school-performance:Scope");
+        settings["AiAgents:McpServers:news:ServerUri"] = "https://news.example/mcp";
+        settings["AiAgents:McpServers:news:Scope"] = "api://news/.default";
+        settings["AiAgents:McpServers:news:AllowedToolNames:0"] = "search_news";
+        settings["AiAgents:McpServers:news:Authentication:TenantId"] = "tenant-1";   // incomplete
+
+        var ex = Assert.Throws<InvalidOperationException>(() => BuildServersOnly(settings));
+
+        foreach (var problem in new[]
+                 {
+                     "AiAgents:McpServers:school-performance:Scope",
+                     "AiAgents:McpServers:school-performance:Authentication (or pass a credential)",
+                     "AiAgents:McpServers:news:Authentication:ClientId", "AiAgents:McpServers:news:Authentication:ClientSecret",
+                 })
+        {
+            Assert.Contains(problem, ex.Message, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
+    public void OnTheirOwn_WithoutAnMcpServersSection_FailsRegistration()
+    {
+        var ex = Assert.Throws<InvalidOperationException>(() => BuildServersOnly([], Substitute.For<TokenCredential>()));
+
+        Assert.Equal("AddMcpServers needs the AiAgents:McpServers section, with at least one server.", ex.Message);
+    }
+
+    [Fact]
+    public void BothForms_ConnectEachServerOnce()
+    {
+        var services = new ServiceCollection();
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(Settings()).Build();
+        services.AddMcpServers(configuration, Substitute.For<TokenCredential>());
+        services.AddAgents(configuration, agents => agents.AddMcpServers());
+
+        Assert.Single(services, service => service.IsKeyedService && service.ServiceType == typeof(IMcpToolClient));
+    }
 }

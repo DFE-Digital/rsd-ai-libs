@@ -2,6 +2,7 @@ using GovUK.Dfe.AI.Agents.Constants;
 using GovUK.Dfe.AI.Agents.Diagnostics;
 using GovUK.Dfe.AI.Agents.Tools.Interfaces;
 using GovUK.Dfe.AI.Agents.ValueObjects;
+using Microsoft.Extensions.Logging;
 using System.Diagnostics;
 
 namespace GovUK.Dfe.AI.Agents.Tools;
@@ -21,9 +22,13 @@ internal static class AgentToolExecution
         IEnumerable<IAgentToolProvider> providers, IReadOnlyCollection<string>? allowedTools = null)
         => CreateResolver(providers, allowedTools, applicationName: null, agentName: null);
 
-    /// <summary>As above, recording an <c>execute_tool</c> span and duration for each call, tagged with the application and agent.</summary>
+    /// <summary>
+    /// As above, recording an <c>execute_tool</c> span and duration for each call, tagged with the application and agent, and
+    /// asking <paramref name="approver"/> before each call to a tool in <paramref name="toolsRequiringApproval"/>.
+    /// </summary>
     internal static ToolCallResolver? CreateResolver(IEnumerable<IAgentToolProvider> providers, IReadOnlyCollection<string>? allowedTools,
-        string? applicationName, string? agentName)
+        string? applicationName, string? agentName, IReadOnlyCollection<string>? toolsRequiringApproval = null,
+        IToolCallApprover? approver = null, ILogger? logger = null)
     {
         ArgumentNullException.ThrowIfNull(providers);
 
@@ -34,17 +39,21 @@ internal static class AgentToolExecution
         }
 
         var allowed = allowedTools?.ToHashSet(StringComparer.Ordinal);
+        var approval = new Approval(toolsRequiringApproval?.ToHashSet(StringComparer.Ordinal) ?? [], approver, logger);
         return async (calls, cancellationToken) =>
-            await Task.WhenAll(calls.Select(call => ExecuteMeasuredAsync(executors, allowed, call, applicationName, agentName, cancellationToken)))
+            await Task.WhenAll(calls.Select(call => ExecuteMeasuredAsync(executors, allowed, approval, call, applicationName, agentName, cancellationToken)))
                 .ConfigureAwait(false);
     }
+
+    /// <summary>Which tools need approval, and who gives it.</summary>
+    private sealed record Approval(HashSet<string> Tools, IToolCallApprover? Approver, ILogger? Logger);
 
     /// <summary>
     /// Runs one call inside an <c>execute_tool</c> span, and records <c>gen_ai.execute_tool.duration</c>. Only the tool's name,
     /// the call's id and a failure's exception type are recorded: arguments and output can carry personal data.
     /// </summary>
     private static async Task<ToolCallOutput> ExecuteMeasuredAsync(IReadOnlyList<IAgentToolExecutor> executors, HashSet<string>? allowed,
-        ToolCallRequest call, string? applicationName, string? agentName, CancellationToken cancellationToken)
+        Approval approval, ToolCallRequest call, string? applicationName, string? agentName, CancellationToken cancellationToken)
     {
         var tags = new TagList
         {
@@ -68,6 +77,13 @@ internal static class AgentToolExecution
 
         try
         {
+            if (approval.Tools.Contains(call.FunctionName)
+                && await ApproveAsync(approval, call, applicationName, agentName, cancellationToken).ConfigureAwait(false) is { } denied)
+            {
+                activity?.SetTag(AgentTelemetry.ToolApprovedTag, false);
+                return denied;
+            }
+
             return await ExecuteAsync(executors, allowed, call, cancellationToken).ConfigureAwait(false);
         }
         catch (Exception ex)
@@ -82,6 +98,25 @@ internal static class AgentToolExecution
         {
             AgentTelemetry.ExecuteToolDuration.Record(Stopwatch.GetElapsedTime(started).TotalSeconds, tags);
         }
+    }
+
+    /// <summary>Null when the call may run; otherwise the output telling the agent it wasn't approved.</summary>
+    private static async Task<ToolCallOutput?> ApproveAsync(Approval approval, ToolCallRequest call, string? applicationName, string? agentName,
+        CancellationToken cancellationToken)
+    {
+        // Startup refuses ToolsRequiringApproval without an approver; refusing here too means a gap can never run the tool.
+        var decision = approval.Approver is null
+            ? ToolCallApproval.Deny("no approver is set up")
+            : await approval.Approver.ApproveAsync(agentName ?? string.Empty, call, cancellationToken).ConfigureAwait(false);
+
+        AgentTelemetry.RecordToolApproval(applicationName, agentName, call.FunctionName, decision.Approved);
+        if (decision.Approved)
+        {
+            return null;
+        }
+
+        approval.Logger?.ToolCallDenied(call.FunctionName, agentName ?? "unknown");
+        return new ToolCallOutput(call.CallId, string.Format(PromptText.ToolCallNotApproved, call.FunctionName, decision.Reason));
     }
 
     private static async Task<ToolCallOutput> ExecuteAsync(IReadOnlyList<IAgentToolExecutor> executors, HashSet<string>? allowed,

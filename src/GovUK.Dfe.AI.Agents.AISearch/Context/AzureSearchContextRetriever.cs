@@ -1,4 +1,5 @@
 using GovUK.Dfe.AI.Agents.AISearch.Constants;
+using GovUK.Dfe.AI.Agents.AISearch.Diagnostics;
 using Azure.Search.Documents.Models;
 using Azure.Search.Documents;
 using GovUK.Dfe.AI.Agents.AISearch.Filters.Interfaces;
@@ -18,9 +19,13 @@ namespace GovUK.Dfe.AI.Agents.AISearch.Context;
 /// uses every non-empty string field.
 /// </param>
 /// <param name="indexes">Each index's settings, keyed by scope: its fields, semantic ranking and vector fields.</param>
+/// <param name="maxEvidenceCharacters">
+/// Optional: the most characters of evidence one search returns, added a whole result at a time, most relevant first.
+/// Null: every relevant result.
+/// </param>
 public sealed class AzureSearchContextRetriever(IReadOnlyDictionary<string, SearchClient> clients, IRelevanceFilter relevanceFilter,
     ILogger<AzureSearchContextRetriever>? logger = null, IReadOnlyDictionary<string, IReadOnlyList<string>>? contentFields = null,
-    IReadOnlyDictionary<string, AzureSearchIndexOptions>? indexes = null)
+    IReadOnlyDictionary<string, AzureSearchIndexOptions>? indexes = null, int? maxEvidenceCharacters = null)
     : IContextRetriever
 {
     private readonly ILogger<AzureSearchContextRetriever> _logger = logger ?? NullLogger<AzureSearchContextRetriever>.Instance;
@@ -48,8 +53,37 @@ public sealed class AzureSearchContextRetriever(IReadOnlyDictionary<string, Sear
             return new ContextResult(string.Format(ErrorMessages.NoAzureSearchInformationFound, scope), HasEvidence: false);
         }
 
-        return new ContextResult(string.Join(Environment.NewLine + Environment.NewLine, relevant.Select((item, i)
-            => $"--- {scope} Evidence {i + 1} ---\n{item.Content}")), HasEvidence: true);
+        return new ContextResult(JoinWithinLimit(scope, relevant), HasEvidence: true);
+    }
+
+    /// <summary>
+    /// Numbers the results as evidence, most relevant first. With a limit, whole results are added until the next would go
+    /// over, so no result is cut mid-way and the citations still match. The first result is always kept, cut if needed.
+    /// </summary>
+    private string JoinWithinLimit(string scope, IReadOnlyList<SearchResultItem> relevant)
+    {
+        var separator = Environment.NewLine + Environment.NewLine;
+        var blocks = relevant.Select((item, i) => $"--- {scope} Evidence {i + 1} ---\n{item.Content}").ToList();
+        if (maxEvidenceCharacters is not { } limit || blocks.Sum(static block => block.Length) + separator.Length * (blocks.Count - 1) <= limit)
+        {
+            return string.Join(separator, blocks);
+        }
+
+        var kept = new List<string> { blocks[0].Length <= limit ? blocks[0] : blocks[0][..limit] };
+        var length = kept[0].Length;
+        foreach (var block in blocks.Skip(1))
+        {
+            if (length + separator.Length + block.Length > limit)
+            {
+                break;
+            }
+
+            kept.Add(block);
+            length += separator.Length + block.Length;
+        }
+
+        _logger.KeptResultsWithinLimit(kept.Count, blocks.Count, scope, limit);
+        return string.Join(separator, kept) + separator + string.Format(ErrorMessages.EvidenceResultsLeftOut, blocks.Count - kept.Count, limit);
     }
 
     private async Task<IReadOnlyList<SearchResultItem>> SearchAsync(SearchClient client, string scope, string query, int size, string? filter,

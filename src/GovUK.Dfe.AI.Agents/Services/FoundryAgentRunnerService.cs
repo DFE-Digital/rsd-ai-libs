@@ -75,6 +75,8 @@ internal sealed class FoundryAgentRunnerService(IAgentFactory agentFactory, IFou
 
         var usage = new UsageTally();
         string? createdConversationId = null;
+        var runId = Guid.CreateVersion7().ToString("N");   // time-ordered, so audit records sort by when they ran
+        telemetry.Identified(runId);
 
         try
         {
@@ -89,20 +91,20 @@ internal sealed class FoundryAgentRunnerService(IAgentFactory agentFactory, IFou
             telemetry.AnsweredBy(response.Model);
 
             // One retry in the same conversation: only the reason goes back, not the prompt and evidence.
-            if (validateOutput?.Invoke(ToResult(agent, response, usage)) is { } problem)
+            if (validateOutput?.Invoke(ToResult(agent, response, usage, runId)) is { } problem)
             {
                 _logger.LogWarning("Agent {AgentName} gave an invalid answer; asking once more: {Problem}", agent.Name, problem);
                 response = await RunResponsesAsync(agent, conversation,
                     [ResponseItem.CreateUserMessageItem(string.Format(PromptText.AnswerRejected, problem))], resolveToolCalls, usage, runToken)
                     .ConfigureAwait(false);
 
-                if (validateOutput(ToResult(agent, response, usage)) is { } stillInvalid)
+                if (validateOutput(ToResult(agent, response, usage, runId)) is { } stillInvalid)
                 {
                     throw new InvalidOperationException(string.Format(ErrorMessages.AgentAnswerInvalid, agent.Name, stillInvalid));
                 }
             }
 
-            return ToResult(agent, response, usage);
+            return ToResult(agent, response, usage, runId);
         }
         catch (OperationCanceledException ex) when (timeoutSource?.IsCancellationRequested == true && !cancellationToken.IsCancellationRequested)
         {
@@ -126,7 +128,8 @@ internal sealed class FoundryAgentRunnerService(IAgentFactory agentFactory, IFou
         {
             telemetry.Failed(ex.GetType().FullName ?? AgentTelemetry.OtherError, "The agent run failed.");
             _logger.LogError(ex, "Agent {AgentName} failed", agent.Name);
-            throw WithUsage(new InvalidOperationException(string.Format(ErrorMessages.AgentRunFailed, agent.Name), ex), usage);
+            var message = ex is ClientResultException { Status: 429 } ? ErrorMessages.AgentRateLimited : ErrorMessages.AgentRunFailed;
+            throw WithUsage(new InvalidOperationException(string.Format(message, agent.Name), ex), usage);
         }
         finally
         {
@@ -138,10 +141,12 @@ internal sealed class FoundryAgentRunnerService(IAgentFactory agentFactory, IFou
         }
     }
 
-    private static AgentResult ToResult(AgentReference agent, ResponseResult response, UsageTally usage)
+    private static AgentResult ToResult(AgentReference agent, ResponseResult response, UsageTally usage, string runId)
         => new()
         {
             AgentName = agent.Name,
+            RunId = runId,
+            CompletedAt = DateTimeOffset.UtcNow,
             Output = response.GetOutputText(),
             TotalTokens = usage.Total.TotalTokens,
             InputTokens = usage.Total.InputTokens,
@@ -303,9 +308,9 @@ internal sealed class FoundryAgentRunnerService(IAgentFactory agentFactory, IFou
     /// <summary>The first input: the evidence, cut to size and fenced as data, then the prompt.</summary>
     private IReadOnlyList<ResponseItem> BuildInitialInputItems(string agentName, string prompt, string? additionalContext)
         => string.IsNullOrWhiteSpace(additionalContext)
-            ? [ResponseItem.CreateUserMessageItem(prompt)]
-            : [ResponseItem.CreateUserMessageItem(PromptText.FenceReferenceMaterial(LimitEvidence(agentName, additionalContext))),
-               ResponseItem.CreateUserMessageItem(prompt)];
+            ? [ResponseItem.CreateUserMessageItem(_runOptions.Redact(prompt))]
+            : [ResponseItem.CreateUserMessageItem(PromptText.FenceReferenceMaterial(LimitEvidence(agentName, _runOptions.Redact(additionalContext)))),
+               ResponseItem.CreateUserMessageItem(_runOptions.Redact(prompt))];
 
     /// <summary>
     /// Keeps evidence within <see cref="AgentRunOptions.MaxEvidenceCharacters"/>, keeping the start (the most relevant
@@ -377,7 +382,7 @@ internal sealed class FoundryAgentRunnerService(IAgentFactory agentFactory, IFou
                 throw new InvalidOperationException(string.Format(ErrorMessages.MissingToolCallOutput, callId));
             }
 
-            var limited = LimitToolOutput(callId, output);
+            var limited = LimitToolOutput(callId, _runOptions.Redact(output));
             nextInputItems.Add(ResponseItem.CreateFunctionCallOutputItem(callId,
                 _runOptions.FenceToolOutput ? PromptText.FenceToolOutput(limited) : limited));
         }

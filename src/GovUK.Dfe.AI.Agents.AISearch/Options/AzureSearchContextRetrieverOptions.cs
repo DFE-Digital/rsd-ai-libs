@@ -12,6 +12,12 @@ public sealed class AzureSearchContextRetrieverOptions
 
     public int MaxRetryAttempts { get; init; } = 3;
 
+    /// <summary>
+    /// Optional: the most characters of evidence one search returns. Results are added whole, most relevant first, until the
+    /// next would go over; the rest are left out, with a note. Unset (default): every relevant result is returned.
+    /// </summary>
+    public int? MaxEvidenceCharacters { get; init; }
+
     /// <summary>Every index has a name, and no name appears twice.</summary>
     internal bool IndexesAreValid
         => Indexes.Count > 0

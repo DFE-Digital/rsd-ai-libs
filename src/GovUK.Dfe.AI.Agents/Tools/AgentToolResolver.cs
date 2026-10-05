@@ -77,14 +77,19 @@ internal static class AgentToolResolver
         IReadOnlyDictionary<string, List<IAgentToolProvider>> toolProvidersByAgentName, AgentDefinition definition)
         => CreateToolCallResolver(toolProvidersByAgentName, definition, applicationName: null);
 
-    /// <summary>As above, with each tool call's telemetry tagged with <paramref name="applicationName"/>.</summary>
+    /// <summary>
+    /// As above, with each tool call's telemetry tagged with <paramref name="applicationName"/>, and each call to a tool in
+    /// the definition's <c>ToolsRequiringApproval</c> sent to <paramref name="approver"/> first.
+    /// </summary>
     internal static ToolCallResolver? CreateToolCallResolver(
-        IReadOnlyDictionary<string, List<IAgentToolProvider>> toolProvidersByAgentName, AgentDefinition definition, string? applicationName)
+        IReadOnlyDictionary<string, List<IAgentToolProvider>> toolProvidersByAgentName, AgentDefinition definition, string? applicationName,
+        IToolCallApprover? approver = null, Microsoft.Extensions.Logging.ILogger? logger = null)
     {
         ArgumentNullException.ThrowIfNull(definition);
 
         return definition.AllowedTools.Count > 0 && toolProvidersByAgentName.TryGetValue(definition.Name, out var providers)
-            ? AgentToolExecution.CreateResolver(providers, definition.AllowedTools, applicationName, definition.Name)
+            ? AgentToolExecution.CreateResolver(providers, definition.AllowedTools, applicationName, definition.Name,
+                definition.ToolsRequiringApproval, approver, logger)
             : null;
     }
 }

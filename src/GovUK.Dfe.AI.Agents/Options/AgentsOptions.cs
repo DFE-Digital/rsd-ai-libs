@@ -24,22 +24,27 @@ public sealed partial class AgentsOptions
     /// <summary>Code only: the default credential, instead of <see cref="Authentication"/>. Set with <c>UseCredential</c>.</summary>
     public TokenCredential? Credential { get; set; }
 
-    /// <summary>Foundry client retries on a transient failure. A retried call may be billed twice.</summary>
-    public int MaxRetries { get; set; } = 3;
+    /// <summary>
+    /// Foundry client retries on a rate limit (HTTP 429) or transient failure, with backoff that honours <c>Retry-After</c>.
+    /// 6 rides out a tokens-per-minute limit (about a minute). A retried 5xx call may be billed twice.
+    /// </summary>
+    public int MaxRetries { get; set; } = 6;
 
     // ===== Each run =====
 
     /// <summary>The longest one run may take, tool rounds included. Unset: no limit.</summary>
     public TimeSpan? RunTimeout { get; set; }
 
+    // Defaults are sized for gpt-5.1 (400,000-token context: up to 272,000 input, 128,000 output).
+
     /// <summary>Output tokens one run may use, across tool rounds (reasoning included); a run that uses them all fails.</summary>
-    public int MaxOutputTokensPerRun { get; set; } = 32_000;
+    public int MaxOutputTokensPerRun { get; set; } = AgentRunOptions.DefaultMaxOutputTokensPerRun;
 
-    /// <summary>The most characters of evidence sent with one run; the rest is cut off with a note.</summary>
-    public int MaxEvidenceCharacters { get; set; } = 100_000;
+    /// <summary>The most characters of evidence sent with one run (about 50,000 tokens); the rest is cut off with a note.</summary>
+    public int MaxEvidenceCharacters { get; set; } = AgentRunOptions.DefaultMaxEvidenceCharacters;
 
-    /// <summary>The most characters of one tool's output sent to the model; the rest is cut off with a note.</summary>
-    public int MaxToolOutputCharacters { get; set; } = 20_000;
+    /// <summary>The most characters of one tool's output sent to the model (about 10,000 tokens); the rest is cut off with a note.</summary>
+    public int MaxToolOutputCharacters { get; set; } = AgentRunOptions.DefaultMaxToolOutputCharacters;
 
     /// <summary>Fences tool output as data the model mustn't take instructions from.</summary>
     public bool FenceToolOutput { get; set; } = true;

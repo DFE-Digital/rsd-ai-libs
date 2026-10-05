@@ -66,7 +66,8 @@ public static class AgentsServiceCollectionExtensions
             package.Register(context);
         }
 
-        var missing = options.MissingSettings().Concat(context.Problems).Distinct(StringComparer.Ordinal).ToList();
+        var missing = options.MissingSettings().Concat(context.Problems).Concat(ApprovalProblems(builder))
+            .Distinct(StringComparer.Ordinal).ToList();
         if (missing.Count > 0)
         {
             throw new InvalidOperationException(string.Format(ErrorMessages.AiAgentsSettingsMissing, string.Join(", ", missing)));
@@ -74,7 +75,8 @@ public static class AgentsServiceCollectionExtensions
 
         var foundryCredential = options.CredentialFor(nameof(AzureCredentialTarget.Foundry), options.Foundry.Authentication);
 
-        services.AddSingleton(options.ToRunOptions());
+        var runOptions = options.ToRunOptions() with { Redactors = builder.Redactors };
+        services.AddSingleton(runOptions);
         services.AddSingleton(options.ToVersionPinning());
         services.AddFoundryAgents(_ => new Uri(options.Foundry.Endpoint!), _ => foundryCredential,
             _ => new FoundryAgentFactoryOptions(options.Foundry.DefaultModel!)
@@ -100,6 +102,24 @@ public static class AgentsServiceCollectionExtensions
 
         RegisterAgents(services, builder.Definitions, options, foundryCredential);
         return services;
+    }
+
+    /// <summary>Tools needing approval must be allowed tools, and need an approver, or they could never run.</summary>
+    private static IEnumerable<string> ApprovalProblems(AgentsBuilder builder)
+    {
+        foreach (var definition in builder.Definitions.Where(static definition => definition.ToolsRequiringApproval.Count > 0))
+        {
+            var notAllowed = definition.ToolsRequiringApproval.Except(definition.AllowedTools, StringComparer.Ordinal).ToList();
+            if (notAllowed.Count > 0)
+            {
+                yield return string.Format(ErrorMessages.ApprovalToolNotAllowed, definition.Name, string.Join(", ", notAllowed));
+            }
+
+            if (!builder.HasToolApprover)
+            {
+                yield return string.Format(ErrorMessages.ApprovalWithoutApprover, definition.Name);
+            }
+        }
     }
 
     /// <summary>Registers the builder's definitions and marks the configured agents as externally managed.</summary>

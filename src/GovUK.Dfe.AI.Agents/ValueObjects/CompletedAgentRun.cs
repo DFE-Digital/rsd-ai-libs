@@ -6,16 +6,22 @@ public sealed record CompletedAgentRun
     /// <summary>The agent that ran.</summary>
     public required string AgentName { get; init; }
 
+    /// <summary>The run's <c>AgentResult.RunId</c>.</summary>
+    public string? RunId { get; init; }
+
+    /// <summary>When the answer was produced.</summary>
+    public DateTimeOffset? CompletedAt { get; init; }
+
     /// <summary>The agent version that ran; null for an ephemeral agent.</summary>
     public string? AgentVersion { get; init; }
 
     /// <summary>The model that answered.</summary>
     public string? Model { get; init; }
 
-    /// <summary>The prompt the agent was given.</summary>
+    /// <summary>The prompt the agent was given, after any redaction.</summary>
     public required string Prompt { get; init; }
 
-    /// <summary>The evidence the agent was given, if any.</summary>
+    /// <summary>The evidence the agent was given, if any, after any redaction.</summary>
     public string? Evidence { get; init; }
 
     /// <summary>The agent's answer.</summary>

@@ -6,6 +6,15 @@ public sealed record AgentResult
     /// <summary>The agent that ran.</summary>
     public required string AgentName { get; init; }
 
+    /// <summary>
+    /// Identifies this run: tagged on its <c>invoke_agent</c> span and given to run observers, so an answer can be traced,
+    /// audited, and tied to users' feedback in your app. Null for a fallback result.
+    /// </summary>
+    public string? RunId { get; init; }
+
+    /// <summary>When the answer was produced. Show it with the answer, alongside that it was AI-generated.</summary>
+    public DateTimeOffset? CompletedAt { get; init; }
+
     /// <summary>The answer; null when the run produced none.</summary>
     public string? Output { get; init; }
 

@@ -9,6 +9,12 @@ public sealed record AgentDefinition(string Name, string SystemPromptKey, bool I
     /// <summary>The only tools it may call. Empty (default): no tools.</summary>
     public IReadOnlyList<string> AllowedTools { get; init; } = [];
 
+    /// <summary>
+    /// Tools from <see cref="AllowedTools"/> that only run once the app's <c>IToolCallApprover</c> approves each call, e.g.
+    /// tools that change records. Needs <c>agents.AddToolApprover&lt;T&gt;()</c>.
+    /// </summary>
+    public IReadOnlyList<string> ToolsRequiringApproval { get; init; } = [];
+
     /// <summary>Optional JSON schema for its answer; read it back with <c>ReadOutputAs&lt;T&gt;()</c>.</summary>
     public AgentOutputSchema? OutputSchema { get; init; }
 

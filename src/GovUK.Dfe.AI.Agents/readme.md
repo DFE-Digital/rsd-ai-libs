@@ -121,6 +121,7 @@ Put your instructions in `prompt`. Put untrusted material (documents, search res
 | `.Quality` / `.Quality.Interfaces` | `AgentTestCase`, `AgentEvaluationReport` / `IAgentTestRunner`, `IAgentRunEvaluator` |
 | `.Extensibility.Interfaces` | `IAgentsPackage`, `IAgentRunObserver` (told about each successful run) |
 | `.Enums` | `AzureCredentialTarget`, `AgentTestTarget` |
+| `.Tools.Interfaces` / `.Privacy` | `IToolCallApprover` / `PatternRedactor` |
 | `.Providers` / `.Tools.WebSearch` / `.Prompts.Interfaces` | `ManagedAgentProviderBase` / `WebSearchToolProvider` / `IPromptTemplateBuilder` |
 | `.Diagnostics` | `AgentTelemetry` |
 | `.Exceptions` | `AgentGuardrailException` |
@@ -156,6 +157,7 @@ extra usings.
 | `SystemPromptKey` | Its key under `PromptFiles:SystemPrompts` |
 | `IsManagedAgent` | `true` (default): kept and reused. `false`: created and deleted on every run |
 | `AllowedTools` | The only tools the agent may call. Empty (the default) means no tools |
+| `ToolsRequiringApproval` | Tools that only run once approved, e.g. ones that change records ([Responsible AI](#responsible-ai)) |
 | `OutputSchema` | A JSON schema for a typed answer; read it with `ReadOutputAs<T>()` |
 | `Validate`, `RequireCitations` | [Answer checks](#answer-checks) |
 
@@ -189,24 +191,104 @@ Run fixed test cases in CI and fail the build if an agent got worse. Resolve `IA
 
 ```csharp
 var tests = services.GetRequiredService<IAgentTestRunner>();
-var cases = await AgentTestCase.LoadAsync("tests/ofsted-agent");   // JSON files: prompt, evidence, mustMention, mustNotMention
-var report = await tests.RunAsync(BriefingAgents.Ofsted, cases);
+var cases = await AgentTestCase.LoadAsync("tests/ofsted-agent");   // JSON: prompt, evidence, mustMention, mustNotMention, group
+var report = await tests.RunAsync(BriefingAgents.Ofsted, cases, repeats: 3);
 var baseline = JsonSerializer.Deserialize<AgentEvaluationReport>(await File.ReadAllTextAsync("baseline.json"))!;
 
-if (!report.Passed
-    || report.BelowMinimum(3.5, "Groundedness", "Relevance").Any()
-    || report.RegressionsFrom(baseline, tolerance: 0.2).Any())
+var failures = report.FailuresAgainst(new ReleaseGate
 {
-    throw new InvalidOperationException("ofsted-agent got worse; not publishing it.");
+    Metrics = ["Groundedness", "Relevance"],   // must be scored
+    MinimumScore = 3.5,                        // lowest average allowed (scores run 1 to 5)
+    Tolerance = 0.2,                           // how far below the baseline a metric may fall
+    MaxGroupGap = 0.5,                         // optional: largest gap between test case groups
+}, baseline);
+
+if (failures.Count > 0)
+{
+    throw new InvalidOperationException("ofsted-agent isn't ready:\n" + string.Join("\n", failures));
 }
 ```
 
-- Test cases run against a temporary copy of the agent, so a failed gate publishes nothing. To test the deployed
-  version instead, pass `AgentTestTarget.Deployed`.
-- Scores need an evaluator: add the Evaluation package, or register your own `IAgentRunEvaluator`. Without one, only
-  `mustMention` and `mustNotMention` are checked.
-- Name the metrics you require in `BelowMinimum`, so the gate fails if the judge returns no scores.
-- After a release passes, save its report as the new `baseline.json`.
+Each failure is a readable line, e.g. `Groundedness: fell from 4.5 to 4.2, more than the tolerance 0.2`.
+
+- **Tolerance:** a judge can score the same answer differently from run to run. `Tolerance` (default `0.2`) stops that
+  noise failing a release, while a real drop still does.
+- **Repeats:** `repeats: 3` runs each case three times and averages its scores, so one unlucky answer doesn't decide the
+  release. A case's facts must be right in every run. Each repeat costs another run and judge call.
+- **Safe to run:** cases run against a temporary copy of the agent, so a failed gate publishes nothing. To test the
+  deployed version instead, pass `AgentTestTarget.Deployed`.
+- **Scores need an evaluator:** add the Evaluation package, or register your own `IAgentRunEvaluator`. Without one, only
+  `mustMention` and `mustNotMention` are checked, and every metric fails as not scored.
+- **First release:** pass no baseline. After a release passes, save its report as the new `baseline.json`.
+
+## Responsible AI
+
+Hooks that help your service meet the
+[UK Government AI Playbook](https://www.gov.uk/government/publications/ai-playbook-for-the-uk-government). The library
+gives you the hooks; your app owns the decisions, the user interface, and its DPIA and ATRS record.
+
+### A person approves tool calls that change things
+
+List the tools that need approval, and add an approver, e.g. one that asks a manager in your app:
+
+```csharp
+public static readonly AgentDefinition Case = new("case-agent", "Case")
+{
+    AllowedTools = ["get_case", "update_case"],
+    ToolsRequiringApproval = ["update_case"],
+};
+
+builder.Services.AddAgents(builder.Configuration, agents => agents
+    .AddAgents(BriefingAgents.All)
+    .AddToolApprover<ManagerApprover>());
+
+public sealed class ManagerApprover(IApprovalQueue queue) : IToolCallApprover   // your own service
+{
+    public async Task<ToolCallApproval> ApproveAsync(string agentName, ToolCallRequest call, CancellationToken ct)
+        => await queue.AskAsync(agentName, call.FunctionName, call.Arguments, ct)
+            ? ToolCallApproval.Approve()
+            : ToolCallApproval.Deny("the manager declined");
+}
+```
+
+- A denied call doesn't run. The agent is told why, and answers without it.
+- The run waits for the decision, within `RunTimeout`. For decisions that take hours, end the run and start a new one
+  once approved.
+- Startup fails if a tool needs approval but there's no approver, or the tool isn't in `AllowedTools`.
+- `dfe.ai_agents.tool.approvals` counts decisions, by tool and outcome.
+
+### Personal data is removed before the model sees it
+
+```csharp
+agents.AddRedactor(new PatternRedactor(new Dictionary<string, string>
+{
+    ["UPN"] = @"\b[A-Z]\d{11}[0-9A-Z]\b",
+    ["NI number"] = @"\b[A-CEGHJ-PR-TW-Z]{2}\d{6}[A-D]\b",
+}));
+```
+
+Every prompt, evidence and tool output is redacted before it's sent, e.g. `Pupil [UPN removed]`. So are the copies given
+to evaluators and run observers. Implement `IAgentInputRedactor` for anything a pattern can't catch.
+
+### Every answer can be traced
+
+Each `AgentResult` has a `RunId` and `CompletedAt`, and the run ID is tagged on the run's trace
+(`dfe.ai_agents.run_id`). Use them to:
+
+- **Label answers** as AI-generated, e.g. "Generated by AI on 5 October 2026. Check before use."
+- **Keep an audit trail:** register an `IAgentRunObserver` that saves each `CompletedAgentRun` (prompt, evidence and
+  answer, already redacted) to your own store, with your retention policy.
+- **Collect feedback** in your app: store the user's verdict with the `RunId`, `AgentName`, `AgentVersion` and `Model`,
+  so you can find the run and compare versions.
+
+### Agents are checked for fairness before release
+
+Give release-gate test cases a `group` (e.g. `"special-schools"`), then fail the gate if one group is served worse:
+
+```csharp
+// MaxGroupGap = 0.5 in the ReleaseGate above, or on its own:
+var gaps = report.GroupGaps(maxGap: 0.5, "Groundedness", "Relevance");
+```
 
 ## Environments and versions
 
@@ -258,6 +340,49 @@ An agent can be in `VersionPins` or `ExternallyManagedAgents`, but not both.
   every 30 minutes. The sweep only deletes this app's agents, and only ones older than any run could be, so it's safe to
   run on every instance. Keep `ApplicationName` unique per app.
 
+## Limits
+
+### Set by this library
+
+| Limit | Default | Setting | When reached |
+| --- | --- | --- | --- |
+| Output tokens per run, including reasoning, tool rounds and the retry | 64,000 | `MaxOutputTokensPerRun` | The run fails |
+| Evidence per run | 200,000 characters (about 50,000 tokens) | `MaxEvidenceCharacters` | Cut, keeping the start, with a note to the model |
+| Evidence per search (AISearch) | No limit | `Search:MaxEvidenceCharacters` | Whole results kept, most relevant first; the rest left out with a note |
+| One tool output | 40,000 characters (about 10,000 tokens) | `MaxToolOutputCharacters` | Cut, with a note to the model |
+| Tool-call rounds per run | 10 | Fixed | The run fails |
+| Time per run | No limit | `RunTimeout` | `TimeoutException` |
+| Runs at once | No limit | `MaxConcurrency`, `GlobalConcurrency` | The run waits up to `MaxWaitForRunSlot` (2 minutes), then `TimeoutException` |
+| Retries of a rate-limited (429) or failed Foundry call | 6, honouring `Retry-After` | `MaxRetries` | The run fails; a rate limit says what to change |
+
+Characters become tokens at about 4 to 1 for English text. The defaults are sized for **gpt-5.1** (up to 272,000 input
+tokens): full evidence (~50,000 tokens) plus ten full tool outputs (~100,000) still leaves room for the instructions and
+conversation. For a model with a smaller window, such as gpt-4o (128,000), lower them.
+
+### Set by Foundry
+
+Check the current figures for your model and region: they change. These are from Microsoft Learn, September 2026.
+
+| Model | Context window (input + output) | Max output tokens |
+| --- | --- | --- |
+| gpt-5, gpt-5-mini, gpt-5.1 | 400,000 (input up to 272,000) | 128,000 |
+| gpt-4.1, gpt-4.1-mini | 1,047,576, but 300,000 on standard deployments | 32,768 |
+| o3, o4-mini | Input 200,000 | 100,000 |
+| gpt-4o, gpt-4o-mini | Input 128,000 | 16,384 |
+
+- **The context window is shared:** instructions, prompt, evidence, tool outputs, the conversation so far, reasoning and
+  the answer all count. Keep `MaxEvidenceCharacters` and tool outputs well within the model's input limit.
+- **Rate limits are per deployment:** tokens per minute (TPM) and requests per minute (RPM) depend on the model, the
+  deployment type and your subscription's quota tier. For example, gpt-5.1 on Global Standard starts at 1,000,000 TPM
+  and 10,000 RPM. Size `MaxConcurrency` and `GlobalConcurrency` to stay under them; over the limit, calls get HTTP 429,
+  which the library retries.
+- **Agent Service limits:** up to 128 tools per agent. The Agent Service has no rate limit of its own; the model
+  deployment's limits apply.
+
+Sources: [model context windows](https://learn.microsoft.com/azure/ai-foundry/openai/concepts/models),
+[quotas and rate limits](https://learn.microsoft.com/azure/ai-foundry/openai/quotas-limits),
+[Agent Service limits](https://learn.microsoft.com/azure/ai-foundry/agents/quotas-limits).
+
 ## Telemetry
 
 Token usage is billed, so it must be recorded: startup fails unless the metrics below are subscribed. In tests and local
@@ -278,6 +403,7 @@ Names follow the [OpenTelemetry generative AI conventions](https://github.com/op
 | `dfe.ai_agents.workflow.input_tokens` / `.output_tokens` | Total tokens per parallel or sequential run, e.g. one briefing |
 | `dfe.ai_agents.run_slot.wait.duration` | Seconds spent waiting for a slot. If this keeps rising, the limits are too low |
 | `dfe.ai_agents.guardrail.blocks` | Prompts and answers a Foundry guardrail blocked |
+| `dfe.ai_agents.tool.approvals` | Tool calls that needed approval, by tool and `dfe.ai_agents.tool.approved` |
 
 Metrics are tagged with `gen_ai.agent.name`, the model (`gen_ai.response.model`) and the application
 (`dfe.ai_agents.application`). The spans are `invoke_workflow` (a parallel or sequential run), `invoke_agent {agent}` and
@@ -324,9 +450,9 @@ All options sit under `AiAgents`. You can also change them in code with `agents.
 | --- | --- | --- |
 | `ApplicationName` | Entry assembly name | Telemetry tag, and scope of the orphan sweep |
 | `RunTimeout` | None | Longest time one run may take |
-| `MaxOutputTokensPerRun` | 32000 | Output tokens one run may use (minimum 16) |
-| `MaxEvidenceCharacters` | 100000 | Longer evidence is cut, keeping the start |
-| `MaxToolOutputCharacters` | 20000 | Longer tool output is cut |
+| `MaxOutputTokensPerRun` | 64000 | Output tokens one run may use (minimum 16) |
+| `MaxEvidenceCharacters` | 200000 | Longer evidence is cut, keeping the start |
+| `MaxToolOutputCharacters` | 40000 | Longer tool output is cut |
 | `FenceToolOutput` | `true` | Fences tool output as data |
 | `DeleteConversationsAfterRun` | `true` | Keeps prompts and evidence out of Foundry |
 | `MaxConcurrency` | None | Runs at once on one instance |
@@ -342,7 +468,7 @@ All options sit under `AiAgents`. You can also change them in code with `agents.
 | `RequireTokenUsageTelemetry` | `true` | Fails startup when token metrics aren't recorded |
 | `ValidateAgentToolsAtStartup` | `true` | Fails startup if a pinned or external agent's tools can't run here |
 | `EnableDriftDetection` | `false` | Warns when a pinned version no longer matches its definition |
-| `MaxRetries` | 3 | Foundry client retries. A retried call may be billed twice |
+| `MaxRetries` | 6 | Retries on a rate limit or transient failure, honouring `Retry-After` (rides out about a minute of throttling). A retried 5xx call may be billed twice |
 
 ## Production checklist
 
@@ -354,6 +480,9 @@ All options sit under `AiAgents`. You can also change them in code with `agents.
 - [ ] `RunTimeout`, `MaxOutputTokensPerRun`, `MaxConcurrency` and `GlobalConcurrency` fit your Foundry quota.
 - [ ] Production uses a fixed model version, and important agents have a release gate.
 - [ ] With add-ons: MCP allow-lists are set, every search is filtered, and every deployment has a guardrail.
+- [ ] Tools that change records are in `ToolsRequiringApproval`, with an approver.
+- [ ] Personal data is redacted, answers are labelled as AI-generated, and users can give feedback (stored with the `RunId`).
+- [ ] Your DPIA and ATRS record are done. See [Responsible AI](#responsible-ai).
 
 ## Testing your app
 
@@ -368,4 +497,4 @@ All options sit under `AiAgents`. You can also change them in code with `agents.
 - **Lower-level services:** `IAgentRunnerService` runs an `AgentSpec` or `AgentReference` directly. `IAgentRuntimeService` handles
   temporary agents and orphan clean-up. `IAgentFactory` maintains versions, e.g. pruning them by hand.
 
-Not supported yet: human approval before a tool runs, streaming, and built-in health checks.
+Not supported yet: streaming and built-in health checks.

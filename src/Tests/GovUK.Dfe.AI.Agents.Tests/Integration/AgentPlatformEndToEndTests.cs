@@ -1,5 +1,6 @@
 using Azure.AI.Projects.Agents;
 using Azure.Core;
+using GovUK.Dfe.AI.Agents.Builders;
 using GovUK.Dfe.AI.Agents.Services.Interfaces;
 using GovUK.Dfe.AI.Agents.Context;
 using GovUK.Dfe.AI.Agents.Factories;
@@ -60,8 +61,12 @@ public sealed partial class AgentPlatformEndToEndTests : IDisposable
 
     private void Pin(string agentName, string version) => _configuration[$"AiAgents:VersionPins:{agentName}"] = version;
 
-    /// <summary>Builds the app through <c>AddAgents</c>; <paramref name="settings"/> are extra <c>AiAgents</c> keys.</summary>
-    private ServiceProvider Build(Action<IServiceCollection>? configure = null, Dictionary<string, string>? settings = null)
+    /// <summary>
+    /// Builds the app through <c>AddAgents</c>; <paramref name="settings"/> are extra <c>AiAgents</c> keys, and
+    /// <paramref name="agents"/> adds to the builder.
+    /// </summary>
+    private ServiceProvider Build(Action<IServiceCollection>? configure = null, Dictionary<string, string>? settings = null,
+        Action<AgentsBuilder>? agents = null)
     {
         _configuration["AiAgents:Foundry:Endpoint"] = "https://example.services.ai.azure.com/api/projects/test";
         _configuration["AiAgents:Foundry:DefaultModel"] = DefaultModel;
@@ -73,7 +78,11 @@ public sealed partial class AgentPlatformEndToEndTests : IDisposable
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(_configuration).Build();
         var services = new ServiceCollection();
         services.AddLogging(logging => logging.AddProvider(_logs).SetMinimumLevel(LogLevel.Trace));
-        services.AddAgents(configuration, agents => agents.UseCredential(Substitute.For<TokenCredential>()));
+        services.AddAgents(configuration, builder =>
+        {
+            builder.UseCredential(Substitute.For<TokenCredential>());
+            agents?.Invoke(builder);
+        });
 
         // Replace only the network edges; everything else is the library's own registration.
         services.AddSingleton(_foundry.Admin);

@@ -12,6 +12,8 @@ GovUK.Dfe.AI.Agents.Builders.AgentsBuilder.AddAgentProvider<TProvider>() -> GovU
 GovUK.Dfe.AI.Agents.Builders.AgentsBuilder.AddAgents(params GovUK.Dfe.AI.Agents.ValueObjects.AgentDefinition![]! definitions) -> GovUK.Dfe.AI.Agents.Builders.AgentsBuilder!
 GovUK.Dfe.AI.Agents.Builders.AgentsBuilder.AddEphemeralAgentSweep(System.TimeSpan? interval = null) -> GovUK.Dfe.AI.Agents.Builders.AgentsBuilder!
 GovUK.Dfe.AI.Agents.Builders.AgentsBuilder.AddPackage(GovUK.Dfe.AI.Agents.Extensibility.Interfaces.IAgentsPackage! package) -> GovUK.Dfe.AI.Agents.Builders.AgentsBuilder!
+GovUK.Dfe.AI.Agents.Builders.AgentsBuilder.AddRedactor(GovUK.Dfe.AI.Agents.Privacy.Interfaces.IAgentInputRedactor! redactor) -> GovUK.Dfe.AI.Agents.Builders.AgentsBuilder!
+GovUK.Dfe.AI.Agents.Builders.AgentsBuilder.AddToolApprover<TApprover>() -> GovUK.Dfe.AI.Agents.Builders.AgentsBuilder!
 GovUK.Dfe.AI.Agents.Builders.AgentsBuilder.AddTools(string! agentName, GovUK.Dfe.AI.Agents.Tools.Interfaces.IAgentToolProvider! provider) -> GovUK.Dfe.AI.Agents.Builders.AgentsBuilder!
 GovUK.Dfe.AI.Agents.Builders.AgentsBuilder.Configure(System.Action<GovUK.Dfe.AI.Agents.Options.AgentsOptions!>! configure) -> GovUK.Dfe.AI.Agents.Builders.AgentsBuilder!
 GovUK.Dfe.AI.Agents.Builders.AgentsBuilder.Services.get -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
@@ -154,6 +156,11 @@ GovUK.Dfe.AI.Agents.Options.AgentsOptions.ValidateAgentToolsAtStartup.get -> boo
 GovUK.Dfe.AI.Agents.Options.AgentsOptions.ValidateAgentToolsAtStartup.set -> void
 GovUK.Dfe.AI.Agents.Options.AgentsOptions.VersionPins.get -> System.Collections.Generic.Dictionary<string!, string!>!
 GovUK.Dfe.AI.Agents.Options.AgentsOptions.VersionPins.set -> void
+GovUK.Dfe.AI.Agents.Privacy.Interfaces.IAgentInputRedactor
+GovUK.Dfe.AI.Agents.Privacy.Interfaces.IAgentInputRedactor.Redact(string! text) -> string!
+GovUK.Dfe.AI.Agents.Privacy.PatternRedactor
+GovUK.Dfe.AI.Agents.Privacy.PatternRedactor.PatternRedactor(System.Collections.Generic.IReadOnlyDictionary<string!, string!>! patterns) -> void
+GovUK.Dfe.AI.Agents.Privacy.PatternRedactor.Redact(string! text) -> string!
 GovUK.Dfe.AI.Agents.Prompts.Interfaces.IPromptProvider
 GovUK.Dfe.AI.Agents.Prompts.Interfaces.IPromptProvider.GetSystemPrompt(string! promptType) -> string!
 GovUK.Dfe.AI.Agents.Prompts.Interfaces.IPromptProvider.GetUserPrompt(string! promptType) -> string!
@@ -176,9 +183,12 @@ GovUK.Dfe.AI.Agents.Quality.AgentEvaluationReport.AgentEvaluationReport(string! 
 GovUK.Dfe.AI.Agents.Quality.AgentEvaluationReport.AgentName.get -> string!
 GovUK.Dfe.AI.Agents.Quality.AgentEvaluationReport.AgentName.init -> void
 GovUK.Dfe.AI.Agents.Quality.AgentEvaluationReport.AverageScores.get -> System.Collections.Generic.IReadOnlyDictionary<string!, double>!
+GovUK.Dfe.AI.Agents.Quality.AgentEvaluationReport.AverageScoresByGroup.get -> System.Collections.Generic.IReadOnlyDictionary<string!, System.Collections.Generic.IReadOnlyDictionary<string!, double>!>!
 GovUK.Dfe.AI.Agents.Quality.AgentEvaluationReport.BelowMinimum(double minimum, params string![]! requiredMetrics) -> System.Collections.Generic.IReadOnlyList<string!>!
 GovUK.Dfe.AI.Agents.Quality.AgentEvaluationReport.Deconstruct(out string! AgentName, out System.Collections.Generic.IReadOnlyList<GovUK.Dfe.AI.Agents.Quality.AgentTestResult!>! Results) -> void
 GovUK.Dfe.AI.Agents.Quality.AgentEvaluationReport.Equals(GovUK.Dfe.AI.Agents.Quality.AgentEvaluationReport? other) -> bool
+GovUK.Dfe.AI.Agents.Quality.AgentEvaluationReport.FailuresAgainst(GovUK.Dfe.AI.Agents.Quality.ReleaseGate! gate, GovUK.Dfe.AI.Agents.Quality.AgentEvaluationReport? baseline = null) -> System.Collections.Generic.IReadOnlyList<string!>!
+GovUK.Dfe.AI.Agents.Quality.AgentEvaluationReport.GroupGaps(double maxGap, params string![]! metrics) -> System.Collections.Generic.IReadOnlyList<string!>!
 GovUK.Dfe.AI.Agents.Quality.AgentEvaluationReport.Passed.get -> bool
 GovUK.Dfe.AI.Agents.Quality.AgentEvaluationReport.RegressionsFrom(GovUK.Dfe.AI.Agents.Quality.AgentEvaluationReport! baseline, double tolerance = 0) -> System.Collections.Generic.IReadOnlyList<string!>!
 GovUK.Dfe.AI.Agents.Quality.AgentEvaluationReport.Results.get -> System.Collections.Generic.IReadOnlyList<GovUK.Dfe.AI.Agents.Quality.AgentTestResult!>!
@@ -190,6 +200,8 @@ GovUK.Dfe.AI.Agents.Quality.AgentTestCase.Deconstruct(out string! Name, out stri
 GovUK.Dfe.AI.Agents.Quality.AgentTestCase.Equals(GovUK.Dfe.AI.Agents.Quality.AgentTestCase? other) -> bool
 GovUK.Dfe.AI.Agents.Quality.AgentTestCase.Evidence.get -> string?
 GovUK.Dfe.AI.Agents.Quality.AgentTestCase.Evidence.init -> void
+GovUK.Dfe.AI.Agents.Quality.AgentTestCase.Group.get -> string?
+GovUK.Dfe.AI.Agents.Quality.AgentTestCase.Group.init -> void
 GovUK.Dfe.AI.Agents.Quality.AgentTestCase.MustMention.get -> System.Collections.Generic.IReadOnlyList<string!>!
 GovUK.Dfe.AI.Agents.Quality.AgentTestCase.MustMention.init -> void
 GovUK.Dfe.AI.Agents.Quality.AgentTestCase.MustNotMention.get -> System.Collections.Generic.IReadOnlyList<string!>!
@@ -207,6 +219,8 @@ GovUK.Dfe.AI.Agents.Quality.AgentTestResult.Deconstruct(out string! CaseName, ou
 GovUK.Dfe.AI.Agents.Quality.AgentTestResult.Equals(GovUK.Dfe.AI.Agents.Quality.AgentTestResult? other) -> bool
 GovUK.Dfe.AI.Agents.Quality.AgentTestResult.Failures.get -> System.Collections.Generic.IReadOnlyList<string!>!
 GovUK.Dfe.AI.Agents.Quality.AgentTestResult.Failures.init -> void
+GovUK.Dfe.AI.Agents.Quality.AgentTestResult.Group.get -> string?
+GovUK.Dfe.AI.Agents.Quality.AgentTestResult.Group.init -> void
 GovUK.Dfe.AI.Agents.Quality.AgentTestResult.Output.get -> string?
 GovUK.Dfe.AI.Agents.Quality.AgentTestResult.Output.init -> void
 GovUK.Dfe.AI.Agents.Quality.AgentTestResult.Passed.get -> bool
@@ -215,7 +229,19 @@ GovUK.Dfe.AI.Agents.Quality.AgentTestResult.Scores.init -> void
 GovUK.Dfe.AI.Agents.Quality.Interfaces.IAgentRunEvaluator
 GovUK.Dfe.AI.Agents.Quality.Interfaces.IAgentRunEvaluator.EvaluateAsync(GovUK.Dfe.AI.Agents.ValueObjects.CompletedAgentRun! run, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyDictionary<string!, double>!>!
 GovUK.Dfe.AI.Agents.Quality.Interfaces.IAgentTestRunner
-GovUK.Dfe.AI.Agents.Quality.Interfaces.IAgentTestRunner.RunAsync(GovUK.Dfe.AI.Agents.ValueObjects.AgentDefinition! definition, System.Collections.Generic.IReadOnlyCollection<GovUK.Dfe.AI.Agents.Quality.AgentTestCase!>! cases, GovUK.Dfe.AI.Agents.Enums.AgentTestTarget target = GovUK.Dfe.AI.Agents.Enums.AgentTestTarget.Candidate, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<GovUK.Dfe.AI.Agents.Quality.AgentEvaluationReport!>!
+GovUK.Dfe.AI.Agents.Quality.Interfaces.IAgentTestRunner.RunAsync(GovUK.Dfe.AI.Agents.ValueObjects.AgentDefinition! definition, System.Collections.Generic.IReadOnlyCollection<GovUK.Dfe.AI.Agents.Quality.AgentTestCase!>! cases, GovUK.Dfe.AI.Agents.Enums.AgentTestTarget target = GovUK.Dfe.AI.Agents.Enums.AgentTestTarget.Candidate, int repeats = 1, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<GovUK.Dfe.AI.Agents.Quality.AgentEvaluationReport!>!
+GovUK.Dfe.AI.Agents.Quality.ReleaseGate
+GovUK.Dfe.AI.Agents.Quality.ReleaseGate.<Clone>$() -> GovUK.Dfe.AI.Agents.Quality.ReleaseGate!
+GovUK.Dfe.AI.Agents.Quality.ReleaseGate.Equals(GovUK.Dfe.AI.Agents.Quality.ReleaseGate? other) -> bool
+GovUK.Dfe.AI.Agents.Quality.ReleaseGate.MaxGroupGap.get -> double?
+GovUK.Dfe.AI.Agents.Quality.ReleaseGate.MaxGroupGap.init -> void
+GovUK.Dfe.AI.Agents.Quality.ReleaseGate.Metrics.get -> System.Collections.Generic.IReadOnlyList<string!>!
+GovUK.Dfe.AI.Agents.Quality.ReleaseGate.Metrics.init -> void
+GovUK.Dfe.AI.Agents.Quality.ReleaseGate.MinimumScore.get -> double
+GovUK.Dfe.AI.Agents.Quality.ReleaseGate.MinimumScore.init -> void
+GovUK.Dfe.AI.Agents.Quality.ReleaseGate.ReleaseGate() -> void
+GovUK.Dfe.AI.Agents.Quality.ReleaseGate.Tolerance.get -> double
+GovUK.Dfe.AI.Agents.Quality.ReleaseGate.Tolerance.init -> void
 GovUK.Dfe.AI.Agents.Services.Interfaces.IAgentRunnerService
 GovUK.Dfe.AI.Agents.Services.Interfaces.IAgentRunnerService.RunAsync(GovUK.Dfe.AI.Agents.ValueObjects.AgentReference! agent, string! prompt, string? conversationId = null, string? additionalContext = null, GovUK.Dfe.AI.Agents.ValueObjects.ToolCallResolver? resolveToolCalls = null, System.Func<GovUK.Dfe.AI.Agents.ValueObjects.AgentResult!, string?>? validateOutput = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<GovUK.Dfe.AI.Agents.ValueObjects.AgentResult!>!
 GovUK.Dfe.AI.Agents.Services.Interfaces.IAgentRunnerService.RunFromSpecAsync(GovUK.Dfe.AI.Agents.ValueObjects.AgentSpec! spec, string! prompt, string? conversationId = null, string? additionalContext = null, GovUK.Dfe.AI.Agents.ValueObjects.ToolCallResolver? resolveToolCalls = null, System.Func<GovUK.Dfe.AI.Agents.ValueObjects.AgentResult!, string?>? validateOutput = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<GovUK.Dfe.AI.Agents.ValueObjects.AgentResult!>!
@@ -234,6 +260,8 @@ GovUK.Dfe.AI.Agents.Tools.Interfaces.IAgentToolExecutor
 GovUK.Dfe.AI.Agents.Tools.Interfaces.IAgentToolExecutor.TryExecuteAsync(GovUK.Dfe.AI.Agents.ValueObjects.ToolCallRequest! call, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<string?>!
 GovUK.Dfe.AI.Agents.Tools.Interfaces.IAgentToolProvider
 GovUK.Dfe.AI.Agents.Tools.Interfaces.IAgentToolProvider.GetToolsAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<OpenAI.Responses.ResponseTool!>!>!
+GovUK.Dfe.AI.Agents.Tools.Interfaces.IToolCallApprover
+GovUK.Dfe.AI.Agents.Tools.Interfaces.IToolCallApprover.ApproveAsync(string! agentName, GovUK.Dfe.AI.Agents.ValueObjects.ToolCallRequest! call, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<GovUK.Dfe.AI.Agents.ValueObjects.ToolCallApproval!>!
 GovUK.Dfe.AI.Agents.Tools.WebSearch.WebSearchToolProvider
 GovUK.Dfe.AI.Agents.Tools.WebSearch.WebSearchToolProvider.GetToolsAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<OpenAI.Responses.ResponseTool!>!>!
 GovUK.Dfe.AI.Agents.Tools.WebSearch.WebSearchToolProvider.WebSearchToolProvider(GovUK.Dfe.AI.Agents.ValueObjects.WebSearchLocation? location = null) -> void
@@ -265,6 +293,8 @@ GovUK.Dfe.AI.Agents.ValueObjects.AgentDefinition.RequireCitations.get -> bool
 GovUK.Dfe.AI.Agents.ValueObjects.AgentDefinition.RequireCitations.init -> void
 GovUK.Dfe.AI.Agents.ValueObjects.AgentDefinition.SystemPromptKey.get -> string!
 GovUK.Dfe.AI.Agents.ValueObjects.AgentDefinition.SystemPromptKey.init -> void
+GovUK.Dfe.AI.Agents.ValueObjects.AgentDefinition.ToolsRequiringApproval.get -> System.Collections.Generic.IReadOnlyList<string!>!
+GovUK.Dfe.AI.Agents.ValueObjects.AgentDefinition.ToolsRequiringApproval.init -> void
 GovUK.Dfe.AI.Agents.ValueObjects.AgentDefinition.Validate.get -> System.Func<GovUK.Dfe.AI.Agents.ValueObjects.AgentResult!, string?>?
 GovUK.Dfe.AI.Agents.ValueObjects.AgentDefinition.Validate.init -> void
 GovUK.Dfe.AI.Agents.ValueObjects.AgentOutputSchema
@@ -296,6 +326,8 @@ GovUK.Dfe.AI.Agents.ValueObjects.AgentResult.AgentName.init -> void
 GovUK.Dfe.AI.Agents.ValueObjects.AgentResult.AgentResult() -> void
 GovUK.Dfe.AI.Agents.ValueObjects.AgentResult.AgentVersion.get -> string?
 GovUK.Dfe.AI.Agents.ValueObjects.AgentResult.AgentVersion.init -> void
+GovUK.Dfe.AI.Agents.ValueObjects.AgentResult.CompletedAt.get -> System.DateTimeOffset?
+GovUK.Dfe.AI.Agents.ValueObjects.AgentResult.CompletedAt.init -> void
 GovUK.Dfe.AI.Agents.ValueObjects.AgentResult.Equals(GovUK.Dfe.AI.Agents.ValueObjects.AgentResult? other) -> bool
 GovUK.Dfe.AI.Agents.ValueObjects.AgentResult.InputTokens.get -> long
 GovUK.Dfe.AI.Agents.ValueObjects.AgentResult.InputTokens.init -> void
@@ -305,25 +337,11 @@ GovUK.Dfe.AI.Agents.ValueObjects.AgentResult.Output.get -> string?
 GovUK.Dfe.AI.Agents.ValueObjects.AgentResult.Output.init -> void
 GovUK.Dfe.AI.Agents.ValueObjects.AgentResult.OutputTokens.get -> long
 GovUK.Dfe.AI.Agents.ValueObjects.AgentResult.OutputTokens.init -> void
+GovUK.Dfe.AI.Agents.ValueObjects.AgentResult.RunId.get -> string?
+GovUK.Dfe.AI.Agents.ValueObjects.AgentResult.RunId.init -> void
 GovUK.Dfe.AI.Agents.ValueObjects.AgentResult.TotalTokens.get -> long
 GovUK.Dfe.AI.Agents.ValueObjects.AgentResult.TotalTokens.init -> void
 GovUK.Dfe.AI.Agents.ValueObjects.AgentResult.Usage.get -> GovUK.Dfe.AI.Agents.ValueObjects.TokenUsage!
-GovUK.Dfe.AI.Agents.ValueObjects.CompletedAgentRun
-GovUK.Dfe.AI.Agents.ValueObjects.CompletedAgentRun.<Clone>$() -> GovUK.Dfe.AI.Agents.ValueObjects.CompletedAgentRun!
-GovUK.Dfe.AI.Agents.ValueObjects.CompletedAgentRun.AgentName.get -> string!
-GovUK.Dfe.AI.Agents.ValueObjects.CompletedAgentRun.AgentName.init -> void
-GovUK.Dfe.AI.Agents.ValueObjects.CompletedAgentRun.CompletedAgentRun() -> void
-GovUK.Dfe.AI.Agents.ValueObjects.CompletedAgentRun.AgentVersion.get -> string?
-GovUK.Dfe.AI.Agents.ValueObjects.CompletedAgentRun.AgentVersion.init -> void
-GovUK.Dfe.AI.Agents.ValueObjects.CompletedAgentRun.Equals(GovUK.Dfe.AI.Agents.ValueObjects.CompletedAgentRun? other) -> bool
-GovUK.Dfe.AI.Agents.ValueObjects.CompletedAgentRun.Evidence.get -> string?
-GovUK.Dfe.AI.Agents.ValueObjects.CompletedAgentRun.Evidence.init -> void
-GovUK.Dfe.AI.Agents.ValueObjects.CompletedAgentRun.Model.get -> string?
-GovUK.Dfe.AI.Agents.ValueObjects.CompletedAgentRun.Model.init -> void
-GovUK.Dfe.AI.Agents.ValueObjects.CompletedAgentRun.Output.get -> string!
-GovUK.Dfe.AI.Agents.ValueObjects.CompletedAgentRun.Output.init -> void
-GovUK.Dfe.AI.Agents.ValueObjects.CompletedAgentRun.Prompt.get -> string!
-GovUK.Dfe.AI.Agents.ValueObjects.CompletedAgentRun.Prompt.init -> void
 GovUK.Dfe.AI.Agents.ValueObjects.AgentSpec
 GovUK.Dfe.AI.Agents.ValueObjects.AgentSpec.<Clone>$() -> GovUK.Dfe.AI.Agents.ValueObjects.AgentSpec!
 GovUK.Dfe.AI.Agents.ValueObjects.AgentSpec.AgentSpec() -> void
@@ -340,6 +358,26 @@ GovUK.Dfe.AI.Agents.ValueObjects.AgentSpec.OutputSchema.get -> GovUK.Dfe.AI.Agen
 GovUK.Dfe.AI.Agents.ValueObjects.AgentSpec.OutputSchema.init -> void
 GovUK.Dfe.AI.Agents.ValueObjects.AgentSpec.Tools.get -> System.Collections.Generic.IReadOnlyList<OpenAI.Responses.ResponseTool!>!
 GovUK.Dfe.AI.Agents.ValueObjects.AgentSpec.Tools.init -> void
+GovUK.Dfe.AI.Agents.ValueObjects.CompletedAgentRun
+GovUK.Dfe.AI.Agents.ValueObjects.CompletedAgentRun.<Clone>$() -> GovUK.Dfe.AI.Agents.ValueObjects.CompletedAgentRun!
+GovUK.Dfe.AI.Agents.ValueObjects.CompletedAgentRun.AgentName.get -> string!
+GovUK.Dfe.AI.Agents.ValueObjects.CompletedAgentRun.AgentName.init -> void
+GovUK.Dfe.AI.Agents.ValueObjects.CompletedAgentRun.AgentVersion.get -> string?
+GovUK.Dfe.AI.Agents.ValueObjects.CompletedAgentRun.AgentVersion.init -> void
+GovUK.Dfe.AI.Agents.ValueObjects.CompletedAgentRun.CompletedAgentRun() -> void
+GovUK.Dfe.AI.Agents.ValueObjects.CompletedAgentRun.CompletedAt.get -> System.DateTimeOffset?
+GovUK.Dfe.AI.Agents.ValueObjects.CompletedAgentRun.CompletedAt.init -> void
+GovUK.Dfe.AI.Agents.ValueObjects.CompletedAgentRun.Equals(GovUK.Dfe.AI.Agents.ValueObjects.CompletedAgentRun? other) -> bool
+GovUK.Dfe.AI.Agents.ValueObjects.CompletedAgentRun.Evidence.get -> string?
+GovUK.Dfe.AI.Agents.ValueObjects.CompletedAgentRun.Evidence.init -> void
+GovUK.Dfe.AI.Agents.ValueObjects.CompletedAgentRun.Model.get -> string?
+GovUK.Dfe.AI.Agents.ValueObjects.CompletedAgentRun.Model.init -> void
+GovUK.Dfe.AI.Agents.ValueObjects.CompletedAgentRun.Output.get -> string!
+GovUK.Dfe.AI.Agents.ValueObjects.CompletedAgentRun.Output.init -> void
+GovUK.Dfe.AI.Agents.ValueObjects.CompletedAgentRun.Prompt.get -> string!
+GovUK.Dfe.AI.Agents.ValueObjects.CompletedAgentRun.Prompt.init -> void
+GovUK.Dfe.AI.Agents.ValueObjects.CompletedAgentRun.RunId.get -> string?
+GovUK.Dfe.AI.Agents.ValueObjects.CompletedAgentRun.RunId.init -> void
 GovUK.Dfe.AI.Agents.ValueObjects.ContextResult
 GovUK.Dfe.AI.Agents.ValueObjects.ContextResult.<Clone>$() -> GovUK.Dfe.AI.Agents.ValueObjects.ContextResult!
 GovUK.Dfe.AI.Agents.ValueObjects.ContextResult.ContextResult(string! Text, bool HasEvidence) -> void
@@ -378,6 +416,11 @@ GovUK.Dfe.AI.Agents.ValueObjects.TokenUsageSummary.Equals(GovUK.Dfe.AI.Agents.Va
 GovUK.Dfe.AI.Agents.ValueObjects.TokenUsageSummary.TokenUsageSummary(GovUK.Dfe.AI.Agents.ValueObjects.TokenUsage! Total, System.Collections.Generic.IReadOnlyDictionary<string!, GovUK.Dfe.AI.Agents.ValueObjects.TokenUsage!>! ByAgent) -> void
 GovUK.Dfe.AI.Agents.ValueObjects.TokenUsageSummary.Total.get -> GovUK.Dfe.AI.Agents.ValueObjects.TokenUsage!
 GovUK.Dfe.AI.Agents.ValueObjects.TokenUsageSummary.Total.init -> void
+GovUK.Dfe.AI.Agents.ValueObjects.ToolCallApproval
+GovUK.Dfe.AI.Agents.ValueObjects.ToolCallApproval.<Clone>$() -> GovUK.Dfe.AI.Agents.ValueObjects.ToolCallApproval!
+GovUK.Dfe.AI.Agents.ValueObjects.ToolCallApproval.Approved.get -> bool
+GovUK.Dfe.AI.Agents.ValueObjects.ToolCallApproval.Equals(GovUK.Dfe.AI.Agents.ValueObjects.ToolCallApproval? other) -> bool
+GovUK.Dfe.AI.Agents.ValueObjects.ToolCallApproval.Reason.get -> string?
 GovUK.Dfe.AI.Agents.ValueObjects.ToolCallOutput
 GovUK.Dfe.AI.Agents.ValueObjects.ToolCallOutput.<Clone>$() -> GovUK.Dfe.AI.Agents.ValueObjects.ToolCallOutput!
 GovUK.Dfe.AI.Agents.ValueObjects.ToolCallOutput.CallId.get -> string!
@@ -422,6 +465,9 @@ override GovUK.Dfe.AI.Agents.Quality.AgentTestCase.ToString() -> string!
 override GovUK.Dfe.AI.Agents.Quality.AgentTestResult.Equals(object? obj) -> bool
 override GovUK.Dfe.AI.Agents.Quality.AgentTestResult.GetHashCode() -> int
 override GovUK.Dfe.AI.Agents.Quality.AgentTestResult.ToString() -> string!
+override GovUK.Dfe.AI.Agents.Quality.ReleaseGate.Equals(object? obj) -> bool
+override GovUK.Dfe.AI.Agents.Quality.ReleaseGate.GetHashCode() -> int
+override GovUK.Dfe.AI.Agents.Quality.ReleaseGate.ToString() -> string!
 override GovUK.Dfe.AI.Agents.ValueObjects.AgentContextEntry.Equals(object? obj) -> bool
 override GovUK.Dfe.AI.Agents.ValueObjects.AgentContextEntry.GetHashCode() -> int
 override GovUK.Dfe.AI.Agents.ValueObjects.AgentContextEntry.ToString() -> string!
@@ -437,12 +483,12 @@ override GovUK.Dfe.AI.Agents.ValueObjects.AgentReference.ToString() -> string!
 override GovUK.Dfe.AI.Agents.ValueObjects.AgentResult.Equals(object? obj) -> bool
 override GovUK.Dfe.AI.Agents.ValueObjects.AgentResult.GetHashCode() -> int
 override GovUK.Dfe.AI.Agents.ValueObjects.AgentResult.ToString() -> string!
-override GovUK.Dfe.AI.Agents.ValueObjects.CompletedAgentRun.Equals(object? obj) -> bool
-override GovUK.Dfe.AI.Agents.ValueObjects.CompletedAgentRun.GetHashCode() -> int
-override GovUK.Dfe.AI.Agents.ValueObjects.CompletedAgentRun.ToString() -> string!
 override GovUK.Dfe.AI.Agents.ValueObjects.AgentSpec.Equals(object? obj) -> bool
 override GovUK.Dfe.AI.Agents.ValueObjects.AgentSpec.GetHashCode() -> int
 override GovUK.Dfe.AI.Agents.ValueObjects.AgentSpec.ToString() -> string!
+override GovUK.Dfe.AI.Agents.ValueObjects.CompletedAgentRun.Equals(object? obj) -> bool
+override GovUK.Dfe.AI.Agents.ValueObjects.CompletedAgentRun.GetHashCode() -> int
+override GovUK.Dfe.AI.Agents.ValueObjects.CompletedAgentRun.ToString() -> string!
 override GovUK.Dfe.AI.Agents.ValueObjects.ContextResult.Equals(object? obj) -> bool
 override GovUK.Dfe.AI.Agents.ValueObjects.ContextResult.GetHashCode() -> int
 override GovUK.Dfe.AI.Agents.ValueObjects.ContextResult.ToString() -> string!
@@ -455,6 +501,9 @@ override GovUK.Dfe.AI.Agents.ValueObjects.TokenUsage.ToString() -> string!
 override GovUK.Dfe.AI.Agents.ValueObjects.TokenUsageSummary.Equals(object? obj) -> bool
 override GovUK.Dfe.AI.Agents.ValueObjects.TokenUsageSummary.GetHashCode() -> int
 override GovUK.Dfe.AI.Agents.ValueObjects.TokenUsageSummary.ToString() -> string!
+override GovUK.Dfe.AI.Agents.ValueObjects.ToolCallApproval.Equals(object? obj) -> bool
+override GovUK.Dfe.AI.Agents.ValueObjects.ToolCallApproval.GetHashCode() -> int
+override GovUK.Dfe.AI.Agents.ValueObjects.ToolCallApproval.ToString() -> string!
 override GovUK.Dfe.AI.Agents.ValueObjects.ToolCallOutput.Equals(object? obj) -> bool
 override GovUK.Dfe.AI.Agents.ValueObjects.ToolCallOutput.GetHashCode() -> int
 override GovUK.Dfe.AI.Agents.ValueObjects.ToolCallOutput.ToString() -> string!
@@ -477,6 +526,8 @@ static GovUK.Dfe.AI.Agents.Quality.AgentTestCase.operator !=(GovUK.Dfe.AI.Agents
 static GovUK.Dfe.AI.Agents.Quality.AgentTestCase.operator ==(GovUK.Dfe.AI.Agents.Quality.AgentTestCase? left, GovUK.Dfe.AI.Agents.Quality.AgentTestCase? right) -> bool
 static GovUK.Dfe.AI.Agents.Quality.AgentTestResult.operator !=(GovUK.Dfe.AI.Agents.Quality.AgentTestResult? left, GovUK.Dfe.AI.Agents.Quality.AgentTestResult? right) -> bool
 static GovUK.Dfe.AI.Agents.Quality.AgentTestResult.operator ==(GovUK.Dfe.AI.Agents.Quality.AgentTestResult? left, GovUK.Dfe.AI.Agents.Quality.AgentTestResult? right) -> bool
+static GovUK.Dfe.AI.Agents.Quality.ReleaseGate.operator !=(GovUK.Dfe.AI.Agents.Quality.ReleaseGate? left, GovUK.Dfe.AI.Agents.Quality.ReleaseGate? right) -> bool
+static GovUK.Dfe.AI.Agents.Quality.ReleaseGate.operator ==(GovUK.Dfe.AI.Agents.Quality.ReleaseGate? left, GovUK.Dfe.AI.Agents.Quality.ReleaseGate? right) -> bool
 static GovUK.Dfe.AI.Agents.ValueObjects.AgentContextEntry.operator !=(GovUK.Dfe.AI.Agents.ValueObjects.AgentContextEntry? left, GovUK.Dfe.AI.Agents.ValueObjects.AgentContextEntry? right) -> bool
 static GovUK.Dfe.AI.Agents.ValueObjects.AgentContextEntry.operator ==(GovUK.Dfe.AI.Agents.ValueObjects.AgentContextEntry? left, GovUK.Dfe.AI.Agents.ValueObjects.AgentContextEntry? right) -> bool
 static GovUK.Dfe.AI.Agents.ValueObjects.AgentDefinition.operator !=(GovUK.Dfe.AI.Agents.ValueObjects.AgentDefinition? left, GovUK.Dfe.AI.Agents.ValueObjects.AgentDefinition? right) -> bool
@@ -488,10 +539,10 @@ static GovUK.Dfe.AI.Agents.ValueObjects.AgentReference.operator !=(GovUK.Dfe.AI.
 static GovUK.Dfe.AI.Agents.ValueObjects.AgentReference.operator ==(GovUK.Dfe.AI.Agents.ValueObjects.AgentReference? left, GovUK.Dfe.AI.Agents.ValueObjects.AgentReference? right) -> bool
 static GovUK.Dfe.AI.Agents.ValueObjects.AgentResult.operator !=(GovUK.Dfe.AI.Agents.ValueObjects.AgentResult? left, GovUK.Dfe.AI.Agents.ValueObjects.AgentResult? right) -> bool
 static GovUK.Dfe.AI.Agents.ValueObjects.AgentResult.operator ==(GovUK.Dfe.AI.Agents.ValueObjects.AgentResult? left, GovUK.Dfe.AI.Agents.ValueObjects.AgentResult? right) -> bool
-static GovUK.Dfe.AI.Agents.ValueObjects.CompletedAgentRun.operator !=(GovUK.Dfe.AI.Agents.ValueObjects.CompletedAgentRun? left, GovUK.Dfe.AI.Agents.ValueObjects.CompletedAgentRun? right) -> bool
-static GovUK.Dfe.AI.Agents.ValueObjects.CompletedAgentRun.operator ==(GovUK.Dfe.AI.Agents.ValueObjects.CompletedAgentRun? left, GovUK.Dfe.AI.Agents.ValueObjects.CompletedAgentRun? right) -> bool
 static GovUK.Dfe.AI.Agents.ValueObjects.AgentSpec.operator !=(GovUK.Dfe.AI.Agents.ValueObjects.AgentSpec? left, GovUK.Dfe.AI.Agents.ValueObjects.AgentSpec? right) -> bool
 static GovUK.Dfe.AI.Agents.ValueObjects.AgentSpec.operator ==(GovUK.Dfe.AI.Agents.ValueObjects.AgentSpec? left, GovUK.Dfe.AI.Agents.ValueObjects.AgentSpec? right) -> bool
+static GovUK.Dfe.AI.Agents.ValueObjects.CompletedAgentRun.operator !=(GovUK.Dfe.AI.Agents.ValueObjects.CompletedAgentRun? left, GovUK.Dfe.AI.Agents.ValueObjects.CompletedAgentRun? right) -> bool
+static GovUK.Dfe.AI.Agents.ValueObjects.CompletedAgentRun.operator ==(GovUK.Dfe.AI.Agents.ValueObjects.CompletedAgentRun? left, GovUK.Dfe.AI.Agents.ValueObjects.CompletedAgentRun? right) -> bool
 static GovUK.Dfe.AI.Agents.ValueObjects.ContextResult.operator !=(GovUK.Dfe.AI.Agents.ValueObjects.ContextResult? left, GovUK.Dfe.AI.Agents.ValueObjects.ContextResult? right) -> bool
 static GovUK.Dfe.AI.Agents.ValueObjects.ContextResult.operator ==(GovUK.Dfe.AI.Agents.ValueObjects.ContextResult? left, GovUK.Dfe.AI.Agents.ValueObjects.ContextResult? right) -> bool
 static GovUK.Dfe.AI.Agents.ValueObjects.SearchResultItem.operator !=(GovUK.Dfe.AI.Agents.ValueObjects.SearchResultItem? left, GovUK.Dfe.AI.Agents.ValueObjects.SearchResultItem? right) -> bool
@@ -502,6 +553,10 @@ static GovUK.Dfe.AI.Agents.ValueObjects.TokenUsage.operator +(GovUK.Dfe.AI.Agent
 static GovUK.Dfe.AI.Agents.ValueObjects.TokenUsage.operator ==(GovUK.Dfe.AI.Agents.ValueObjects.TokenUsage? left, GovUK.Dfe.AI.Agents.ValueObjects.TokenUsage? right) -> bool
 static GovUK.Dfe.AI.Agents.ValueObjects.TokenUsageSummary.operator !=(GovUK.Dfe.AI.Agents.ValueObjects.TokenUsageSummary? left, GovUK.Dfe.AI.Agents.ValueObjects.TokenUsageSummary? right) -> bool
 static GovUK.Dfe.AI.Agents.ValueObjects.TokenUsageSummary.operator ==(GovUK.Dfe.AI.Agents.ValueObjects.TokenUsageSummary? left, GovUK.Dfe.AI.Agents.ValueObjects.TokenUsageSummary? right) -> bool
+static GovUK.Dfe.AI.Agents.ValueObjects.ToolCallApproval.Approve() -> GovUK.Dfe.AI.Agents.ValueObjects.ToolCallApproval!
+static GovUK.Dfe.AI.Agents.ValueObjects.ToolCallApproval.Deny(string! reason) -> GovUK.Dfe.AI.Agents.ValueObjects.ToolCallApproval!
+static GovUK.Dfe.AI.Agents.ValueObjects.ToolCallApproval.operator !=(GovUK.Dfe.AI.Agents.ValueObjects.ToolCallApproval? left, GovUK.Dfe.AI.Agents.ValueObjects.ToolCallApproval? right) -> bool
+static GovUK.Dfe.AI.Agents.ValueObjects.ToolCallApproval.operator ==(GovUK.Dfe.AI.Agents.ValueObjects.ToolCallApproval? left, GovUK.Dfe.AI.Agents.ValueObjects.ToolCallApproval? right) -> bool
 static GovUK.Dfe.AI.Agents.ValueObjects.ToolCallOutput.operator !=(GovUK.Dfe.AI.Agents.ValueObjects.ToolCallOutput? left, GovUK.Dfe.AI.Agents.ValueObjects.ToolCallOutput? right) -> bool
 static GovUK.Dfe.AI.Agents.ValueObjects.ToolCallOutput.operator ==(GovUK.Dfe.AI.Agents.ValueObjects.ToolCallOutput? left, GovUK.Dfe.AI.Agents.ValueObjects.ToolCallOutput? right) -> bool
 static GovUK.Dfe.AI.Agents.ValueObjects.ToolCallRequest.operator !=(GovUK.Dfe.AI.Agents.ValueObjects.ToolCallRequest? left, GovUK.Dfe.AI.Agents.ValueObjects.ToolCallRequest? right) -> bool

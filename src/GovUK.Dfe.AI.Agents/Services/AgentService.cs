@@ -4,6 +4,7 @@ using GovUK.Dfe.AI.Agents.Extensibility.Interfaces;
 using GovUK.Dfe.AI.Agents.Extensions;
 using GovUK.Dfe.AI.Agents.Quality;
 using GovUK.Dfe.AI.Agents.Tools;
+using GovUK.Dfe.AI.Agents.Tools.Interfaces;
 using GovUK.Dfe.AI.Agents.ValueObjects;
 using GovUK.Dfe.AI.Agents.Resilience;
 using Microsoft.Extensions.Logging;
@@ -17,9 +18,10 @@ namespace GovUK.Dfe.AI.Agents.Services;
 
 internal sealed class AgentService(IAgentRunnerService agentRunner, IAgentRuntimeService agentRuntime, AgentSpecBuilder specs,
     AgentRunOptions? runOptions = null, Factories.Interfaces.IAgentFactory? agentFactory = null, ILogger<AgentService>? logger = null,
-    IEnumerable<IAgentRunObserver>? observers = null)
+    IEnumerable<IAgentRunObserver>? observers = null, IToolCallApprover? toolApprover = null)
     : IAgentService
 {
+    private readonly AgentRunOptions _runOptions = runOptions ?? new AgentRunOptions();
     private readonly IAgentRunObserver[] _observers = observers?.ToArray() ?? [];
     private readonly AgentSpecBuilder _specs = specs;
     private readonly ILogger<AgentService> _logger = logger ?? NullLogger<AgentService>.Instance;
@@ -167,7 +169,7 @@ internal sealed class AgentService(IAgentRunnerService agentRunner, IAgentRuntim
     {
         // Tools bound to this agent that run in this app (e.g. MCP) execute the model's calls here,
         // limited to the definition's AllowedTools.
-        var resolveToolCalls = AgentToolResolver.CreateToolCallResolver(_specs.ToolProviders, definition, _applicationName);
+        var resolveToolCalls = AgentToolResolver.CreateToolCallResolver(_specs.ToolProviders, definition, _applicationName, toolApprover, _logger);
         var (runPrompt, validate) = Citations.ForRun(definition, prompt, evidence);
 
         AgentResult result;
@@ -191,7 +193,17 @@ internal sealed class AgentService(IAgentRunnerService agentRunner, IAgentRuntim
                 cancellationToken: cancellationToken, validateOutput: validate).ConfigureAwait(false);
         }
 
-        Notify(new CompletedAgentRun { AgentName = definition.Name, AgentVersion = result.AgentVersion, Model = result.Model, Prompt = prompt, Evidence = evidence, Output = result.Output ?? string.Empty });
+        if (_observers.Length > 0)
+        {
+            // Observers (scoring, audit) get what the model was given: redacted, so no copy keeps data the model never saw.
+            Notify(new CompletedAgentRun
+            {
+                AgentName = definition.Name, RunId = result.RunId, CompletedAt = result.CompletedAt, AgentVersion = result.AgentVersion,
+                Model = result.Model, Prompt = _runOptions.Redact(prompt), Evidence = evidence is null ? null : _runOptions.Redact(evidence),
+                Output = result.Output ?? string.Empty,
+            });
+        }
+
         return result;
     }
 

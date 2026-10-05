@@ -230,6 +230,16 @@ public sealed class AddAgentsTests
     }
 
     [Fact]
+    public void Defaults_AreSizedForGpt51()
+    {
+        using var provider = Build(ValidSettings());
+        var run = provider.GetRequiredService<AgentRunOptions>();
+
+        Assert.Equal((64_000, 200_000, 40_000), (run.MaxOutputTokensPerRun, run.MaxEvidenceCharacters, run.MaxToolOutputCharacters));
+        Assert.Equal(6, new AgentsOptions().MaxRetries);
+    }
+
+    [Fact]
     public void MapsEvidenceAndCacheSettings()
     {
         var settings = ValidSettings();

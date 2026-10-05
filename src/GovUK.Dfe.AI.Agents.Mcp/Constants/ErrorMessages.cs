@@ -3,6 +3,8 @@ namespace GovUK.Dfe.AI.Agents.Mcp.Constants;
 /// <summary>This package's error messages.</summary>
 internal static class ErrorMessages
 {
+    internal const string McpServersSectionMissing = "AddMcpServers needs the AiAgents:McpServers section, with at least one server.";
+    internal const string McpServersSettingsInvalid = "MCP servers can't start: these settings are missing or invalid: {0}.";
     internal const string McpConnectionFailed = "Failed to connect to MCP server '{0}' at {1}.";
     internal const string McpOptionsInvalid = "MCP server '{0}' configuration is invalid; missing or empty: {1}.";
     internal const string McpStartupValidationFailed = "MCP tool configuration validation failed during startup for server '{0}'.";

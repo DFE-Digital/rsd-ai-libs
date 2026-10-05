@@ -109,9 +109,22 @@ public static class AgentTelemetry
     internal static readonly Histogram<double> RunSlotWaitDuration = Meter.CreateHistogram<double>(
         "dfe.ai_agents.run_slot.wait.duration", "s", "Time agent runs waited for a free run slot.");
 
-    /// <summary>Judge scores of sampled answers, tagged with the agent, its version and <c>gen_ai.evaluation.name</c>.</summary>
+    /// <summary>Prompts and answers a Foundry guardrail blocked, by stage.</summary>
     internal static readonly Counter<long> GuardrailBlocks = Meter.CreateCounter<long>(
         "dfe.ai_agents.guardrail.blocks", "{block}", "Prompts and answers a Foundry guardrail blocked.");
+
+    internal const string RunIdTag = "dfe.ai_agents.run_id";
+    internal const string ToolApprovedTag = "dfe.ai_agents.tool.approved";
+
+    internal static readonly Counter<long> ToolApprovals = Meter.CreateCounter<long>(
+        "dfe.ai_agents.tool.approvals", "{call}", "Tool calls that needed approval, by tool and whether they were approved.");
+
+    internal static void RecordToolApproval(string? applicationName, string? agentName, string toolName, bool approved)
+        => ToolApprovals.Add(1,
+            new KeyValuePair<string, object?>(ApplicationTag, applicationName),
+            new KeyValuePair<string, object?>(AgentNameTag, agentName is null ? null : AgentNameForTelemetry(agentName)),
+            new KeyValuePair<string, object?>(ToolNameTag, toolName),
+            new KeyValuePair<string, object?>(ToolApprovedTag, approved));
 
     internal static void RecordGuardrailBlock(string applicationName, string agentName, string stage)
         => GuardrailBlocks.Add(1,

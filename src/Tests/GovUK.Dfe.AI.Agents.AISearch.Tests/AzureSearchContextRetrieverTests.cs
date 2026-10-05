@@ -256,4 +256,46 @@ public sealed class AzureSearchContextRetrieverTests
 
         Assert.Equal(input, _relevanceFilter.Filter(input));
     }
+
+    // ===================== Evidence size =====================
+
+    [Fact]
+    public async Task WithALimit_WholeResultsAreKept_MostRelevantFirst_AndTheRestAreLeftOutWithANote()
+    {
+        SetUpSearchResults(("first result about the school", 1.0), ("second result about the school", 0.9), ("third result", 0.8));
+        var sut = new AzureSearchContextRetriever(new Dictionary<string, SearchClient> { [Scope] = _client }, _relevanceFilter,
+            maxEvidenceCharacters: 140);
+
+        var text = (await sut.GetContextAsync(Scope, "query", cancellationToken: cancellationToken)).Text;
+
+        Assert.Contains("first result about the school", text);
+        Assert.Contains("second result about the school", text);   // whole, never cut mid-way
+        Assert.DoesNotContain("third result", text);
+        Assert.EndsWith("[1 less relevant result(s) left out to keep the evidence within 140 characters.]", text);
+    }
+
+    [Fact]
+    public async Task WithALimitSmallerThanTheTopResult_TheTopResultIsCut_SoThereIsAlwaysSomeEvidence()
+    {
+        SetUpSearchResults((new string('x', 500), 1.0), ("second", 0.9));
+        var sut = new AzureSearchContextRetriever(new Dictionary<string, SearchClient> { [Scope] = _client }, _relevanceFilter,
+            maxEvidenceCharacters: 100);
+
+        var text = (await sut.GetContextAsync(Scope, "query", cancellationToken: cancellationToken)).Text;
+
+        Assert.StartsWith("--- establishment Evidence 1 ---", text);
+        Assert.DoesNotContain("second", text);
+        Assert.Contains("[1 less relevant result(s) left out", text);
+    }
+
+    [Fact]
+    public async Task WithoutALimit_EveryRelevantResultIsReturned()
+    {
+        SetUpSearchResults((new string('a', 5_000), 1.0), (new string('b', 5_000), 0.9));
+
+        var text = (await CreateSut().GetContextAsync(Scope, "query", cancellationToken: cancellationToken)).Text;
+
+        Assert.Contains(new string('b', 5_000), text);
+        Assert.DoesNotContain("left out", text);
+    }
 }

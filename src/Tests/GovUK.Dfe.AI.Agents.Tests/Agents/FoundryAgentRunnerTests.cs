@@ -56,7 +56,7 @@ public sealed class FoundryAgentRunnerTests
 
     [Theory]
     [InlineData("failed", null, "resp-1 did not complete (status 'Failed')")]
-    [InlineData("incomplete", "max_output_tokens", "used its 32000 output tokens for this run. Raise MaxOutputTokensPerRun")]
+    [InlineData("incomplete", "max_output_tokens", "used its 64000 output tokens for this run. Raise MaxOutputTokensPerRun")]
     [InlineData("incomplete", "content_filter", "A Foundry guardrail blocked the answer for agent 'my-agent'")]
     public async Task RunAsync_Throws_WhenResponseDoesNotComplete_TheModelStopsAtTheOutputTokenCap_OrAGuardrailBlocksTheAnswer(string status,
         string? reason, string expected)
@@ -71,6 +71,23 @@ public sealed class FoundryAgentRunnerTests
 
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => sut.RunFromSpecAsync(spec, "prompt", cancellationToken: cancellationToken));
         Assert.Contains(expected, ex.InnerException!.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ARateLimitStillReachedAfterRetrying_FailsWithWhatToChange()
+    {
+        var response = Substitute.For<System.ClientModel.Primitives.PipelineResponse>();
+        response.Status.Returns(429);
+        var rateLimited = new System.ClientModel.ClientResultException("Too many requests.", response);
+        _conversationClient.CreateConversationAsync(Arg.Any<CancellationToken>()).Returns("conversation-1");
+        _conversationClient.CreateResponseAsync("my-agent", "conversation-1", Arg.Any<IReadOnlyList<ResponseItem>>(), "1", Arg.Any<int?>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromException<ResponseResult>(rateLimited));
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            CreateSut().RunAsync(new AgentReference("agent-id", "my-agent", "1"), "prompt", cancellationToken: cancellationToken));
+
+        Assert.StartsWith("Agent 'my-agent' failed: Foundry's rate limit (HTTP 429) was still reached after retrying.", ex.Message);
+        Assert.IsType<System.ClientModel.ClientResultException>(ex.InnerException);
     }
 
     [Theory]
@@ -219,7 +236,7 @@ public sealed class FoundryAgentRunnerTests
         Assert.Equal(130, result.TotalTokens);
         Assert.Equal(20, result.InputTokens);
         Assert.Equal(110, result.OutputTokens);
-        Assert.Equal([32_000, 31_910], caps);   // the first round used 90
+        Assert.Equal([64_000, 63_910], caps);   // the default budget; the first round used 90
     }
 
     [Fact]

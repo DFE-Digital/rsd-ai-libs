@@ -17,6 +17,7 @@ public sealed class AgentsBuilder
     private readonly List<Action<AgentsOptions>> _configureOptions = [];
     private readonly List<AgentDefinition> _definitions = [];
     private readonly List<IAgentsPackage> _packages = [];
+    private readonly List<Privacy.Interfaces.IAgentInputRedactor> _redactors = [];
 
     internal AgentsBuilder(IServiceCollection services) => Services = services;
 
@@ -26,6 +27,10 @@ public sealed class AgentsBuilder
     internal IReadOnlyList<AgentDefinition> Definitions => _definitions;
 
     internal IReadOnlyList<IAgentsPackage> Packages => _packages;
+
+    internal IReadOnlyList<Privacy.Interfaces.IAgentInputRedactor> Redactors => _redactors;
+
+    internal bool HasToolApprover { get; private set; }
 
     /// <summary>Adds an add-on package once per <see cref="IAgentsPackage.Name"/>, so calling its <c>Add…</c> method twice is harmless.</summary>
     public AgentsBuilder AddPackage(IAgentsPackage package)
@@ -66,6 +71,28 @@ public sealed class AgentsBuilder
         ArgumentNullException.ThrowIfNull(provider);
 
         Services.AddSingleton(new AgentToolBinding(agentName, provider));
+        return this;
+    }
+
+    /// <summary>
+    /// Asks <typeparamref name="TApprover"/> before every call to a tool in an agent's <c>ToolsRequiringApproval</c>, e.g. so
+    /// a person approves changes to records. One approver serves every agent.
+    /// </summary>
+    public AgentsBuilder AddToolApprover<TApprover>() where TApprover : class, IToolCallApprover
+    {
+        Services.AddSingleton<IToolCallApprover, TApprover>();
+        HasToolApprover = true;
+        return this;
+    }
+
+    /// <summary>
+    /// Removes personal data from every prompt, evidence and tool output before it's sent to a model, e.g. a
+    /// <c>PatternRedactor</c> for pupil numbers. Several run in the order added.
+    /// </summary>
+    public AgentsBuilder AddRedactor(Privacy.Interfaces.IAgentInputRedactor redactor)
+    {
+        ArgumentNullException.ThrowIfNull(redactor);
+        _redactors.Add(redactor);
         return this;
     }
 

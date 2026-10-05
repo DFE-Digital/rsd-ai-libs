@@ -37,6 +37,9 @@ internal sealed class AgentRunTelemetry : IDisposable
 
     public void InConversation(string conversationId) => _activity?.SetTag(AgentTelemetry.ConversationIdTag, conversationId);
 
+    /// <summary>The run's id, so an answer, its feedback and its audit record can be found in traces.</summary>
+    public void Identified(string runId) => _activity?.SetTag(AgentTelemetry.RunIdTag, runId);
+
     /// <summary>The model that answered, so quality and cost can be tied to model changes.</summary>
     public void AnsweredBy(string? model)
     {

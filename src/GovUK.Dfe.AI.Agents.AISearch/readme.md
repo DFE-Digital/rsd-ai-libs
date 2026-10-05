@@ -27,6 +27,19 @@ builder.Services.AddAgents(builder.Configuration, agents => agents
 Give the app's identity the **Search Index Data Reader** role. To use a different identity for search, add
 `Search:Authentication`, or set one in code with `agents.UseAISearchCredential(credential)`.
 
+### Search without agents
+
+An app that only needs search results, e.g. a search page, can add search on its own. It needs no Foundry settings and
+no agents:
+
+```csharp
+builder.Services.AddAISearch(builder.Configuration, new ManagedIdentityCredential());
+```
+
+It reads the same `AiAgents:Search` section. Pass a credential, or leave it out and set a complete
+`AiAgents:Search:Authentication` block (`TenantId`, `ClientId`, `ClientSecret`). If you later add agents with
+`agents.AddAISearch()`, search is still registered only once.
+
 ## Use
 
 Inject `IContextRetriever`, search, and pass the result as evidence:
@@ -45,6 +58,9 @@ var result = await agents.RunAsync(BriefingAgents.Ofsted, "Summarise the latest 
 - **Set `ContentFields`** on each index. Otherwise every string field, including ids and URLs, is sent to the model.
 - **Weak matches are dropped:** results scoring below half the top score are removed. Change this with
   `Search:MinimumRelevanceFilter` (default `0.5`).
+- **Large results:** every relevant result is returned by default. To cap the evidence, set
+  `Search:MaxEvidenceCharacters`: whole results are kept, most relevant first, and the rest are left out with a note, so
+  no result is cut mid-way and citations still match. To fetch less from the search service, lower `size`.
 
 ## Better matches: semantic and hybrid search
 

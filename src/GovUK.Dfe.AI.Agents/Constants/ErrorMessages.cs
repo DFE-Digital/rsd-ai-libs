@@ -27,11 +27,14 @@ internal static class ErrorMessages
     public const string AgentToolsNotRunnable = "Agent '{0}' version {1} calls tools this app can't run: {2}. Configure the MCP server that allows them and list them in the agent's AllowedTools, or re-provision the agent.";
     public const string AiAgentsSettingsMissing = "AI agents can't start: these settings are missing or empty: {0}.";
     public const string AgentRunFailed = "Agent '{0}' failed.";
+    public const string AgentRateLimited = "Agent '{0}' failed: Foundry's rate limit (HTTP 429) was still reached after retrying. Lower MaxConcurrency or GlobalConcurrency, or raise the model deployment's tokens-per-minute quota.";
     public const string AgentGetOrCreateFailed = "Failed to get or create Foundry agent '{0}'.";
     public const string AgentCreateFailed = "Failed to create Foundry agent '{0}'.";
     public const string AgentDeleteFailed = "Failed to delete Foundry agent '{0}'.";
     public const string AgentPruneVersionsFailed = "Failed to prune versions for Foundry agent '{0}'.";
     public const string DuplicateAgentDefinition = "Agent '{0}' is defined more than once.";
+    public const string ApprovalToolNotAllowed = "agent {0}'s ToolsRequiringApproval (not in its AllowedTools: {1})";
+    public const string ApprovalWithoutApprover = "agent {0}'s ToolsRequiringApproval (call agents.AddToolApprover<T>() so they can run)";
     public const string AgentAnswerInvalid = "Agent '{0}' gave an invalid answer twice: {1}";
     public const string TestCaseWithoutPrompt = "Test case {0} has no \"prompt\".";
     public const string NoRunSlot = "No agent run slot came free within {0}. Raise MaxConcurrency or GlobalConcurrency:MaxConcurrentRuns, or MaxWaitForRunSlot.";

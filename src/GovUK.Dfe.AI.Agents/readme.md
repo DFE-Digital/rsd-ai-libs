@@ -42,7 +42,7 @@ dotnet add package Azure.Monitor.OpenTelemetry.AspNetCore   # sends token usage 
 }
 ```
 
-- Give the identity the **Azure AI User** role on the Foundry project.
+- Give the identity the **Foundry User** role on the Foundry project.
 - Load `Authentication:ClientSecret` from Key Vault, never from appsettings.json. To use managed identities instead,
   see [Credentials](#credentials).
 - Set each prompt file to *Copy to output directory*.

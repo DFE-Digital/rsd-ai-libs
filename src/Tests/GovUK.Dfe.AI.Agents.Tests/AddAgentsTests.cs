@@ -127,7 +127,7 @@ public sealed class AddAgentsTests
     }
 
     [Fact]
-    public void AnAddOnsProblems_AreListedWithCoresProblems_InOneError()
+    public async Task AnAddOnsProblems_AreListedWithCoresProblems_InOneError()
     {
         var settings = WithoutDefaultPrincipal(ValidSettings());
         settings.Remove("AiAgents:Foundry:Endpoint");
@@ -145,7 +145,7 @@ public sealed class AddAgentsTests
         // The add-on gets a credential that can't be used by accident; startup has already failed anyway.
         var request = new TokenRequestContext(["scope"]);
         Assert.Throws<InvalidOperationException>(() => package.Credential!.GetToken(request, TestContext.Current.CancellationToken));
-        Assert.Throws<InvalidOperationException>(() => package.Credential!.GetTokenAsync(request, TestContext.Current.CancellationToken));
+        await Assert.ThrowsAsync<InvalidOperationException>(async () => await package.Credential!.GetTokenAsync(request, TestContext.Current.CancellationToken));
     }
 
     [Fact]

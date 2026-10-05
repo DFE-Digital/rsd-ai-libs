@@ -1,7 +1,7 @@
 namespace GovUK.Dfe.AI.Agents.Options;
 
 /// <summary>Which agent versions this environment runs, and which must never be deleted.</summary>
-public sealed class AgentVersionPinningOptions
+internal sealed class AgentVersionPinningOptions
 {
     /// <summary>The version this environment runs, per agent. An agent with no pin uses its latest matching version.</summary>
     public IReadOnlyDictionary<string, string> VersionPins { get; init; } = new Dictionary<string, string>();

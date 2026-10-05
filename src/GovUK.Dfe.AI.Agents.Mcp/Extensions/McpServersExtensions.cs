@@ -116,8 +116,7 @@ public static class McpServersExtensions
                 var tools = server.AllowedToolNames.Where(name => definition.AllowedTools.Contains(McpToolClient.ToFunctionName(name))).ToList();
                 if (tools.Count > 0)
                 {
-                    services.AddSingleton(sp => new AgentToolBinding(definition.Name,
-                        new McpAllowedToolsProvider(sp.GetRequiredKeyedService<IMcpToolClient>(key), tools)));
+                    context.AddTools(definition.Name, sp => new McpAllowedToolsProvider(sp.GetRequiredKeyedService<IMcpToolClient>(key), tools));
                 }
             }
         }

@@ -22,6 +22,8 @@
 		<InternalsVisibleTo Include="GovUK.Dfe.AI.Agents.AISearch.Tests" />
 		<InternalsVisibleTo Include="GovUK.Dfe.AI.Agents.Evaluation.Tests" />
 		<InternalsVisibleTo Include="GovUK.Dfe.AI.Agents.Guardrails.Tests" />
+		<!-- NSubstitute builds its mocks of internal interfaces in this assembly. -->
+		<InternalsVisibleTo Include="DynamicProxyGenAssembly2" />
 	  </ItemGroup>
 
 	  <ItemGroup>

@@ -46,6 +46,10 @@ warning instead. If Azure Resource Manager can't be reached, startup only logs a
 
 | Setting | Default | Purpose |
 | --- | --- | --- |
+| `SubscriptionId`, `ResourceGroup` | Required | Where the Foundry resource is |
+| `AccountName` | The resource in `Foundry:Endpoint` | Set only if the deployments are on another Foundry resource |
+| `Name` | Required | The guardrail's name in Foundry |
+| `Deployments` | Required | Every model deployment your agents use |
 | `BlockFrom` | `Medium` | Lowest harm severity blocked in prompts and answers. `Low` blocks the most |
 | `PromptShields` | `true` | Blocks jailbreak attempts |
 | `IndirectAttacks` | `true` | Blocks instructions hidden in documents and tool output |

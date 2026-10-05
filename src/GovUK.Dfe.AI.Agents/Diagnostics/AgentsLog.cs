@@ -50,4 +50,7 @@ internal static partial class AgentsLog
 
     [LoggerMessage(EventId = 1013, Level = LogLevel.Information, Message = "Created the run slot container {Container}")]
     public static partial void CreatedRunSlotContainer(this ILogger logger, Uri container);
+
+    [LoggerMessage(EventId = 1014, Level = LogLevel.Warning, Message = "Run observer {Observer} failed for a run of {AgentName}")]
+    public static partial void RunObserverFailed(this ILogger logger, Exception exception, string observer, string agentName);
 }

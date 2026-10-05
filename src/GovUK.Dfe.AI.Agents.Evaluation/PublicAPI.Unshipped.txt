@@ -1,6 +1,12 @@
 #nullable enable
+GovUK.Dfe.AI.Agents.Evaluation.Options.EvaluationSettings
+GovUK.Dfe.AI.Agents.Evaluation.Options.EvaluationSettings.EvaluationSettings() -> void
+GovUK.Dfe.AI.Agents.Evaluation.Options.EvaluationSettings.JudgeModel.get -> string?
+GovUK.Dfe.AI.Agents.Evaluation.Options.EvaluationSettings.JudgeModel.set -> void
+GovUK.Dfe.AI.Agents.Evaluation.Options.EvaluationSettings.SampleRate.get -> double
+GovUK.Dfe.AI.Agents.Evaluation.Options.EvaluationSettings.SampleRate.set -> void
 GovUK.Dfe.AI.Agents.Evaluation.Quality.ExtensionsAiEvaluator
-GovUK.Dfe.AI.Agents.Evaluation.Quality.ExtensionsAiEvaluator.EvaluateAsync(GovUK.Dfe.AI.Agents.ValueObjects.AgentRunSample! sample, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyDictionary<string!, double>!>!
+GovUK.Dfe.AI.Agents.Evaluation.Quality.ExtensionsAiEvaluator.EvaluateAsync(GovUK.Dfe.AI.Agents.ValueObjects.CompletedAgentRun! run, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyDictionary<string!, double>!>!
 GovUK.Dfe.AI.Agents.Evaluation.Quality.ExtensionsAiEvaluator.ExtensionsAiEvaluator(Microsoft.Extensions.AI.Evaluation.IEvaluator! evaluator, Microsoft.Extensions.AI.Evaluation.ChatConfiguration! chatConfiguration, Microsoft.Extensions.Logging.ILogger<GovUK.Dfe.AI.Agents.Evaluation.Quality.ExtensionsAiEvaluator!>? logger = null) -> void
 GovUK.Dfe.AI.Agents.Evaluation.Quality.FoundryJudgeChatClient
 GovUK.Dfe.AI.Agents.Evaluation.Quality.FoundryJudgeChatClient.Dispose() -> void
@@ -9,4 +15,5 @@ GovUK.Dfe.AI.Agents.Evaluation.Quality.FoundryJudgeChatClient.GetResponseAsync(S
 GovUK.Dfe.AI.Agents.Evaluation.Quality.FoundryJudgeChatClient.GetService(System.Type! serviceType, object? serviceKey = null) -> object?
 GovUK.Dfe.AI.Agents.Evaluation.Quality.FoundryJudgeChatClient.GetStreamingResponseAsync(System.Collections.Generic.IEnumerable<Microsoft.Extensions.AI.ChatMessage!>! messages, Microsoft.Extensions.AI.ChatOptions? options = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Collections.Generic.IAsyncEnumerable<Microsoft.Extensions.AI.ChatResponseUpdate!>!
 Microsoft.Extensions.DependencyInjection.QualityEvaluationExtensions
-static Microsoft.Extensions.DependencyInjection.QualityEvaluationExtensions.AddQualityEvaluation(this GovUK.Dfe.AI.Agents.Builders.AgentsBuilder! agents, string! judgeModel, double sampleRate = 0.05, Microsoft.Extensions.AI.Evaluation.IEvaluator? evaluator = null) -> GovUK.Dfe.AI.Agents.Builders.AgentsBuilder!
+static Microsoft.Extensions.DependencyInjection.QualityEvaluationExtensions.AddCustomQualityEvaluation(this GovUK.Dfe.AI.Agents.Builders.AgentsBuilder! agents, System.Func<System.IServiceProvider!, GovUK.Dfe.AI.Agents.Quality.Interfaces.IAgentRunEvaluator!>! evaluator) -> GovUK.Dfe.AI.Agents.Builders.AgentsBuilder!
+static Microsoft.Extensions.DependencyInjection.QualityEvaluationExtensions.AddQualityEvaluation(this GovUK.Dfe.AI.Agents.Builders.AgentsBuilder! agents, Microsoft.Extensions.AI.Evaluation.IEvaluator? evaluator = null) -> GovUK.Dfe.AI.Agents.Builders.AgentsBuilder!

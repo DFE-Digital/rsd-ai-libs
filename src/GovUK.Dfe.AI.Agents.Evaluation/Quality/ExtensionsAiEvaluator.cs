@@ -19,13 +19,13 @@ public sealed class ExtensionsAiEvaluator(IEvaluator evaluator, ChatConfiguratio
 {
     private readonly ILogger _logger = logger ?? NullLogger<ExtensionsAiEvaluator>.Instance;
 
-    public async Task<IReadOnlyDictionary<string, double>> EvaluateAsync(AgentRunSample sample, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyDictionary<string, double>> EvaluateAsync(CompletedAgentRun run, CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(sample);
+        ArgumentNullException.ThrowIfNull(run);
 
-        ChatMessage[] messages = [new(ChatRole.User, sample.Prompt)];
-        var response = new ChatResponse(new ChatMessage(ChatRole.Assistant, sample.Output));
-        EvaluationContext[] context = sample.Evidence is null ? [] : [new GroundednessEvaluatorContext(sample.Evidence)];
+        ChatMessage[] messages = [new(ChatRole.User, run.Prompt)];
+        var response = new ChatResponse(new ChatMessage(ChatRole.Assistant, run.Output));
+        EvaluationContext[] context = run.Evidence is null ? [] : [new GroundednessEvaluatorContext(run.Evidence)];
 
         var result = await evaluator.EvaluateAsync(messages, response, chatConfiguration, context, cancellationToken).ConfigureAwait(false);
 
@@ -39,7 +39,7 @@ public sealed class ExtensionsAiEvaluator(IEvaluator evaluator, ChatConfiguratio
                 continue;
             }
 
-            _logger.LogWarning("No {Metric} score for {AgentName}: {Reason}", metric.Name, sample.AgentName, WhyUnscored(metric));
+            _logger.LogWarning("No {Metric} score for {AgentName}: {Reason}", metric.Name, run.AgentName, WhyUnscored(metric));
         }
 
         return scores;

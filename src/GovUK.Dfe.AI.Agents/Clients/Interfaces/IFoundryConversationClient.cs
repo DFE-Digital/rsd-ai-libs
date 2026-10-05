@@ -3,7 +3,7 @@ using OpenAI.Responses;
 namespace GovUK.Dfe.AI.Agents.Clients.Interfaces;
 
 /// <summary>Foundry conversations: create one, send input to an agent in it, delete it.</summary>
-public interface IFoundryConversationClient
+internal interface IFoundryConversationClient
 {
     /// <summary>Creates a conversation and returns its ID.</summary>
     Task<string> CreateConversationAsync(CancellationToken cancellationToken = default);

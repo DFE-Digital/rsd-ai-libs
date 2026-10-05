@@ -4,11 +4,12 @@ using GovUK.Dfe.AI.Agents.Concurrency;
 using GovUK.Dfe.AI.Agents.Context.Interfaces;
 using GovUK.Dfe.AI.Agents.Extensibility;
 using GovUK.Dfe.AI.Agents.Extensibility.Interfaces;
+using GovUK.Dfe.AI.Agents.Tools;
+using GovUK.Dfe.AI.Agents.Tools.Interfaces;
 using GovUK.Dfe.AI.Agents.Factories;
 using GovUK.Dfe.AI.Agents.Options;
 using GovUK.Dfe.AI.Agents.Providers.Interfaces;
 using GovUK.Dfe.AI.Agents.Quality.Interfaces;
-using GovUK.Dfe.AI.Agents.Quality;
 using GovUK.Dfe.AI.Agents.Services.Interfaces;
 using GovUK.Dfe.AI.Agents.Services;
 using GovUK.Dfe.AI.Agents.ValueObjects;
@@ -104,10 +105,16 @@ public sealed class AddAgentsTests
 
         public IReadOnlyCollection<string> CodeCredentials { get; private set; } = [];
 
+        public string? ApplicationName { get; private set; }
+
+        public IAgentToolProvider Tools { get; } = Substitute.For<IAgentToolProvider>();
+
         public void Register(AgentsPackageContext context)
         {
             Registrations++;
             CodeCredentials = [.. context.CodeCredentials];
+            ApplicationName = context.ApplicationName;
+            context.AddTools("ofsted-agent", _ => Tools);
             var section = context.Section.GetSection("Fake");
             if (string.IsNullOrWhiteSpace(section["Endpoint"]))
             {
@@ -155,6 +162,8 @@ public sealed class AddAgentsTests
         Assert.Equal(1, package.Registrations);
         Assert.Same(credential, package.Credential);
         Assert.Equal(["Fake"], package.CodeCredentials);
+        Assert.Equal("briefing-tool", package.ApplicationName);
+        Assert.Same(package.Tools, Assert.Single(provider.GetServices<AgentToolBinding>(), binding => binding.AgentName == "ofsted-agent").Provider);
     }
 
     [Fact]
@@ -251,19 +260,13 @@ public sealed class AddAgentsTests
         Assert.Equal(added, provider.GetServices<Microsoft.Extensions.Hosting.IHostedService>().OfType<EphemeralAgentSweepService>().Any());
     }
 
-    [Theory]
-    [InlineData(0.0, false)]
-    [InlineData(0.1, true)]
-    public void AddQualityEvaluation_ScoresTests_AndLiveRunsOnlyWhenSampled(double sampleRate, bool scoresLiveRuns)
+    [Fact]
+    public void TheReleaseGate_IsAvailable_WithoutAnyEvaluator()
     {
-        var evaluator = Substitute.For<IAgentRunEvaluator>();
-
-        using var provider = Build(ValidSettings(), agents => agents.AddQualityEvaluation(_ => evaluator, sampleRate));
+        using var provider = Build(ValidSettings());
 
         Assert.NotNull(provider.GetRequiredService<IAgentTestRunner>());
-        Assert.Same(evaluator, provider.GetRequiredService<IAgentRunEvaluator>());
-        Assert.Equal(scoresLiveRuns,
-            provider.GetServices<Microsoft.Extensions.Hosting.IHostedService>().OfType<AgentQualityMonitor>().Any());
+        Assert.Null(provider.GetService<IAgentRunEvaluator>());
     }
 
     [Fact]

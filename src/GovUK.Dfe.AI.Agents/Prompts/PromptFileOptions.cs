@@ -1,7 +1,7 @@
 namespace GovUK.Dfe.AI.Agents.Prompts;
 
 /// <summary>The <c>PromptFiles</c> section: prompt file paths, by prompt type.</summary>
-public sealed class PromptFileOptions
+internal sealed class PromptFileOptions
 {
     public Dictionary<string, string> SystemPrompts { get; set; } = [];
     public Dictionary<string, string> UserPrompts { get; set; } = [];

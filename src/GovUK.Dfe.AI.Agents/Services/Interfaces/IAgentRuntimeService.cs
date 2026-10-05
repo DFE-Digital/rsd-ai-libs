@@ -1,4 +1,3 @@
-using GovUK.Dfe.AI.Agents.Orchestration.Interfaces;
 using GovUK.Dfe.AI.Agents.ValueObjects;
 
 namespace GovUK.Dfe.AI.Agents.Services.Interfaces;
@@ -6,8 +5,6 @@ namespace GovUK.Dfe.AI.Agents.Services.Interfaces;
 /// <summary>Advanced: resolving, creating and running agents directly, and cleaning up ephemeral ones.</summary>
 public interface IAgentRuntimeService
 {
-    IAgentOrchestrator Orchestrator { get; }
-
     /// <summary>The agent at this environment's pinned version, or its latest.</summary>
     Task<AgentReference> ResolveAsync(string agentName, CancellationToken cancellationToken);
 

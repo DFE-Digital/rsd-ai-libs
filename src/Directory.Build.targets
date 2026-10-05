@@ -32,9 +32,9 @@
   </PropertyGroup>
 
   <ItemGroup Condition="'$(IsPackable)' != 'false'">
+    <!-- The package adds the project's PublicAPI.Shipped.txt and PublicAPI.Unshipped.txt itself; adding them again stops
+         dotnet format from updating them. -->
     <PackageReference Include="Microsoft.CodeAnalysis.PublicApiAnalyzers" Version="5.6.0" PrivateAssets="all" />
-    <AdditionalFiles Include="PublicAPI.Shipped.txt" />
-    <AdditionalFiles Include="PublicAPI.Unshipped.txt" />
   </ItemGroup>
 
   <!--

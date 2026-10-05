@@ -48,8 +48,7 @@ internal sealed class AgentTestRunner(IAgentService agents, IAgentRunEvaluator? 
 
         var scores = evaluator is null
             ? NoScores
-            : await evaluator.EvaluateAsync(new AgentRunSample(definition.Name, result.AgentVersion, result.Model, testCase.Prompt,
-                testCase.Evidence, output), cancellationToken).ConfigureAwait(false);
+            : await evaluator.EvaluateAsync(new CompletedAgentRun { AgentName = definition.Name, AgentVersion = result.AgentVersion, Model = result.Model, Prompt = testCase.Prompt, Evidence = testCase.Evidence, Output = output }, cancellationToken).ConfigureAwait(false);
 
         return new AgentTestResult(testCase.Name, output, failures, scores);
     }

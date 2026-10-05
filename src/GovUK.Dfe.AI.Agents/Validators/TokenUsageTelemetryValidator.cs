@@ -15,7 +15,7 @@ namespace GovUK.Dfe.AI.Agents.Validators;
 /// connection string still passes. It runs in <see cref="StartedAsync"/>, after every hosted service
 /// has started, because OpenTelemetry attaches its metric listener while the host starts.
 /// </remarks>
-public sealed class TokenUsageTelemetryValidator : IHostedLifecycleService
+internal sealed class TokenUsageTelemetryValidator : IHostedLifecycleService
 {
     private readonly bool _required;
     private readonly Func<bool> _isTokenUsageRecorded;

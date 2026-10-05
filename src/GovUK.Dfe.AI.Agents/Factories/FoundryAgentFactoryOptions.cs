@@ -6,7 +6,7 @@ namespace GovUK.Dfe.AI.Agents.Factories;
 /// <param name="DefaultModel">
 /// The default model deployment used when <see cref="AgentSpec.Model"/> is not set.
 /// </param>
-public sealed record FoundryAgentFactoryOptions(string DefaultModel)
+internal sealed record FoundryAgentFactoryOptions(string DefaultModel)
 {
     /// <summary>
     /// When set, each new version prunes older ones, keeping this many (3 keeps 5, 4 and 3). Pinned and protected

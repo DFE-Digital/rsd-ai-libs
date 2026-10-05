@@ -35,8 +35,8 @@ public sealed class CitationsTests
         var (prompt, validate) = Citations.ForRun(definition, "Summarise.", NumberedEvidence);
 
         Assert.EndsWith("as [Evidence n].", prompt, StringComparison.Ordinal);
-        Assert.Contains("Cite the evidence", validate!(new AgentResult("ofsted-agent", "No citations.", 0)), StringComparison.Ordinal);
-        Assert.Equal("own check", validate(new AgentResult("ofsted-agent", "Good [Evidence 1].", 0)));
+        Assert.Contains("Cite the evidence", validate!(new AgentResult { AgentName = "ofsted-agent", Output = "No citations.", TotalTokens = 0 }), StringComparison.Ordinal);
+        Assert.Equal("own check", validate(new AgentResult { AgentName = "ofsted-agent", Output = "Good [Evidence 1].", TotalTokens = 0 }));
     }
 
     [Theory]

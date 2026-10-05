@@ -1,7 +1,7 @@
 namespace GovUK.Dfe.AI.Agents.Options;
 
 /// <summary>Settings for every agent run, read from the <c>AiAgents</c> section by <c>AddAgents</c>.</summary>
-public sealed record AgentRunOptions
+internal sealed record AgentRunOptions
 {
     /// <summary>The smallest <c>max_output_tokens</c> the Responses API accepts.</summary>
     internal const int MinOutputTokens = 16;

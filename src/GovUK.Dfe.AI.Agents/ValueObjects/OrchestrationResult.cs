@@ -1,7 +1,7 @@
 namespace GovUK.Dfe.AI.Agents.ValueObjects;
 
 /// <summary>The result of an orchestration.</summary>
-public sealed record OrchestrationResult(string? FinalOutput, IReadOnlyList<AgentStepResult> Results)
+internal sealed record OrchestrationResult(string? FinalOutput, IReadOnlyList<AgentStepResult> Results)
 {
     public long TotalTokens => Results.Sum(r => r.Result?.TotalTokens ?? 0);
 
@@ -11,7 +11,7 @@ public sealed record OrchestrationResult(string? FinalOutput, IReadOnlyList<Agen
 }
 
 /// <summary>One step: its result, or the error if it failed.</summary>
-public sealed record AgentStepResult(string AgentName, AgentResult? Result, Exception? Error)
+internal sealed record AgentStepResult(string AgentName, AgentResult? Result, Exception? Error)
 {
     public bool Succeeded => Error is null;
 }

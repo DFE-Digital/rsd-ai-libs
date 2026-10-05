@@ -6,5 +6,5 @@ namespace GovUK.Dfe.AI.Agents.Quality.Interfaces;
 public interface IAgentRunEvaluator
 {
     /// <returns>Scores by metric name; higher is better.</returns>
-    Task<IReadOnlyDictionary<string, double>> EvaluateAsync(AgentRunSample sample, CancellationToken cancellationToken = default);
+    Task<IReadOnlyDictionary<string, double>> EvaluateAsync(CompletedAgentRun run, CancellationToken cancellationToken = default);
 }

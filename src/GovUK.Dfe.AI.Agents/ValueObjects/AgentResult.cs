@@ -1,9 +1,17 @@
 namespace GovUK.Dfe.AI.Agents.ValueObjects;
 
 /// <summary>One run's answer and token usage.</summary>
-/// <param name="TotalTokens">Input plus output tokens.</param>
-public sealed record AgentResult(string AgentName, string? Output, long TotalTokens)
+public sealed record AgentResult
 {
+    /// <summary>The agent that ran.</summary>
+    public required string AgentName { get; init; }
+
+    /// <summary>The answer; null when the run produced none.</summary>
+    public string? Output { get; init; }
+
+    /// <summary>Input plus output tokens.</summary>
+    public long TotalTokens { get; init; }
+
     /// <summary>The input (prompt) tokens used, when Foundry reported them.</summary>
     public long InputTokens { get; init; }
 

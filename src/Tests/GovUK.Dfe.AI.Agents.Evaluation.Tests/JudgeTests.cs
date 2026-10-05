@@ -23,7 +23,10 @@ namespace GovUK.Dfe.AI.Agents.Evaluation.Tests;
 /// <summary>The Foundry judge, and how its scores (or why there are none) reach the release gate and live sampling.</summary>
 public sealed class JudgeTests
 {
-    private static readonly AgentRunSample Sample = new("ofsted-agent", "3", "gpt-4o", "Summarise.", "Rated Good.", "Rated Good.");
+    private static readonly CompletedAgentRun Sample = new()
+    {
+        AgentName = "ofsted-agent", AgentVersion = "3", Model = "gpt-4o", Prompt = "Summarise.", Evidence = "Rated Good.", Output = "Rated Good.",
+    };
 
     private static (FoundryJudgeChatClient Judge, Func<CreateResponseOptions?> Sent) Judge(ResponseResult reply)
     {
@@ -39,7 +42,7 @@ public sealed class JudgeTests
     [Fact]
     public void AddQualityEvaluation_WithAJudgeModel_JudgesThroughThisAppsFoundryProject()
     {
-        using var provider = Build(agents => agents.AddQualityEvaluation(judgeModel: "myconnection/gpt-5.1"));
+        using var provider = Build(agents => agents.AddQualityEvaluation());
 
         Assert.IsType<ExtensionsAiEvaluator>(provider.GetRequiredService<IAgentRunEvaluator>());
     }
@@ -100,7 +103,7 @@ public sealed class JudgeTests
                 Arg.Any<IEnumerable<EvaluationContext>?>(), Arg.Any<CancellationToken>())
             .Returns(new EvaluationResult(new NumericMetric("Accuracy", 3), new NumericMetric("Tone")));
         var logs = new CollectingLoggerProvider();
-        using var provider = Build(agents => agents.AddQualityEvaluation(judgeModel: "myconnection/gpt-5.1", evaluator: own),
+        using var provider = Build(agents => agents.AddQualityEvaluation(evaluator: own),
             builder => builder.AddProvider(logs));
 
         var scores = await provider.GetRequiredService<IAgentRunEvaluator>().EvaluateAsync(Sample, cancellationToken: TestContext.Current.CancellationToken);
@@ -110,10 +113,26 @@ public sealed class JudgeTests
     }
 
     [Theory]
-    [InlineData("")]
-    [InlineData(" ")]
-    public void AddQualityEvaluation_WithoutAJudgeModel_FailsAtRegistration(string judgeModel)
-        => Assert.ThrowsAny<ArgumentException>(() => Build(agents => agents.AddQualityEvaluation(judgeModel)));
+    [InlineData(null, "AiAgents:Evaluation (agents.AddQualityEvaluation() needs this section)")]
+    [InlineData(" ", "AiAgents:Evaluation:JudgeModel")]
+    public void AddQualityEvaluation_WithoutAJudgeModel_FailsStartup_NamingTheSetting(string? judgeModel, string reported)
+    {
+        var ex = Assert.Throws<InvalidOperationException>(() => Build(agents => agents.AddQualityEvaluation(),
+            settings: new() { ["AiAgents:Evaluation:JudgeModel"] = judgeModel }));
+
+        Assert.Contains(reported, ex.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("-0.1")]
+    [InlineData("1.5")]
+    public void ASampleRateOutsideZeroToOne_FailsStartup(string sampleRate)
+    {
+        var ex = Assert.Throws<InvalidOperationException>(() => Build(agents => agents.AddQualityEvaluation(),
+            settings: new() { ["AiAgents:Evaluation:SampleRate"] = sampleRate }));
+
+        Assert.Contains("AiAgents:Evaluation:SampleRate (from 0 to 1)", ex.Message, StringComparison.Ordinal);
+    }
 
     [Fact]
     public async Task AJudgeCalledThroughStreaming_ReturnsItsWholeAnswer_AndKeepsEachMessagesRole()
@@ -129,16 +148,30 @@ public sealed class JudgeTests
             sent()!.InputItems.OfType<MessageResponseItem>().Select(item => item.Role));
     }
 
-    private static ServiceProvider Build(Action<AgentsBuilder> configure, Action<ILoggingBuilder>? logging = null)
+    /// <summary>Registers with a judge model under <c>AiAgents:Evaluation</c>; <paramref name="settings"/> override it (null removes one).</summary>
+    private static ServiceProvider Build(Action<AgentsBuilder> configure, Action<ILoggingBuilder>? logging = null,
+        Dictionary<string, string?>? settings = null)
     {
-        var settings = new Dictionary<string, string?>
+        var all = new Dictionary<string, string?>
         {
             ["AiAgents:Foundry:Endpoint"] = "https://example.services.ai.azure.com/api/projects/briefings",
             ["AiAgents:Foundry:DefaultModel"] = "myconnection/gpt-5.1",
+            ["AiAgents:Evaluation:JudgeModel"] = "myconnection/gpt-5.1",
         };
+        foreach (var (key, value) in settings ?? [])
+        {
+            if (value is null)
+            {
+                all.Remove(key);
+            }
+            else
+            {
+                all[key] = value;
+            }
+        }
         var services = new ServiceCollection();
         services.AddLogging(builder => logging?.Invoke(builder));
-        services.AddAgents(new ConfigurationBuilder().AddInMemoryCollection(settings).Build(), agents =>
+        services.AddAgents(new ConfigurationBuilder().AddInMemoryCollection(all).Build(), agents =>
         {
             agents.UseCredential(Substitute.For<TokenCredential>());
             configure(agents);

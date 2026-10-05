@@ -1,5 +1,6 @@
 using GovUK.Dfe.AI.Agents.Context;
 using GovUK.Dfe.AI.Agents.Diagnostics;
+using GovUK.Dfe.AI.Agents.Extensibility.Interfaces;
 using GovUK.Dfe.AI.Agents.Extensions;
 using GovUK.Dfe.AI.Agents.Quality;
 using GovUK.Dfe.AI.Agents.Tools;
@@ -16,9 +17,10 @@ namespace GovUK.Dfe.AI.Agents.Services;
 
 internal sealed class AgentService(IAgentRunnerService agentRunner, IAgentRuntimeService agentRuntime, AgentSpecBuilder specs,
     AgentRunOptions? runOptions = null, Factories.Interfaces.IAgentFactory? agentFactory = null, ILogger<AgentService>? logger = null,
-    AgentQualityMonitor? qualityMonitor = null)
+    IEnumerable<IAgentRunObserver>? observers = null)
     : IAgentService
 {
+    private readonly IAgentRunObserver[] _observers = observers?.ToArray() ?? [];
     private readonly AgentSpecBuilder _specs = specs;
     private readonly ILogger<AgentService> _logger = logger ?? NullLogger<AgentService>.Instance;
     private readonly string _applicationName = runOptions?.ApplicationName ?? AgentTelemetry.DefaultApplicationName;
@@ -189,11 +191,23 @@ internal sealed class AgentService(IAgentRunnerService agentRunner, IAgentRuntim
                 cancellationToken: cancellationToken, validateOutput: validate).ConfigureAwait(false);
         }
 
-        if (qualityMonitor?.ShouldSample() == true)
-        {
-            qualityMonitor.Enqueue(new AgentRunSample(definition.Name, result.AgentVersion, result.Model, prompt, evidence, result.Output ?? string.Empty));
-        }
-
+        Notify(new CompletedAgentRun { AgentName = definition.Name, AgentVersion = result.AgentVersion, Model = result.Model, Prompt = prompt, Evidence = evidence, Output = result.Output ?? string.Empty });
         return result;
+    }
+
+    /// <summary>Tells each observer about a finished run; an observer's failure is logged, never the run's.</summary>
+    private void Notify(CompletedAgentRun run)
+    {
+        foreach (var observer in _observers)
+        {
+            try
+            {
+                observer.OnRunCompleted(run);
+            }
+            catch (Exception ex)
+            {
+                _logger.RunObserverFailed(ex, observer.GetType().Name, run.AgentName);
+            }
+        }
     }
 }

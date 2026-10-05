@@ -4,7 +4,7 @@ using GovUK.Dfe.AI.Agents.ValueObjects;
 namespace GovUK.Dfe.AI.Agents.Extensions;
 
 /// <summary>Turns an orchestration step into an <c>AgentResult</c>, with a fallback for a failed step.</summary>
-public static class AgentStepResultExtensions
+internal static class AgentStepResultExtensions
 {
     /// <summary>The step's result, or a failed result with <paramref name="failureMessage"/>.</summary>
     /// <remarks>
@@ -19,10 +19,7 @@ public static class AgentStepResultExtensions
         }
 
         var usage = Diagnostics.AgentTelemetry.TokenUsageOf(step.Error);
-        return new AgentResult(step.AgentName, failureMessage, usage.TotalTokens)
-        {
-            InputTokens = usage.InputTokens,
-            OutputTokens = usage.OutputTokens,
-        };
+        return new AgentResult { AgentName = step.AgentName, Output = failureMessage, TotalTokens = usage.TotalTokens, InputTokens = usage.InputTokens,
+            OutputTokens = usage.OutputTokens };
     }
 }

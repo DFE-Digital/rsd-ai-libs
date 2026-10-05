@@ -6,7 +6,7 @@ using System.ClientModel.Primitives;
 namespace GovUK.Dfe.AI.Agents.Clients;
 
 /// <summary>Foundry conversations and responses, through the project's OpenAI client.</summary>
-public sealed class FoundryConversationClient(ProjectOpenAIClient client) : IFoundryConversationClient
+internal sealed class FoundryConversationClient(ProjectOpenAIClient client) : IFoundryConversationClient
 {
     public async Task<string> CreateConversationAsync(CancellationToken cancellationToken = default)
     {

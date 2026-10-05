@@ -22,7 +22,7 @@ namespace GovUK.Dfe.AI.Agents.Factories;
 /// Agent versions in Foundry: reuses the version that matches a spec or creates one, resolves pinned and latest versions,
 /// and prunes and deletes old ones. Resolved versions are cached briefly (<see cref="FoundryAgentFactoryOptions.AgentCacheDuration"/>).
 /// </summary>
-public sealed class FoundryAgentFactory(AgentAdministrationClient administrationClient, FoundryAgentFactoryOptions options,
+internal sealed class FoundryAgentFactory(AgentAdministrationClient administrationClient, FoundryAgentFactoryOptions options,
     ILogger<FoundryAgentFactory>? logger = null, AgentVersionPinningOptions? versionPinning = null, TimeProvider? timeProvider = null)
     : IAgentFactory
 {

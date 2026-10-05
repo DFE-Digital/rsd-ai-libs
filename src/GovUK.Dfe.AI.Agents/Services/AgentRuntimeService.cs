@@ -1,5 +1,4 @@
 using GovUK.Dfe.AI.Agents.Factories.Interfaces;
-using GovUK.Dfe.AI.Agents.Orchestration.Interfaces;
 using GovUK.Dfe.AI.Agents.ValueObjects;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -9,7 +8,7 @@ using GovUK.Dfe.AI.Agents.Options;
 namespace GovUK.Dfe.AI.Agents.Services;
 
 /// <summary>Resolves, creates and runs agents directly, and cleans up ephemeral ones. Most apps use <c>IAgentService</c>.</summary>
-public sealed class AgentRuntimeService(IAgentFactory factory, IAgentRunnerService runner, IAgentOrchestrator orchestrator,
+internal sealed class AgentRuntimeService(IAgentFactory factory, IAgentRunnerService runner,
     AgentVersionPinningOptions? versionPinning = null, ILogger<AgentRuntimeService>? logger = null, AgentRunOptions? runOptions = null)
     : IAgentRuntimeService
 {
@@ -37,8 +36,6 @@ public sealed class AgentRuntimeService(IAgentFactory factory, IAgentRunnerServi
     /// clean-up, so an agent that's still in use (on any instance) is never treated as orphaned.
     /// </summary>
     internal TimeSpan MinimumOrphanAge => (_runOptions.RunTimeout ?? AssumedMaximumRunTime) + EphemeralCleanupTimeout + TimeSpan.FromMinutes(5);
-
-    public IAgentOrchestrator Orchestrator => orchestrator;
 
     public Task<AgentReference> ResolveAsync(string agentName, CancellationToken cancellationToken)
         => factory.ResolveAsync(agentName, _versionPinning.GetPinnedVersion(agentName), cancellationToken);

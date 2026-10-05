@@ -1,6 +1,6 @@
 namespace GovUK.Dfe.AI.Agents.Resilience;
 /// <summary>Runs a step, returning a fallback result when it fails.</summary>
-public static class ResilientAgentStep
+internal static class ResilientAgentStep
 {
     /// <summary>
     /// Runs <paramref name="step"/>, or returns <paramref name="fallback"/>'s result for a failure <paramref name="shouldSuppress"/> accepts.

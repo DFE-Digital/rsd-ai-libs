@@ -49,3 +49,15 @@ public static readonly AgentDefinition Ofsted = new("ofsted-agent", "Ofsted")
 - **Errors:** a tool error is returned to the model. Calls are never retried, so side effects can't happen twice.
 - **Startup check:** if an allowed tool doesn't exist on its server, startup fails. If a server can't be reached,
   startup only logs a warning, so an outage doesn't stop new instances starting.
+
+## Settings
+
+Each entry under `McpServers` is keyed by a name you choose.
+
+| Setting | Default | Purpose |
+| --- | --- | --- |
+| `ServerUri` | Required | The server's MCP endpoint |
+| `Scope` | Required | The token scope, e.g. `api://school-performance/.default` |
+| `AllowedToolNames` | Required | Every tool this app may use from the server |
+| `ToolListCacheDuration` | 5 minutes | How long the server's tool list is reused |
+| `Authentication` | The default identity | A separate identity for this server, possibly in another tenant |

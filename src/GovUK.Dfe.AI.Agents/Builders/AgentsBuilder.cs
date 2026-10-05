@@ -91,27 +91,6 @@ public sealed class AgentsBuilder
         return this;
     }
 
-    /// <summary>
-    /// Scores every <c>IAgentTestRunner</c> case, and a <paramref name="sampleRate"/> share of live runs in the background
-    /// (<c>dfe.ai_agents.evaluation.score</c>). A rate of 0 scores only tests. For a Foundry judge, use the .Evaluation package.
-    /// </summary>
-    public AgentsBuilder AddQualityEvaluation(Func<IServiceProvider, Quality.Interfaces.IAgentRunEvaluator> evaluator, double sampleRate = 0.05)
-    {
-        ArgumentNullException.ThrowIfNull(evaluator);
-        ArgumentOutOfRangeException.ThrowIfNegative(sampleRate);
-        ArgumentOutOfRangeException.ThrowIfGreaterThan(sampleRate, 1);
-
-        Services.AddSingleton(evaluator);
-        if (sampleRate > 0)
-        {
-            Services.AddSingleton(sp => new Quality.AgentQualityMonitor(sp.GetRequiredService<Quality.Interfaces.IAgentRunEvaluator>(), sampleRate,
-                sp.GetRequiredService<AgentRunOptions>(), sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<Quality.AgentQualityMonitor>>()));
-            Services.AddHostedService(sp => sp.GetRequiredService<Quality.AgentQualityMonitor>());
-        }
-
-        return this;
-    }
-
     /// <summary>The default credential for every service.</summary>
     public AgentsBuilder UseCredential(TokenCredential credential)
     {

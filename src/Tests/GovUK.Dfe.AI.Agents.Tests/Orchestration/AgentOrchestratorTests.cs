@@ -25,10 +25,10 @@ public sealed class AgentOrchestratorTests
 
         _agentRunner.RunAsync(researcher, Arg.Any<string>(), Arg.Any<string?>(), Arg.Any<string?>(),
                 Arg.Any<ToolCallResolver?>(), Arg.Any<Func<AgentResult, string?>?>(), Arg.Any<CancellationToken>())
-            .Returns(new AgentResult("researcher", "research notes", 10));
+            .Returns(new AgentResult { AgentName = "researcher", Output = "research notes", TotalTokens = 10 });
         _agentRunner.RunAsync(writer, "Explain MCP.", Arg.Any<string?>(), Arg.Is<string?>(evidence => evidence != null && evidence.Contains("research notes")),
                 Arg.Any<ToolCallResolver?>(), Arg.Any<Func<AgentResult, string?>?>(), Arg.Any<CancellationToken>())
-            .Returns(new AgentResult("writer", "final draft", 20));
+            .Returns(new AgentResult { AgentName = "writer", Output = "final draft", TotalTokens = 20 });
 
         var sut = CreateSut();
         var result = await sut.RunSequentialAsync([researcher, writer], "Explain MCP.", new AgentContext(), cancellationToken: cancellationToken);
@@ -48,7 +48,7 @@ public sealed class AgentOrchestratorTests
         _agentRunner.RunAsync(first, Arg.Any<string>(), cancellationToken: Arg.Any<CancellationToken>())
             .ThrowsAsync(new InvalidOperationException("boom"));
         _agentRunner.RunAsync(second, Arg.Any<string>(), cancellationToken: Arg.Any<CancellationToken>())
-            .Returns(new AgentResult("second", "ok", 5));
+            .Returns(new AgentResult { AgentName = "second", Output = "ok", TotalTokens = 5 });
 
         var sut = CreateSut();
         var result = await sut.RunSequentialAsync([first, second], "input", new AgentContext(), cancellationToken: cancellationToken);
@@ -81,7 +81,7 @@ public sealed class AgentOrchestratorTests
         _agentRunner.RunAsync(a, Arg.Any<string>(), cancellationToken: Arg.Any<CancellationToken>())
             .ThrowsAsync(new InvalidOperationException("boom"));
         _agentRunner.RunAsync(b, Arg.Any<string>(), cancellationToken: Arg.Any<CancellationToken>())
-            .Returns(new AgentResult("b", "output b", 15));
+            .Returns(new AgentResult { AgentName = "b", Output = "output b", TotalTokens = 15 });
 
         var sut = CreateSut();
         var result = await sut.RunParallelAsync([a, b], "input", new AgentContext(), cancellationToken: cancellationToken);
@@ -98,9 +98,9 @@ public sealed class AgentOrchestratorTests
         var fromMcp = new AgentReference("from-mcp-id", "from-mcp");
 
         _agentRunner.RunAsync(fromSearch, "search evidence", cancellationToken: Arg.Any<CancellationToken>())
-            .Returns(new AgentResult("from-search", "search result", 10));
+            .Returns(new AgentResult { AgentName = "from-search", Output = "search result", TotalTokens = 10 });
         _agentRunner.RunAsync(fromMcp, "mcp evidence", cancellationToken: Arg.Any<CancellationToken>())
-            .Returns(new AgentResult("from-mcp", "mcp result", 12));
+            .Returns(new AgentResult { AgentName = "from-mcp", Output = "mcp result", TotalTokens = 12 });
 
         var steps = new List<AgentOrchestrationStep>
         {
@@ -122,7 +122,7 @@ public sealed class AgentOrchestratorTests
         var broken = new AgentReference("broken-id", "broken");
 
         _agentRunner.RunAsync(ok, Arg.Any<string>(), cancellationToken: Arg.Any<CancellationToken>())
-            .Returns(new AgentResult("ok", "output", 5));
+            .Returns(new AgentResult { AgentName = "ok", Output = "output", TotalTokens = 5 });
 
         var steps = new List<AgentOrchestrationStep>
         {
@@ -144,7 +144,7 @@ public sealed class AgentOrchestratorTests
         var ok = new AgentReference("ok-id", "ok");
 
         _agentRunner.RunAsync(ok, Arg.Any<string>(), cancellationToken: Arg.Any<CancellationToken>())
-            .Returns(new AgentResult("ok", "output", 5));
+            .Returns(new AgentResult { AgentName = "ok", Output = "output", TotalTokens = 5 });
 
         var steps = new List<AgentOrchestrationStep>
         {
@@ -187,7 +187,7 @@ public sealed class AgentOrchestratorTests
                         currentlyRunning--;
                     }
 
-                    return new AgentResult(agent.Name, "ok", 1);
+                    return new AgentResult { AgentName = agent.Name, Output = "ok", TotalTokens = 1 };
                 });
         }
 
@@ -204,7 +204,7 @@ public sealed class AgentOrchestratorTests
         ToolCallResolver resolver =
             (_, _) => Task.FromResult<IEnumerable<ToolCallOutput>>([]);
         _agentRunner.RunAsync(agent, "prompt", Arg.Any<string?>(), Arg.Is<string?>("evidence"), resolver, Arg.Any<Func<AgentResult, string?>?>(), Arg.Any<CancellationToken>())
-            .Returns(new AgentResult("tool-agent", "done", 1));
+            .Returns(new AgentResult { AgentName = "tool-agent", Output = "done", TotalTokens = 1 });
 
         var step = new AgentOrchestrationStep("tool-agent", _ => Task.FromResult(agent), _ => Task.FromResult("prompt"))
         {
@@ -224,7 +224,7 @@ public sealed class AgentOrchestratorTests
         ToolCallResolver resolver =
             (_, _) => Task.FromResult<IEnumerable<ToolCallOutput>>([]);
         _agentRunner.RunAsync(agent, "task", Arg.Any<string?>(), Arg.Any<string?>(), resolver, Arg.Any<Func<AgentResult, string?>?>(), Arg.Any<CancellationToken>())
-            .Returns(new AgentResult("tool-agent", "done", 1));
+            .Returns(new AgentResult { AgentName = "tool-agent", Output = "done", TotalTokens = 1 });
 
         var result = await CreateSut().RunSequentialAsync([agent], "task", new AgentContext(),
             cancellationToken: cancellationToken, resolveToolCallsFor: _ => resolver);

@@ -1,74 +1,26 @@
-using System.Diagnostics.Metrics;
 using System.Text.Json;
-using GovUK.Dfe.AI.Agents.Diagnostics;
 using GovUK.Dfe.AI.Agents.Enums;
-using GovUK.Dfe.AI.Agents.Options;
 using GovUK.Dfe.AI.Agents.Quality.Interfaces;
 using GovUK.Dfe.AI.Agents.Quality;
 using GovUK.Dfe.AI.Agents.Services.Interfaces;
 using GovUK.Dfe.AI.Agents.ValueObjects;
-using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute.ExceptionExtensions;
 using NSubstitute;
 using Xunit;
 
 namespace GovUK.Dfe.AI.Agents.Tests.Quality;
 
-/// <summary>Live-run scoring and the test-case release gate. The judge itself is in the .Evaluation tests.</summary>
+/// <summary>The test-case release gate. Live-run scoring and the judge are in the .Evaluation tests.</summary>
 public sealed class QualityEvaluationTests
 {
     private static readonly AgentDefinition Ofsted = new("ofsted-agent", "Ofsted");
-    private static readonly AgentRunSample Sample = new("ofsted-agent", "3", "gpt-4o", "Summarise.", "Rated Good.", "Rated Good.");
 
     private static IAgentRunEvaluator ScoresGroundedness(double score)
     {
         var evaluator = Substitute.For<IAgentRunEvaluator>();
-        evaluator.EvaluateAsync(Arg.Any<AgentRunSample>(), Arg.Any<CancellationToken>())
+        evaluator.EvaluateAsync(Arg.Any<CompletedAgentRun>(), Arg.Any<CancellationToken>())
             .Returns(new Dictionary<string, double> { ["Groundedness"] = score });
         return evaluator;
-    }
-
-    // ===================== Live runs =====================
-
-    [Theory]
-    [InlineData(0.0, false)]
-    [InlineData(1.0, true)]
-    public void Sampling_FollowsTheRate(double rate, bool sampled)
-        => Assert.Equal(sampled, new AgentQualityMonitor(ScoresGroundedness(5), rate, new AgentRunOptions(),
-            NullLogger<AgentQualityMonitor>.Instance).ShouldSample());
-
-    [Fact]
-    public async Task EachScore_IsRecorded_TaggedWithTheAgentVersionAndMetric()
-    {
-        var recorded = new List<(double Score, Dictionary<string, object?> Tags)>();
-        using var listener = new MeterListener();
-        listener.InstrumentPublished = (instrument, l) =>
-        {
-            if (instrument.Name == "dfe.ai_agents.evaluation.score")
-            {
-                l.EnableMeasurementEvents(instrument);
-            }
-        };
-        listener.SetMeasurementEventCallback<double>((_, score, tags, _) => recorded.Add((score, tags.ToArray().ToDictionary(t => t.Key, t => t.Value))));
-        listener.Start();
-
-        await new AgentQualityMonitor(ScoresGroundedness(4.5), 1, new AgentRunOptions { ApplicationName = "briefing-tool" },
-            NullLogger<AgentQualityMonitor>.Instance).ScoreAsync(Sample, CancellationToken.None);
-
-        var (score, tags) = Assert.Single(recorded, r => Equals(r.Tags[AgentTelemetry.ApplicationTag], "briefing-tool"));
-        Assert.Equal(4.5, score);
-        Assert.Equal("3", tags["gen_ai.agent.version"]);
-        Assert.Equal("Groundedness", tags["gen_ai.evaluation.name"]);
-    }
-
-    [Fact]
-    public async Task AScoringFailure_IsOnlyLogged()
-    {
-        var evaluator = Substitute.For<IAgentRunEvaluator>();
-        evaluator.EvaluateAsync(Arg.Any<AgentRunSample>(), Arg.Any<CancellationToken>()).Throws(new InvalidOperationException("Judge down."));
-        var monitor = new AgentQualityMonitor(evaluator, 1, new AgentRunOptions(), NullLogger<AgentQualityMonitor>.Instance);
-
-        Assert.Null(await Record.ExceptionAsync(() => monitor.ScoreAsync(Sample, CancellationToken.None)));
     }
 
     // ===================== Release gate =====================
@@ -77,7 +29,7 @@ public sealed class QualityEvaluationTests
     {
         var agents = Substitute.For<IAgentService>();
         agents.RunAsync(Arg.Any<AgentDefinition>(), Arg.Any<string>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
-            .Returns(new AgentResult("ofsted-agent", output, 30) { AgentVersion = "4" });
+            .Returns(new AgentResult { AgentName = "ofsted-agent", Output = output, TotalTokens = 30, AgentVersion = "4" });
         return agents;
     }
 

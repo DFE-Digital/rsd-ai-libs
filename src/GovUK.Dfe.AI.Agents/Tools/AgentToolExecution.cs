@@ -7,18 +7,15 @@ using System.Diagnostics;
 namespace GovUK.Dfe.AI.Agents.Tools;
 
 /// <summary>
-/// Builds the <c>resolveToolCalls</c> callback that <see cref="Core.Interfaces.IAgentRunnerService"/> uses to
-/// run an agent's function tool calls in this app. <c>IAgentService</c> does this for you from
-/// <see cref="AgentToolBinding"/>s; call it yourself when using <c>IAgentRunnerService</c> directly.
+/// Executes tool calls on the first provider that owns them, and records telemetry for each call. Only providers implementing <see cref="IAgentToolExecutor"/> run calls.
 /// </summary>
-public static class AgentToolExecution
+internal static class AgentToolExecution
 {
-    /// <summary>Creates a callback that runs each call on the first of <paramref name="providers"/> that owns it.</summary>
+    /// <summary>
+    /// Creates a <see cref="ToolCallResolver"/> that executes tool calls on the first provider that owns them, and records telemetry for each call. Only providers implementing <see cref="IAgentToolExecutor"/> run calls.
+    /// </summary>
     /// <param name="providers">The agent's tool providers. Only those implementing <see cref="IAgentToolExecutor"/> run calls.</param>
-    /// <param name="allowedTools">
-    /// The tool names this agent may call. A call to any other tool is refused, even if a provider could
-    /// run it. <see langword="null"/> allows every tool the providers run.
-    /// </param>
+    /// <param name="allowedTools">The tool names this agent may call. A call to any other tool is refused, even if a provider could run it. <see langword="null"/> allows every tool the providers run.</param>
     /// <returns>The callback, or <see langword="null"/> when none of the providers runs tools in this app.</returns>
     public static ToolCallResolver? CreateResolver(
         IEnumerable<IAgentToolProvider> providers, IReadOnlyCollection<string>? allowedTools = null)

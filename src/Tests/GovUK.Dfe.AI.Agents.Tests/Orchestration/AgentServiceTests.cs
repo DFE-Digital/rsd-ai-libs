@@ -13,6 +13,7 @@ using NSubstitute.ExceptionExtensions;
 using NSubstitute;
 using OpenAI.Responses;
 using Xunit;
+using GovUK.Dfe.AI.Agents.Extensibility.Interfaces;
 
 namespace GovUK.Dfe.AI.Agents.Tests.Orchestration;
 
@@ -48,6 +49,47 @@ public sealed class AgentServiceTests
 
     // ===================== Single agent =====================
 
+    // ===================== Run observers =====================
+
+    private void Answers(string output)
+        => _agentRunner.RunAsync(Arg.Any<AgentReference>(), Arg.Any<string>(), conversationId: Arg.Any<string?>(), additionalContext: Arg.Any<string?>(),
+            resolveToolCalls: AnyResolver(), cancellationToken: Arg.Any<CancellationToken>())
+            .Returns(new AgentResult { AgentName = Managed.Name, Output = output, TotalTokens = 10, AgentVersion = "4", Model = "gpt-5.1" });
+
+    [Fact]
+    public async Task EachObserver_IsToldAboutASuccessfulRun_WithItsPromptEvidenceAndAnswer_EvenIfAnotherObserverFails()
+    {
+        Answers("Rated Good.");
+        var failing = Substitute.For<IAgentRunObserver>();
+        failing.When(observer => observer.OnRunCompleted(Arg.Any<CompletedAgentRun>())).Throw(new InvalidOperationException("observer bug"));
+        CompletedAgentRun? seen = null;
+        var recording = Substitute.For<IAgentRunObserver>();
+        recording.OnRunCompleted(Arg.Do<CompletedAgentRun>(run => seen = run));
+        _ = CreateSut();
+        var sut = new AgentService(_agentRunner, _agentRuntime, new AgentSpecBuilder(_promptProvider, customProviders: [_managedAgentProvider]),
+            observers: [failing, recording]);
+
+        var result = await sut.RunAsync(Managed, "Summarise.", "Inspection: Good.", cancellationToken);
+
+        Assert.Equal("Rated Good.", result.Output);
+        Assert.Equal(new CompletedAgentRun { AgentName = Managed.Name, AgentVersion = "4", Model = "gpt-5.1", Prompt = "Summarise.", Evidence = "Inspection: Good.", Output = "Rated Good." }, seen);
+    }
+
+    [Fact]
+    public async Task AFailedRun_IsNotObserved()
+    {
+        _agentRunner.RunAsync(Arg.Any<AgentReference>(), Arg.Any<string>(), conversationId: Arg.Any<string?>(), additionalContext: Arg.Any<string?>(),
+            resolveToolCalls: AnyResolver(), cancellationToken: Arg.Any<CancellationToken>()).ThrowsAsync(new InvalidOperationException("boom"));
+        var observer = Substitute.For<IAgentRunObserver>();
+        _ = CreateSut();
+        var sut = new AgentService(_agentRunner, _agentRuntime, new AgentSpecBuilder(_promptProvider, customProviders: [_managedAgentProvider]),
+            observers: [observer]);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => sut.RunAsync(Managed, "Summarise.", cancellationToken: cancellationToken));
+
+        observer.DidNotReceiveWithAnyArgs().OnRunCompleted(default!);
+    }
+
     [Fact]
     public async Task RunAsync_Throws_RatherThanReturningAFallback()
     {
@@ -69,9 +111,9 @@ public sealed class AgentServiceTests
         managedTwoProvider.CreatesAgent.Returns(false);
         managedTwoProvider.GetAgentAsync(Arg.Any<CancellationToken>()).Returns(new AgentReference($"{ManagedTwo.Name}-id", ManagedTwo.Name));
         _agentRunner.RunAsync(Arg.Is<AgentReference>(a => a.Name == Managed.Name), "prompt-for-managed-agent", conversationId: Arg.Any<string?>(), additionalContext: Arg.Is<string?>("initial"),
-            resolveToolCalls: AnyResolver(), cancellationToken: Arg.Any<CancellationToken>()).Returns(new AgentResult(Managed.Name, "first output", 10));
+            resolveToolCalls: AnyResolver(), cancellationToken: Arg.Any<CancellationToken>()).Returns(new AgentResult { AgentName = Managed.Name, Output = "first output", TotalTokens = 10 });
         _agentRunner.RunAsync(Arg.Is<AgentReference>(a => a.Name == ManagedTwo.Name), "prompt-for-managed-agent-two", conversationId: Arg.Any<string?>(), additionalContext: Arg.Is<string?>("first output"),
-            resolveToolCalls: AnyResolver(), cancellationToken: Arg.Any<CancellationToken>()).Returns(new AgentResult(ManagedTwo.Name, "second output", 10));
+            resolveToolCalls: AnyResolver(), cancellationToken: Arg.Any<CancellationToken>()).Returns(new AgentResult { AgentName = ManagedTwo.Name, Output = "second output", TotalTokens = 10 });
 
         var context = new AgentContext();
         var results = await CreateSut(managedTwoProvider).RunSequentialAsync([Managed, ManagedTwo], ResolvePrompt, "initial",
@@ -91,7 +133,7 @@ public sealed class AgentServiceTests
         toolProvider.GetToolsAsync(Arg.Any<CancellationToken>()).Returns([tool]);
         AgentSpec? capturedSpec = null;
         _agentRuntime.RunEphemeralAsync(Arg.Do<AgentSpec>(spec => capturedSpec = spec), Arg.Any<string>(), AnyResolver(),
-            Arg.Any<string?>(), Arg.Any<Func<AgentResult, string?>?>(), Arg.Any<CancellationToken>()).Returns(new AgentResult(Ephemeral.Name, "ephemeral output", 5));
+            Arg.Any<string?>(), Arg.Any<Func<AgentResult, string?>?>(), Arg.Any<CancellationToken>()).Returns(new AgentResult { AgentName = Ephemeral.Name, Output = "ephemeral output", TotalTokens = 5 });
 
         var sut = new AgentService(_agentRunner, _agentRuntime, new AgentSpecBuilder(_promptProvider, [new AgentToolBinding(Ephemeral.Name, toolProvider)]));
         await sut.RunParallelAsync([Ephemeral], ResolvePrompt, new AgentContext(), cancellationToken: cancellationToken);
@@ -122,7 +164,7 @@ public sealed class AgentServiceTests
                 return new AgentReference("id", "custom-agent", "1");
             });
         _agentRunner.RunAsync(Arg.Any<AgentReference>(), Arg.Any<string>(), conversationId: Arg.Any<string?>(), additionalContext: Arg.Any<string?>(),
-            resolveToolCalls: AnyResolver(), cancellationToken: Arg.Any<CancellationToken>()).Returns(new AgentResult("custom-agent", "{}", 1));
+            resolveToolCalls: AnyResolver(), cancellationToken: Arg.Any<CancellationToken>()).Returns(new AgentResult { AgentName = "custom-agent", Output = "{}", TotalTokens = 1 });
 
         var sut = new AgentService(_agentRunner, _agentRuntime, new AgentSpecBuilder(_promptProvider, customProviders: [custom]));
         await sut.RunParallelAsync([definition], ResolvePrompt, new AgentContext(), cancellationToken: cancellationToken);

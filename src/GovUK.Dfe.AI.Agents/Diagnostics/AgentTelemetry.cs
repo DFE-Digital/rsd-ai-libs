@@ -38,7 +38,6 @@ public static class AgentTelemetry
     internal const string ToolNameTag = "gen_ai.tool.name";
     internal const string ToolCallIdTag = "gen_ai.tool.call.id";
     internal const string ToolTypeTag = "gen_ai.tool.type";
-    internal const string EvaluationNameTag = "gen_ai.evaluation.name";
     internal const string ErrorTypeTag = "error.type";
 
     internal const string InvokeAgentOperation = "invoke_agent";
@@ -111,9 +110,6 @@ public static class AgentTelemetry
         "dfe.ai_agents.run_slot.wait.duration", "s", "Time agent runs waited for a free run slot.");
 
     /// <summary>Judge scores of sampled answers, tagged with the agent, its version and <c>gen_ai.evaluation.name</c>.</summary>
-    internal static readonly Histogram<double> EvaluationScore = Meter.CreateHistogram<double>(
-        "dfe.ai_agents.evaluation.score", "{score}", "Judge scores of sampled agent answers, by evaluation.");
-
     internal static readonly Counter<long> GuardrailBlocks = Meter.CreateCounter<long>(
         "dfe.ai_agents.guardrail.blocks", "{block}", "Prompts and answers a Foundry guardrail blocked.");
 

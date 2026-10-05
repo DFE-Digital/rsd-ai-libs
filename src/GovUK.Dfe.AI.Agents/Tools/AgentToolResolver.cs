@@ -6,7 +6,7 @@ using OpenAI.Responses;
 namespace GovUK.Dfe.AI.Agents.Tools;
 
 /// <summary>Resolves an agent's tools from its bound providers.</summary>
-public static class AgentToolResolver
+internal static class AgentToolResolver
 {
     /// <summary>Groups bindings by agent name, for repeated lookups.</summary>
     public static IReadOnlyDictionary<string, List<IAgentToolProvider>> GroupByAgentName(IEnumerable<AgentToolBinding>? bindings)

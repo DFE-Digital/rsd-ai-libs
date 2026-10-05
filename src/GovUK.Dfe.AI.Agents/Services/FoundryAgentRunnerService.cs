@@ -1,4 +1,5 @@
 using System.ClientModel;
+using System.Text.Json;
 using GovUK.Dfe.AI.Agents.Clients.Interfaces;
 using GovUK.Dfe.AI.Agents.Concurrency.Interfaces;
 using GovUK.Dfe.AI.Agents.Constants;
@@ -19,7 +20,7 @@ namespace GovUK.Dfe.AI.Agents.Services;
 /// Runs one Foundry agent: sends the prompt (with evidence fenced), runs the tool calls the model asks for, retries one
 /// invalid answer, and enforces the run's timeout, token budget and run slot. Records tokens and deletes the conversation.
 /// </summary>
-public sealed class FoundryAgentRunnerService(IAgentFactory agentFactory, IFoundryConversationClient conversationClient,
+internal sealed class FoundryAgentRunnerService(IAgentFactory agentFactory, IFoundryConversationClient conversationClient,
     ILogger<FoundryAgentRunnerService>? logger = null, AgentRunOptions? runOptions = null, IAgentRunLimiter? runLimiter = null) : IAgentRunnerService
 {
     /// <summary>The most tool-call rounds in one run.</summary>
@@ -138,8 +139,11 @@ public sealed class FoundryAgentRunnerService(IAgentFactory agentFactory, IFound
     }
 
     private static AgentResult ToResult(AgentReference agent, ResponseResult response, UsageTally usage)
-        => new(agent.Name, response.GetOutputText(), usage.Total.TotalTokens)
+        => new()
         {
+            AgentName = agent.Name,
+            Output = response.GetOutputText(),
+            TotalTokens = usage.Total.TotalTokens,
             InputTokens = usage.Total.InputTokens,
             OutputTokens = usage.Total.OutputTokens,
             AgentVersion = agent.Version,
@@ -210,10 +214,38 @@ public sealed class FoundryAgentRunnerService(IAgentFactory agentFactory, IFound
         return response;
     }
 
-    /// <summary>Foundry rejects a prompt its guardrail blocks with a 400 whose error code is content_filter.</summary>
-    private static bool IsGuardrailBlock(ClientResultException ex)
-        => ex.Status == 400 && (ex.Message.Contains("content_filter", StringComparison.Ordinal)
-            || ex.GetRawResponse()?.Content.ToString().Contains("content_filter", StringComparison.Ordinal) == true);
+    /// <summary>
+    /// Foundry rejects a prompt its guardrail blocks with a 400 whose JSON error has code <c>content_filter</c>, or an inner
+    /// error code of <c>ResponsibleAIPolicyViolation</c>. Read from the codes, not the message, whose wording can change.
+    /// </summary>
+    internal static bool IsGuardrailBlock(ClientResultException ex)
+    {
+        if (ex.Status != 400 || ex.GetRawResponse()?.Content is not { } content)
+        {
+            return false;
+        }
+
+        try
+        {
+            using var body = JsonDocument.Parse(content.ToMemory());
+            if (!body.RootElement.TryGetProperty("error", out var error) || error.ValueKind != JsonValueKind.Object)
+            {
+                return false;
+            }
+
+            return CodeOf(error) == "content_filter"
+                || (error.TryGetProperty("innererror", out var inner) && CodeOf(inner) == "ResponsibleAIPolicyViolation");
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+
+        static string? CodeOf(JsonElement element)
+            => element.ValueKind == JsonValueKind.Object && element.TryGetProperty("code", out var code) && code.ValueKind == JsonValueKind.String
+                ? code.GetString()
+                : null;
+    }
 
     private InvalidOperationException OutputTokenLimitReached(string agentName)
         => new(string.Format(ErrorMessages.OutputTokenLimitReached, agentName, _runOptions.MaxOutputTokensPerRun));

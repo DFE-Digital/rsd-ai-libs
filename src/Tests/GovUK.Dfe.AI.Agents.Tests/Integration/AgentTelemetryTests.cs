@@ -267,7 +267,7 @@ public sealed class AgentTelemetryTests : IDisposable
         var ofsted = await factory.GetOrCreateAsync(new AgentSpec { Name = "ofsted-agent", Instructions = "x" }, cancellationToken: TestContext.Current.CancellationToken);
         var trust = await factory.GetOrCreateAsync(new AgentSpec { Name = "trust-agent", Instructions = "y" }, cancellationToken: TestContext.Current.CancellationToken);
 
-        var result = await provider.GetRequiredService<IAgentRuntimeService>().Orchestrator
+        var result = await provider.GetRequiredService<GovUK.Dfe.AI.Agents.Orchestration.Interfaces.IAgentOrchestrator>()
             .RunParallelAsync([ofsted, trust], "input", new AgentContext(), cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.False(result.Results.Single(r => r.AgentName == "trust-agent").Succeeded);

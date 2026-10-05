@@ -4,7 +4,7 @@ using GovUK.Dfe.AI.Agents.Prompts.Interfaces;
 namespace GovUK.Dfe.AI.Agents.Prompts;
 
 /// <summary>Prompt templates read from the files configured under <c>PromptFiles</c>, by key.</summary>
-public sealed class FilePromptTemplateStore(IReadOnlyDictionary<string, string> paths, Func<string, string> readFile) : IPromptTemplateStore
+internal sealed class FilePromptTemplateStore(IReadOnlyDictionary<string, string> paths, Func<string, string> readFile) : IPromptTemplateStore
 {
     public string GetTemplate(string key)
         => paths.TryGetValue(key, out var path)

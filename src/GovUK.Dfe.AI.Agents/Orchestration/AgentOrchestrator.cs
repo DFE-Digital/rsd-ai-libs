@@ -11,7 +11,7 @@ using GovUK.Dfe.AI.Agents.Options;
 namespace GovUK.Dfe.AI.Agents.Orchestration;
 
 /// <summary>Runs already-resolved agents in parallel or in sequence. Most apps use <c>IAgentService</c>.</summary>
-public sealed class AgentOrchestrator(IAgentRunnerService agentRunner, ILogger<AgentOrchestrator>? logger = null,
+internal sealed class AgentOrchestrator(IAgentRunnerService agentRunner, ILogger<AgentOrchestrator>? logger = null,
     AgentRunOptions? runOptions = null) : IAgentOrchestrator
 {
     private readonly ILogger<AgentOrchestrator> _logger = logger ?? NullLogger<AgentOrchestrator>.Instance;

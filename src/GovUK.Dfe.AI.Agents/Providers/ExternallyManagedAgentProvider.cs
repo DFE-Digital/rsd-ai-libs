@@ -6,7 +6,7 @@ using GovUK.Dfe.AI.Agents.Providers.Interfaces;
 namespace GovUK.Dfe.AI.Agents.Providers;
 
 /// <summary>An agent another pipeline provisions: resolved at its pinned (or latest) version, never created.</summary>
-public sealed class ExternallyManagedAgentProvider(string agentName, IAgentFactory agentFactory, IAgentRuntimeService agentRuntime)
+internal sealed class ExternallyManagedAgentProvider(string agentName, IAgentFactory agentFactory, IAgentRuntimeService agentRuntime)
     : IManagedAgentProvider
 {
     public string AgentName => agentName;

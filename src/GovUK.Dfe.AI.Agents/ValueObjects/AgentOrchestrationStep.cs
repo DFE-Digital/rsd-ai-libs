@@ -1,7 +1,7 @@
 namespace GovUK.Dfe.AI.Agents.ValueObjects;
 
 /// <summary>One step of an orchestration: which agent to run and what to send it.</summary>
-public sealed record AgentOrchestrationStep(string AgentName, Func<CancellationToken, Task<AgentReference>> ResolveAgent,
+internal sealed record AgentOrchestrationStep(string AgentName, Func<CancellationToken, Task<AgentReference>> ResolveAgent,
     Func<CancellationToken, Task<string>> ResolvePrompt)
 {
     /// <summary>Untrusted material for the agent (search results, documents), sent fenced as data. Null for none.</summary>

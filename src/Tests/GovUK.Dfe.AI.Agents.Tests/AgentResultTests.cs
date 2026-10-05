@@ -24,7 +24,7 @@ public sealed class AgentResultTests
     [Fact]
     public void ReadOutputAs_ReadsAStructuredAnswer()
     {
-        var result = new AgentResult("ofsted-agent", """{"rating":"Good","inspectionDate":"2024-03-12","strengths":["Leadership"]}""", 10);
+        var result = new AgentResult { AgentName = "ofsted-agent", Output = """{"rating":"Good","inspectionDate":"2024-03-12","strengths":["Leadership"]}""", TotalTokens = 10 };
 
         var findings = result.ReadOutputAs<OfstedFindings>();
 
@@ -35,7 +35,7 @@ public sealed class AgentResultTests
     [Fact]
     public void ReadOutputAs_ExplainsTheProblem_WhenTheAgentFailed()
     {
-        var fallback = new AgentResult("ofsted-agent", "This section could not be generated due to an error retrieving or analysing evidence.", 0);
+        var fallback = new AgentResult { AgentName = "ofsted-agent", Output = "This section could not be generated due to an error retrieving or analysing evidence.", TotalTokens = 0 };
 
         var ex = Assert.Throws<InvalidOperationException>(() => fallback.ReadOutputAs<OfstedFindings>());
 

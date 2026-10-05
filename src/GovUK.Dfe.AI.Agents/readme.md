@@ -12,7 +12,7 @@ Install the core package, plus any add-ons you need. Each add-on depends on a co
 | `GovUK.Dfe.AI.Agents` | Agents, versions, runs, answer checks, limits, telemetry | `AddAgents(...)` |
 | [`GovUK.Dfe.AI.Agents.Mcp`](https://github.com/DFE-Digital/rsd-ai-libs/blob/main/src/GovUK.Dfe.AI.Agents.Mcp/readme.md) | Tools from your own MCP servers | `.AddMcpServers()` |
 | [`GovUK.Dfe.AI.Agents.AISearch`](https://github.com/DFE-Digital/rsd-ai-libs/blob/main/src/GovUK.Dfe.AI.Agents.AISearch/readme.md) | Evidence from Azure AI Search | `.AddAISearch()` |
-| [`GovUK.Dfe.AI.Agents.Evaluation`](https://github.com/DFE-Digital/rsd-ai-libs/blob/main/src/GovUK.Dfe.AI.Agents.Evaluation/readme.md) | A judge model that scores answers | `.AddQualityEvaluation(judgeModel)` |
+| [`GovUK.Dfe.AI.Agents.Evaluation`](https://github.com/DFE-Digital/rsd-ai-libs/blob/main/src/GovUK.Dfe.AI.Agents.Evaluation/readme.md) | A judge model that scores answers | `.AddQualityEvaluation()` |
 | [`GovUK.Dfe.AI.Agents.Guardrails`](https://github.com/DFE-Digital/rsd-ai-libs/blob/main/src/GovUK.Dfe.AI.Agents.Guardrails/readme.md) | Foundry guardrails on your model deployments | `.AddGuardrails()` |
 
 ## Quick start
@@ -21,7 +21,7 @@ Install the core package, plus any add-ons you need. Each add-on depends on a co
 
 ```sh
 dotnet add package GovUK.Dfe.AI.Agents
-dotnet add package Azure.Monitor.OpenTelemetry.AspNetCore   # token usage must be recorded
+dotnet add package Azure.Monitor.OpenTelemetry.AspNetCore   # sends token usage to Application Insights
 ```
 
 ### 2. Configure
@@ -113,13 +113,15 @@ Put your instructions in `prompt`. Put untrusted material (documents, search res
 | `using GovUK.Dfe.AI.Agents…` | For |
 | --- | --- |
 | `.Builders` | `AgentsBuilder` |
-| `.ValueObjects` | `AgentDefinition`, `AgentOutputSchema`, `AgentResult`, `AgentSpec`, `AgentRunSample` |
+| `.ValueObjects` | `AgentDefinition`, `AgentOutputSchema`, `AgentResult`, `AgentSpec`, `CompletedAgentRun` |
 | `.Services.Interfaces` | `IAgentService`, `IAgentRunnerService`, `IAgentRuntimeService` |
 | `.Extensions` | `ReadOutputAs<T>()`, `ToTokenUsageSummary()` |
 | `.Context` / `.Context.Interfaces` | `AgentContext` / `IContextRetriever` |
 | `.Filters` | `ODataFilter` |
 | `.Quality` / `.Quality.Interfaces` | `AgentTestCase`, `AgentEvaluationReport` / `IAgentTestRunner`, `IAgentRunEvaluator` |
+| `.Extensibility.Interfaces` | `IAgentsPackage`, `IAgentRunObserver` (told about each successful run) |
 | `.Enums` | `AzureCredentialTarget`, `AgentTestTarget` |
+| `.Providers` / `.Tools.WebSearch` / `.Prompts.Interfaces` | `ManagedAgentProviderBase` / `WebSearchToolProvider` / `IPromptTemplateBuilder` |
 | `.Diagnostics` | `AgentTelemetry` |
 | `.Exceptions` | `AgentGuardrailException` |
 
@@ -161,8 +163,8 @@ Other extension points:
 
 - **Agents built in code:** subclass `ManagedAgentProviderBase` and add it with `agents.AddAgentProvider<T>()`.
 - **Non-MCP tools:** `agents.AddTools("news-agent", new WebSearchToolProvider())`.
-- **User prompt templates:** add them under `PromptFiles:UserPrompts` with `{{Name}}` placeholders, then fill them with
-  `IPromptTemplateBuilder`.
+- **User prompt templates:** add them under `PromptFiles:UserPrompts` with `{{Name}}` placeholders, then fill one with
+  `IPromptTemplateBuilder.Build("Key", values)`.
 
 ## Answer checks
 
@@ -183,11 +185,12 @@ public static readonly AgentDefinition Ofsted = new("ofsted-agent", "Ofsted")
 
 ## Release gate
 
-Run fixed test cases in CI and fail the build if an agent got worse:
+Run fixed test cases in CI and fail the build if an agent got worse. Resolve `IAgentTestRunner` from the app's services:
 
 ```csharp
+var tests = services.GetRequiredService<IAgentTestRunner>();
 var cases = await AgentTestCase.LoadAsync("tests/ofsted-agent");   // JSON files: prompt, evidence, mustMention, mustNotMention
-var report = await tests.RunAsync(BriefingAgents.Ofsted, cases);    // IAgentTestRunner
+var report = await tests.RunAsync(BriefingAgents.Ofsted, cases);
 var baseline = JsonSerializer.Deserialize<AgentEvaluationReport>(await File.ReadAllTextAsync("baseline.json"))!;
 
 if (!report.Passed
@@ -200,8 +203,8 @@ if (!report.Passed
 
 - Test cases run against a temporary copy of the agent, so a failed gate publishes nothing. To test the deployed
   version instead, pass `AgentTestTarget.Deployed`.
-- Scores need an evaluator: add the Evaluation package, or your own with `agents.AddQualityEvaluation(sp => ...)`.
-  Without an evaluator, only `mustMention` and `mustNotMention` are checked.
+- Scores need an evaluator: add the Evaluation package, or register your own `IAgentRunEvaluator`. Without one, only
+  `mustMention` and `mustNotMention` are checked.
 - Name the metrics you require in `BelowMinimum`, so the gate fails if the judge returns no scores.
 - After a release passes, save its report as the new `baseline.json`.
 
@@ -274,13 +277,13 @@ Names follow the [OpenTelemetry generative AI conventions](https://github.com/op
 | `gen_ai.invoke_workflow.duration` | Seconds per parallel or sequential run |
 | `dfe.ai_agents.workflow.input_tokens` / `.output_tokens` | Total tokens per parallel or sequential run, e.g. one briefing |
 | `dfe.ai_agents.run_slot.wait.duration` | Seconds spent waiting for a slot. If this keeps rising, the limits are too low |
-| `dfe.ai_agents.evaluation.score` | Judge scores of sampled answers, by `gen_ai.evaluation.name` (Evaluation package) |
 | `dfe.ai_agents.guardrail.blocks` | Prompts and answers a Foundry guardrail blocked |
 
 Metrics are tagged with `gen_ai.agent.name`, the model (`gen_ai.response.model`) and the application
 (`dfe.ai_agents.application`). The spans are `invoke_workflow` (a parallel or sequential run), `invoke_agent {agent}` and
 `execute_tool {tool}`. Telemetry never contains prompts, evidence, tool arguments, tool output or exception messages:
-a failure is recorded only as its `error.type`.
+a failure is recorded only as its `error.type`. Add-ons record their own metrics under the same meter (see their
+readmes).
 
 Tokens per app and agent per day:
 
@@ -295,24 +298,23 @@ parallel and sequential runs, the agent gets a fallback result instead.
 
 ## Credentials
 
-`Authentication` is the default identity. `Foundry`, `GlobalConcurrency` and `ExternallyManagedAgents` can each have
-their own `Authentication` block, and so can each add-on's section (`Search`, each MCP server, `Guardrails`). Load each secret from Key Vault, e.g. the
-secret `AiAgents--Foundry--Authentication--ClientSecret` (or the environment variable
-`AiAgents__Foundry__Authentication__ClientSecret`).
+`Authentication` is the default identity. Any service can have its own `Authentication` block instead: `Foundry`,
+`GlobalConcurrency`, `ExternallyManagedAgents`, and each add-on's section. Load secrets from Key Vault, e.g. the secret
+`AiAgents--Foundry--Authentication--ClientSecret` (environment variable `AiAgents__Foundry__Authentication__ClientSecret`).
 
 To use managed identities, set credentials in code:
 
 ```csharp
-agents.UseCredential(new ManagedIdentityCredential())                   // default for every service
-      .UseCredentialFor(AzureCredentialTarget.Foundry, foundryCredential) // one of core's services
-      .UseExternallyManagedAgentsCredential(centralCredential)          // the central agents' project
-      .UseAISearchCredential(searchCredential)                          // add-ons: AI Search,
-      .UseMcpCredential("school-performance", partnerCredential)        // one MCP server,
-      .UseGuardrailsCredential(armCredential);                          // and Resource Manager
+agents.UseCredential(new ManagedIdentityCredential())                     // default for every service
+      .UseCredentialFor(AzureCredentialTarget.Foundry, foundryCredential)   // one core service
+      .UseExternallyManagedAgentsCredential(centralCredential);           // the central agents' project
 ```
 
-Each service uses, in order: its code credential, its own `Authentication` block, then the default. Give each identity
-only the role its service needs.
+Each add-on has its own method: `UseMcpCredential(server, ...)`, `UseAISearchCredential(...)` and
+`UseGuardrailsCredential(...)`.
+
+A service uses, in order: its code credential, its own `Authentication` block, then the default. Give each identity only
+the role its service needs.
 
 ## Options
 
@@ -355,7 +357,13 @@ All options sit under `AiAgents`. You can also change them in code with `agents.
 
 ## Testing your app
 
-- **Unit tests:** substitute `IAgentService`.
+- **Unit tests:** substitute `IAgentService` and return a result:
+
+  ```csharp
+  agents.RunAsync(BriefingAgents.Ofsted, Arg.Any<string>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
+      .Returns(new AgentResult { AgentName = "ofsted-agent", Output = """{"rating":"Good","strengths":[]}""" });
+  ```
+
 - **Tests that start the host:** set `"RequireTokenUsageTelemetry": false`.
 - **Lower-level services:** `IAgentRunnerService` runs an `AgentSpec` or `AgentReference` directly. `IAgentRuntimeService` handles
   temporary agents and orphan clean-up. `IAgentFactory` maintains versions, e.g. pruning them by hand.

@@ -73,6 +73,22 @@ public sealed class FoundryAgentRunnerTests
         Assert.Contains(expected, ex.InnerException!.Message, StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData(400, "{\"error\":{\"code\":\"content_filter\",\"message\":\"The response was filtered.\"}}", true)]
+    [InlineData(400, "{\"error\":{\"code\":\"invalid_prompt\",\"innererror\":{\"code\":\"ResponsibleAIPolicyViolation\"}}}", true)]
+    [InlineData(400, "{\"error\":{\"code\":\"invalid_request\",\"message\":\"Mentions content_filter in passing.\"}}", false)]   // wording isn't a code
+    [InlineData(400, "not json", false)]
+    [InlineData(400, "{\"error\":\"content_filter\"}", false)]
+    [InlineData(429, "{\"error\":{\"code\":\"content_filter\"}}", false)]   // only a rejected request is a block
+    public void AGuardrailBlock_IsRecognisedByItsErrorCode_NotItsWording(int status, string body, bool isBlock)
+    {
+        var response = Substitute.For<System.ClientModel.Primitives.PipelineResponse>();
+        response.Status.Returns(status);
+        response.Content.Returns(BinaryData.FromString(body));
+
+        Assert.Equal(isBlock, FoundryAgentRunnerService.IsGuardrailBlock(new System.ClientModel.ClientResultException("content_filter", response)));
+    }
+
     [Fact]
     public async Task RunAsync_WhenAGuardrailBlocksThePrompt_FailsWithAgentGuardrailException_AndCountsTheBlock()
     {

@@ -7,7 +7,7 @@ namespace GovUK.Dfe.AI.Agents.Orchestration.Interfaces;
 /// Advanced: runs agents you've already resolved to <see cref="AgentReference"/>s. Most apps use
 /// <c>IAgentService</c>, which resolves agents from definitions and wires up their tools for you.
 /// </summary>
-public interface IAgentOrchestrator
+internal interface IAgentOrchestrator
 {
     /// <summary>
     /// Runs agents one after another. The first gets <paramref name="initialInput"/> as its prompt; each

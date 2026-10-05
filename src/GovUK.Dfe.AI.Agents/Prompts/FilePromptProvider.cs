@@ -3,7 +3,7 @@ using GovUK.Dfe.AI.Agents.Prompts.Interfaces;
 namespace GovUK.Dfe.AI.Agents.Prompts;
 
 /// <summary>System and user prompts from files, with the shared response format appended where configured.</summary>
-public sealed class FilePromptProvider(IPromptTemplateStore systemPrompts, IPromptTemplateStore userPrompts,
+internal sealed class FilePromptProvider(IPromptTemplateStore systemPrompts, IPromptTemplateStore userPrompts,
     string? responseFormatKey = null, IReadOnlySet<string>? responseFormatExemptPromptTypes = null) : IPromptProvider
 {
     public string GetSystemPrompt(string promptType)

@@ -1,6 +1,8 @@
 using Azure.Core;
 using GovUK.Dfe.AI.Agents.Options;
 using GovUK.Dfe.AI.Agents.Extensibility.Interfaces;
+using GovUK.Dfe.AI.Agents.Tools;
+using GovUK.Dfe.AI.Agents.Tools.Interfaces;
 using GovUK.Dfe.AI.Agents.ValueObjects;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -37,10 +39,21 @@ public sealed class AgentsPackageContext
     /// <summary>The app's agents, as added with <c>AddAgents</c>.</summary>
     public IReadOnlyList<AgentDefinition> Definitions { get; }
 
+    /// <summary>The app's name, as tagged on telemetry: <c>AiAgents:ApplicationName</c>, or the entry assembly's name.</summary>
+    public string ApplicationName => Options.ToRunOptions().ApplicationName;
+
     /// <summary>The services given a credential in code with <c>UseCredentialFor</c>, by key.</summary>
     public IReadOnlyCollection<string> CodeCredentials => Options.CredentialOverrides.Keys;
 
     internal IReadOnlyList<string> Problems => _problems;
+
+    /// <summary>Gives <paramref name="agentName"/> the tools from a provider resolved from the app's services, on every run.</summary>
+    public void AddTools(string agentName, Func<IServiceProvider, IAgentToolProvider> provider)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(agentName);
+        ArgumentNullException.ThrowIfNull(provider);
+        Services.AddSingleton(sp => new AgentToolBinding(agentName, provider(sp)));
+    }
 
     /// <summary>
     /// Reports a missing or invalid setting, by its path under <c>AiAgents</c>, e.g. <c>"Search:Endpoint"</c>. Startup then

@@ -30,7 +30,7 @@ public sealed class AgentRuntimeTests
         _agentRunner.RunFromSpecAsync(Arg.Do<AgentSpec>(spec => capturedSpec = spec), "prompt", cancellationToken: Arg.Any<CancellationToken>())
             .Returns(Task.FromException<AgentResult>(new InvalidOperationException("boom")));
 
-        var sut = new AgentRuntimeService(_agentFactory, _agentRunner, new AgentOrchestrator(_agentRunner));
+        var sut = new AgentRuntimeService(_agentFactory, _agentRunner);
         var spec = new AgentSpec { Name = "my-agent", Instructions = "Do the thing." };
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => sut.RunEphemeralAsync(spec, "prompt", cancellationToken: cancellationToken));
@@ -47,7 +47,7 @@ public sealed class AgentRuntimeTests
         _agentRunner.RunFromSpecAsync(Arg.Any<AgentSpec>(), "prompt", cancellationToken: Arg.Any<CancellationToken>())
             .Returns(Task.FromException<AgentResult>(new OperationCanceledException(cancelled.Token)));
 
-        var sut = new AgentRuntimeService(_agentFactory, _agentRunner, new AgentOrchestrator(_agentRunner));
+        var sut = new AgentRuntimeService(_agentFactory, _agentRunner);
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
             sut.RunEphemeralAsync(new AgentSpec { Name = "my-agent", Instructions = "x" }, "prompt", cancellationToken: cancelled.Token));
@@ -67,7 +67,7 @@ public sealed class AgentRuntimeTests
     [Fact]
     public async Task DeleteOrphanedEphemeralAgentsAsync_RefusesAMinimumAgeShorterThanARunCanTake()
     {
-        var sut = new AgentRuntimeService(_agentFactory, _agentRunner, new AgentOrchestrator(_agentRunner),
+        var sut = new AgentRuntimeService(_agentFactory, _agentRunner,
             runOptions: new AgentRunOptions { RunTimeout = TimeSpan.FromMinutes(30) });
 
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
@@ -106,7 +106,7 @@ public sealed class AgentRuntimeTests
     {
         var pinning = new AgentVersionPinningOptions { VersionPins = new Dictionary<string, string> { ["my-agent"] = "3" } };
         _agentFactory.ResolveAsync("my-agent", "3", Arg.Any<CancellationToken>()).Returns(new AgentReference("v3-id", "my-agent", "3"));
-        var runtime = new AgentRuntimeService(_agentFactory, _agentRunner, new AgentOrchestrator(_agentRunner), pinning);
+        var runtime = new AgentRuntimeService(_agentFactory, _agentRunner, pinning);
 
         var result = await new TestManagedAgentProvider(_agentFactory, runtime).GetAgentAsync(cancellationToken);
 

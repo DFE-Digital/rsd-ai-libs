@@ -5,7 +5,7 @@ using Microsoft.Extensions.Logging;
 namespace GovUK.Dfe.AI.Agents.Prompts;
 
 /// <summary>Reads a prompt file relative to the app's base directory; a missing or empty file throws.</summary>
-public sealed class FileSystemPromptFileReader(ILogger<FileSystemPromptFileReader> logger) : IPromptFileReader
+internal sealed class FileSystemPromptFileReader(ILogger<FileSystemPromptFileReader> logger) : IPromptFileReader
 {
     public string Read(string path)
     {

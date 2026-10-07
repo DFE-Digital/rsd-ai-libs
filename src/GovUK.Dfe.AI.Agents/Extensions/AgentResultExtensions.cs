@@ -49,12 +49,17 @@ public static class AgentResultExtensions
 
         var byAgent = new Dictionary<string, TokenUsage>(StringComparer.Ordinal);
         var total = TokenUsage.None;
+        decimal? cost = null;
         foreach (var result in results)
         {
             byAgent[result.AgentName] = byAgent.GetValueOrDefault(result.AgentName, TokenUsage.None) + result.Usage;
             total += result.Usage;
+            if (result.Cost is { } runCost)
+            {
+                cost = (cost ?? 0) + runCost;
+            }
         }
 
-        return new TokenUsageSummary(total, byAgent);
+        return new TokenUsageSummary(total, byAgent) { Cost = cost };
     }
 }

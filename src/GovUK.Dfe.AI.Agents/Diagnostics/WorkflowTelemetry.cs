@@ -30,15 +30,20 @@ internal sealed class WorkflowTelemetry : IDisposable
     }
 
     /// <summary>Records what the whole run used, so the cost of one briefing is a single number as well as per agent.</summary>
-    public void Completed(TokenUsage usage, int failedAgents)
+    public void Completed(TokenUsage usage, int failedAgents, decimal? cost = null, string? currency = null)
     {
         _completed = true;
         _activity?.SetTag(AgentTelemetry.InputTokensTag, usage.InputTokens);
         _activity?.SetTag(AgentTelemetry.OutputTokensTag, usage.OutputTokens);
         _activity?.SetTag(AgentTelemetry.WorkflowFailedAgentCountTag, failedAgents);
 
-        AgentTelemetry.WorkflowInputTokens.Record(usage.InputTokens, _mode, _application);
-        AgentTelemetry.WorkflowOutputTokens.Record(usage.OutputTokens, _mode, _application);
+        AgentTelemetry.WorkflowTokens.Record(usage.InputTokens, _mode, _application, new(AgentTelemetry.TokenTypeTag, "input"));
+        AgentTelemetry.WorkflowTokens.Record(usage.OutputTokens, _mode, _application, new(AgentTelemetry.TokenTypeTag, "output"));
+        if (cost is { } value)
+        {
+            AgentTelemetry.WorkflowCost.Record((double)value, _mode, _application, new(AgentTelemetry.CurrencyTag, currency));
+            _activity?.SetTag(AgentTelemetry.CostDataKey, (double)value);
+        }
     }
 
     public void Dispose()

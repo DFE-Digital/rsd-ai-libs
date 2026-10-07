@@ -15,6 +15,8 @@ using GovUK.Dfe.AI.Agents.Options;
 using GovUK.Dfe.AI.Agents.Orchestration.Interfaces;
 using GovUK.Dfe.AI.Agents.Orchestration;
 using GovUK.Dfe.AI.Agents.Extensibility;
+using GovUK.Dfe.AI.Agents.Extensibility.Interfaces;
+using GovUK.Dfe.AI.Agents.Tools.Interfaces;
 using GovUK.Dfe.AI.Agents.Prompts.Interfaces;
 using GovUK.Dfe.AI.Agents.Prompts;
 using GovUK.Dfe.AI.Agents.Providers.Interfaces;
@@ -83,7 +85,7 @@ public static class AgentsServiceCollectionExtensions
             {
                 KeepLatestVersions = options.KeepLatestVersions,
                 AgentCacheDuration = options.AgentCacheDuration,
-            }, options.MaxRetries);
+            }, FoundryClientOptions(options, runOptions.ApplicationName));
         services.AddFilePrompts(section, options.ResponseFormatKey, options.ResponseFormatExemptPromptTypes);
 
         if (options.EnableDriftDetection)
@@ -156,7 +158,7 @@ public static class AgentsServiceCollectionExtensions
         services.AddSingleton(sp =>
         {
             var client = new AIProjectClient(new Uri(external.Endpoint!), credential,
-                new AIProjectClientOptions { RetryPolicy = new ClientRetryPolicy(options.MaxRetries) });
+                FoundryClientOptions(options, sp.GetRequiredService<AgentRunOptions>().ApplicationName));
             return new ExternalFoundryProjectService(credential, client.AgentAdministrationClient, new FoundryConversationClient(client.ProjectOpenAIClient),
                 new FoundryAgentFactoryOptions(options.Foundry.DefaultModel!) { AgentCacheDuration = options.AgentCacheDuration },
                 sp.GetRequiredService<AgentRunOptions>(), sp.GetRequiredService<IAgentRunLimiter>(), sp.GetRequiredService<ILoggerFactory>());
@@ -195,6 +197,7 @@ public static class AgentsServiceCollectionExtensions
         services.AddSingleton<IAgentRuntimeService, AgentRuntimeService>();
         services.AddSingleton(sp => new AgentSpecBuilder(sp.GetRequiredService<IPromptProvider>(),
             sp.GetServices<AgentToolBinding>(), sp.GetServices<IManagedAgentProvider>()));
+        services.AddSingleton(sp => new AgentRunHooks(sp.GetServices<IAgentRunObserver>(), sp.GetService<IToolCallApprover>()));
         services.AddSingleton<IAgentService, AgentService>();
         services.AddSingleton<IAgentTestRunner>(sp => new AgentTestRunner(sp.GetRequiredService<IAgentService>(),
             sp.GetService<IAgentRunEvaluator>()));
@@ -204,12 +207,18 @@ public static class AgentsServiceCollectionExtensions
 
     internal static IServiceCollection AddFoundryAgents(this IServiceCollection services, Func<IServiceProvider, Uri> endpoint,
         Func<IServiceProvider, TokenCredential> credential, Func<IServiceProvider, FoundryAgentFactoryOptions> optionsFactory,
-        int maxRetries = 3)
+        AIProjectClientOptions? clientOptions = null)
     {
-        services.AddSingleton(sp => new AIProjectClient(endpoint(sp), credential(sp),
-            new AIProjectClientOptions { RetryPolicy = new ClientRetryPolicy(maxRetries) }));
-
+        services.AddSingleton(sp => new AIProjectClient(endpoint(sp), credential(sp), clientOptions ?? new AIProjectClientOptions()));
         return services.AddFoundryAgents(optionsFactory);
+    }
+
+    /// <summary>Retries (honouring <c>Retry-After</c>) and the remaining-tokens metrics, for every Foundry client.</summary>
+    internal static AIProjectClientOptions FoundryClientOptions(AgentsOptions options, string applicationName)
+    {
+        var clientOptions = new AIProjectClientOptions { RetryPolicy = new ClientRetryPolicy(options.MaxRetries) };
+        clientOptions.AddPolicy(new GovUK.Dfe.AI.Agents.Diagnostics.TokenHeadroomPolicy(applicationName, options.LowRemainingTokensPercent), PipelinePosition.PerTry);
+        return clientOptions;
     }
 
     /// <summary>Prompt files from <paramref name="configuration"/>'s <c>PromptFiles</c> section.</summary>

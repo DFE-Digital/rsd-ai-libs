@@ -61,7 +61,7 @@ internal sealed class AgentRunTelemetry : IDisposable
     }
 
     /// <summary>Records tokens, duration and call counts, whatever the outcome: every response Foundry returned is billed.</summary>
-    public void Record(TokenUsage usage, int inferenceCalls, int toolCalls)
+    public void Record(TokenUsage usage, int inferenceCalls, int toolCalls, decimal? cost = null, string? currency = null)
     {
         KeyValuePair<string, object?> model = new(AgentTelemetry.ResponseModelTag, _model);
         KeyValuePair<string, object?> operation = new(AgentTelemetry.OperationNameTag, AgentTelemetry.InvokeAgentOperation);
@@ -81,6 +81,11 @@ internal sealed class AgentRunTelemetry : IDisposable
         AgentTelemetry.InvokeAgentDuration.Record(Stopwatch.GetElapsedTime(_started).TotalSeconds, duration);
         AgentTelemetry.InvokeAgentInferenceCalls.Record(inferenceCalls, _agent, _application);
         AgentTelemetry.InvokeAgentToolCalls.Record(toolCalls, _agent, _application);
+        if (cost is { } value)
+        {
+            AgentTelemetry.Cost.Add((double)value, _agent, model, _application, new(AgentTelemetry.CurrencyTag, currency));
+            _activity?.SetTag(AgentTelemetry.CostDataKey, (double)value);
+        }
 
         _activity?.SetTag(AgentTelemetry.InputTokensTag, usage.InputTokens);
         _activity?.SetTag(AgentTelemetry.OutputTokensTag, usage.OutputTokens);

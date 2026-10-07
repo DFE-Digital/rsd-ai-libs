@@ -1,3 +1,5 @@
+using GovUK.Dfe.AI.Agents.ValueObjects;
+
 namespace GovUK.Dfe.AI.Agents.Options;
 
 public sealed partial class AgentsOptions
@@ -102,5 +104,70 @@ public sealed partial class AgentsOptions
             => Agents = section.GetChildren()
                 .Where(static child => !Reserved.Contains(child.Key, StringComparer.OrdinalIgnoreCase) && child.Value is not null)
                 .ToDictionary(static child => child.Key, static child => child.Value!);
+    }
+
+    /// <summary>
+    /// The <c>Pricing</c> section: what each model costs, so runs report their cost. Keyed by model name, as shown in a
+    /// result's <c>Model</c>; a key matches any model that starts with it, so "gpt-5.1" covers "gpt-5.1-2025-11-13".
+    /// </summary>
+    public sealed class PricingSettings
+    {
+        /// <summary>The currency the prices are in, e.g. "GBP". It tags the cost metrics.</summary>
+        public string Currency { get; set; } = "USD";
+
+        /// <summary>Prices per model. A model with no entry has no cost reported.</summary>
+        public Dictionary<string, ModelPrice> Models { get; set; } = [];
+
+        /// <summary>
+        /// <paramref name="usage"/>'s cost on <paramref name="model"/>, from the longest matching key; null when the model
+        /// isn't priced. Cached input tokens are charged at the cached price, or the input price when that isn't set.
+        /// </summary>
+        internal decimal? CostOf(string? model, TokenUsage usage)
+        {
+            if (string.IsNullOrWhiteSpace(model))
+            {
+                return null;
+            }
+
+            var price = Models.Where(entry => model.StartsWith(entry.Key, StringComparison.OrdinalIgnoreCase))
+                .OrderByDescending(static entry => entry.Key.Length).Select(static entry => entry.Value).FirstOrDefault();
+            if (price is null)
+            {
+                return null;
+            }
+
+            var cached = Math.Min(usage.CachedInputTokens, usage.InputTokens);
+            return ((usage.InputTokens - cached) * price.CostPer1kTokensInput
+                    + cached * (price.CostPer1kTokensCachedInput ?? price.CostPer1kTokensInput)
+                    + usage.OutputTokens * price.CostPer1kTokensOutput) / 1_000m;
+        }
+
+        internal IEnumerable<string> Problems()
+        {
+            if (Models.Count > 0 && string.IsNullOrWhiteSpace(Currency))
+            {
+                yield return "Pricing:Currency";
+            }
+
+            foreach (var model in Models.Where(static entry => entry.Value.IsNegative).Select(static entry => entry.Key))
+            {
+                yield return $"Pricing:Models:{model} (prices can't be negative)";
+            }
+        }
+    }
+
+    /// <summary>One model's prices, per 1,000 tokens.</summary>
+    public sealed class ModelPrice
+    {
+        /// <summary>The price of 1,000 input tokens.</summary>
+        public decimal CostPer1kTokensInput { get; set; }
+
+        /// <summary>The price of 1,000 input tokens served from Foundry's prompt cache. Unset: the input price.</summary>
+        public decimal? CostPer1kTokensCachedInput { get; set; }
+
+        /// <summary>The price of 1,000 output tokens, reasoning included.</summary>
+        public decimal CostPer1kTokensOutput { get; set; }
+
+        internal bool IsNegative => CostPer1kTokensInput < 0 || CostPer1kTokensCachedInput < 0 || CostPer1kTokensOutput < 0;
     }
 }

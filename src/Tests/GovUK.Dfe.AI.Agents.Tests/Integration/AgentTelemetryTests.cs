@@ -6,6 +6,7 @@ using Azure.Core;
 using GovUK.Dfe.AI.Agents.Clients.Interfaces;
 using GovUK.Dfe.AI.Agents.Context;
 using GovUK.Dfe.AI.Agents.Diagnostics;
+using GovUK.Dfe.AI.Agents.Extensions;
 using GovUK.Dfe.AI.Agents.Options;
 using GovUK.Dfe.AI.Agents.Services.Interfaces;
 using GovUK.Dfe.AI.Agents.Tests.Integration.Fakes;
@@ -87,6 +88,10 @@ public sealed class AgentTelemetryTests : IDisposable
     }
 
     private IReadOnlyList<Measurement> MeasurementsOf(string instrument) => [.. _measurements.Where(m => m.Instrument == instrument)];
+
+    /// <summary>The one workflow token measurement of <paramref name="type"/>: "input" or "output".</summary>
+    private Measurement WorkflowTokens(string type)
+        => Assert.Single(MeasurementsOf("dfe.ai_agents.workflow.tokens"), m => Equals(m.Tags["gen_ai.token.type"], type));
 
     private IReadOnlyList<Activity> SpansOf(string operation)
         => [.. _activities.Where(activity => Equals(activity.GetTagItem(AgentTelemetry.OperationNameTag), operation))];
@@ -229,8 +234,8 @@ public sealed class AgentTelemetryTests : IDisposable
         await provider.GetRequiredService<IAgentService>().RunParallelAsync(
             [new AgentDefinition("ofsted-agent", "Ofsted"), new AgentDefinition("trust-agent", "Trust")], PromptFor, new AgentContext(), cancellationToken: TestContext.Current.CancellationToken);
 
-        Assert.Equal(20, Assert.Single(MeasurementsOf("dfe.ai_agents.workflow.input_tokens")).Value);
-        var output = Assert.Single(MeasurementsOf("dfe.ai_agents.workflow.output_tokens"));
+        Assert.Equal(20, WorkflowTokens("input").Value);
+        var output = WorkflowTokens("output");
         Assert.Equal((140, "parallel"), (output.Value, output.Tags[AgentTelemetry.WorkflowModeTag]));
         Assert.False(Assert.Single(MeasurementsOf("gen_ai.invoke_workflow.duration")).Tags.ContainsKey(AgentTelemetry.ErrorTypeTag));
 
@@ -271,12 +276,136 @@ public sealed class AgentTelemetryTests : IDisposable
             .RunParallelAsync([ofsted, trust], "input", new AgentContext(), cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.False(result.Results.Single(r => r.AgentName == "trust-agent").Succeeded);
-        Assert.Equal(result.Usage.InputTokens, Assert.Single(MeasurementsOf("dfe.ai_agents.workflow.input_tokens")).Value);
-        Assert.Equal(result.Usage.OutputTokens, Assert.Single(MeasurementsOf("dfe.ai_agents.workflow.output_tokens")).Value);
+        Assert.Equal(result.Usage.InputTokens, WorkflowTokens("input").Value);
+        Assert.Equal(result.Usage.OutputTokens, WorkflowTokens("output").Value);
         Assert.Single(SpansOf("invoke_workflow"));
     }
 
     [Fact]
     public void ApplicationName_DefaultsToTheEntryAssemblyName()
         => Assert.Equal(System.Reflection.Assembly.GetEntryAssembly()?.GetName().Name ?? "unknown", new AgentRunOptions().ApplicationName);
+
+    // ===================== Cost =====================
+
+    // gpt-4o at 0.0025 per 1,000 input tokens and 0.01 per 1,000 output; each fake answer is 10 in and 240 out.
+    private const decimal RunCost = (10 * 0.0025m + 240 * 0.01m) / 1_000m;
+
+    private void PriceGpt4o()
+    {
+        _configuration["AiAgents:Pricing:Currency"] = "GBP";
+        _configuration["AiAgents:Pricing:Models:gpt-4o:CostPer1kTokensInput"] = "0.0025";
+        _configuration["AiAgents:Pricing:Models:gpt-4o:CostPer1kTokensOutput"] = "0.01";
+    }
+
+    [Fact]
+    public async Task EachRun_AndTheWholeExecution_ReportWhatTheyCost_InTheResultsAndMetrics()
+    {
+        PriceGpt4o();
+        WriteSystemPrompt("Ofsted", "You analyse Ofsted reports.");
+        WriteSystemPrompt("Trust", "You analyse trusts.");
+        _conversations.Reply("ofsted-agent", FoundryResponses.Completed("r1", "Good.", totalTokens: 250));
+        _conversations.Reply("trust-agent", FoundryResponses.Completed("r2", "Stable.", totalTokens: 250));
+        using var provider = Build();
+
+        var results = await provider.GetRequiredService<IAgentService>().RunParallelAsync(
+            [new AgentDefinition("ofsted-agent", "Ofsted"), new AgentDefinition("trust-agent", "Trust")], PromptFor, new AgentContext(),
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.All(results, result => Assert.Equal(RunCost, result.Cost));
+        Assert.Equal(RunCost * 2, results.ToTokenUsageSummary().Cost);
+
+        var perRun = MeasurementsOf("dfe.ai_agents.cost");
+        Assert.Equal(2, perRun.Count);
+        Assert.All(perRun, cost =>
+        {
+            Assert.Equal((double)RunCost, cost.Value, precision: 12);
+            Assert.Equal(("GBP", "gpt-4o"), (cost.Tags["dfe.ai_agents.currency"], cost.Tags[AgentTelemetry.ResponseModelTag]));
+        });
+        Assert.Equal((double)(RunCost * 2), Assert.Single(MeasurementsOf("dfe.ai_agents.workflow.cost")).Value, precision: 12);
+    }
+
+    [Fact]
+    public async Task AFailedRun_StillReportsWhatItCost_BecauseFoundryBillsIt()
+    {
+        PriceGpt4o();
+        WriteSystemPrompt("Ofsted", "You analyse Ofsted reports.");
+        _conversations.Reply("ofsted-agent", FoundryResponses.WithOutputItems("r1", [], totalTokens: 250, status: "failed"));
+        using var provider = Build();
+
+        var result = Assert.Single(await provider.GetRequiredService<IAgentService>().RunParallelAsync(
+            [new AgentDefinition("ofsted-agent", "Ofsted")], PromptFor, new AgentContext(), cancellationToken: TestContext.Current.CancellationToken));
+
+        Assert.Equal(RunCost, result.Cost);   // the fallback result keeps the billed cost
+        Assert.Equal((double)RunCost, Assert.Single(MeasurementsOf("dfe.ai_agents.cost")).Value, precision: 12);
+    }
+
+    [Fact]
+    public async Task WithoutPrices_RunsReportTokensOnly()
+    {
+        WriteSystemPrompt("Ofsted", "You analyse Ofsted reports.");
+        _conversations.Reply("ofsted-agent", FoundryResponses.Completed("r1", "Good.", totalTokens: 250));
+        using var provider = Build();
+
+        var result = Assert.Single(await provider.GetRequiredService<IAgentService>().RunParallelAsync(
+            [new AgentDefinition("ofsted-agent", "Ofsted")], PromptFor, new AgentContext(), cancellationToken: TestContext.Current.CancellationToken));
+
+        Assert.Null(result.Cost);
+        Assert.Empty(MeasurementsOf("dfe.ai_agents.cost"));
+    }
+
+    [Fact]
+    public void Pricing_UsesTheLongestMatchingModelName_IgnoringCase()
+    {
+        var pricing = new AgentsOptions.PricingSettings
+        {
+            Models =
+            {
+                ["gpt-5"] = new AgentsOptions.ModelPrice { CostPer1kTokensInput = 1, CostPer1kTokensOutput = 1 },
+                ["gpt-5.1"] = new AgentsOptions.ModelPrice { CostPer1kTokensInput = 2, CostPer1kTokensOutput = 8 },
+            },
+        };
+        var usage = new TokenUsage(1_000, 1_000, 2_000);
+
+        Assert.Equal(10m, pricing.CostOf("GPT-5.1-2025-11-13", usage));
+        Assert.Equal(2m, pricing.CostOf("gpt-5-mini", usage));
+        Assert.Null(pricing.CostOf("gpt-4o", usage));
+        Assert.Null(pricing.CostOf(null, usage));
+    }
+
+    [Theory]
+    [InlineData(null, 3.0)]     // no cached price: cached tokens cost the input price (2,000 x 1 + 1,000 x 1) / 1,000
+    [InlineData("0.25", 2.25)]  // cached price: 1,000 x 1 + 1,000 x 0.25 + 1,000 x 1, per 1,000
+    public void CachedInputTokens_AreChargedAtTheCachedPrice_WhenOneIsSet(string? cachedPrice, double expected)
+    {
+        var pricing = new AgentsOptions.PricingSettings
+        {
+            Models =
+            {
+                ["gpt-5.1"] = new AgentsOptions.ModelPrice
+                {
+                    CostPer1kTokensInput = 1,
+                    CostPer1kTokensCachedInput = cachedPrice is null ? null : decimal.Parse(cachedPrice, System.Globalization.CultureInfo.InvariantCulture),
+                    CostPer1kTokensOutput = 1,
+                },
+            },
+        };
+
+        var cost = pricing.CostOf("gpt-5.1", new TokenUsage(2_000, 1_000, 3_000) { CachedInputTokens = 1_000 });
+
+        Assert.Equal((decimal)expected, cost);
+    }
+
+    [Fact]
+    public async Task CachedInputTokens_ReportedByFoundry_AreKeptOnTheResult()
+    {
+        WriteSystemPrompt("Ofsted", "You analyse Ofsted reports.");
+        _conversations.Reply("ofsted-agent", FoundryResponses.Completed("r1", "Good.", totalTokens: 250, cachedTokens: 8));
+        using var provider = Build();
+
+        var result = await provider.GetRequiredService<IAgentService>().RunAsync(new AgentDefinition("ofsted-agent", "Ofsted"), "Summarise.",
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Equal((10, 8), (result.InputTokens, result.CachedInputTokens));
+        Assert.Equal(8, new[] { result }.ToTokenUsageSummary().Total.CachedInputTokens);
+    }
 }

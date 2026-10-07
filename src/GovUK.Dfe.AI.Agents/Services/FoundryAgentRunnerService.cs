@@ -133,7 +133,9 @@ internal sealed class FoundryAgentRunnerService(IAgentFactory agentFactory, IFou
         }
         finally
         {
-            telemetry.Record(usage.Total, usage.InferenceCalls, usage.ToolCalls);
+            telemetry.AnsweredBy(usage.Model);
+            telemetry.Record(usage.Total, usage.InferenceCalls, usage.ToolCalls, _runOptions.Pricing.CostOf(usage.Model, usage.Total),
+                _runOptions.Pricing.Currency);
             if (createdConversationId is not null && _runOptions.DeleteConversationsAfterRun)
             {
                 await DeleteConversationQuietlyAsync(agent.Name, createdConversationId).ConfigureAwait(false);
@@ -141,16 +143,18 @@ internal sealed class FoundryAgentRunnerService(IAgentFactory agentFactory, IFou
         }
     }
 
-    private static AgentResult ToResult(AgentReference agent, ResponseResult response, UsageTally usage, string runId)
+    private AgentResult ToResult(AgentReference agent, ResponseResult response, UsageTally usage, string runId)
         => new()
         {
+            Cost = _runOptions.Pricing.CostOf(usage.Model, usage.Total),
             AgentName = agent.Name,
             RunId = runId,
             CompletedAt = DateTimeOffset.UtcNow,
-            Output = response.GetOutputText(),
+            Output = Quality.AnswerLinks.RemoveRelativeLinks(response.GetOutputText()),
             TotalTokens = usage.Total.TotalTokens,
             InputTokens = usage.Total.InputTokens,
             OutputTokens = usage.Total.OutputTokens,
+            CachedInputTokens = usage.Total.CachedInputTokens,
             AgentVersion = agent.Version,
             Model = response.Model,
         };
@@ -205,6 +209,7 @@ internal sealed class FoundryAgentRunnerService(IAgentFactory agentFactory, IFou
         }
 
         usage.Add(response.Usage);   // every response is billed, even in a run that later fails
+        usage.Model ??= response.Model;
 
         if (response.IncompleteStatusDetails?.Reason == ResponseIncompleteStatusReason.MaxOutputTokens)
         {
@@ -274,9 +279,14 @@ internal sealed class FoundryAgentRunnerService(IAgentFactory agentFactory, IFou
     /// Attaches the tokens a failed run used to its exception, so a fallback result (and the briefing
     /// total built from it) still reports what Foundry billed. Read with <see cref="AgentTelemetry.TokenUsageOf"/>.
     /// </summary>
-    private static Exception WithUsage(Exception exception, UsageTally usage)
+    private Exception WithUsage(Exception exception, UsageTally usage)
     {
         exception.Data[AgentTelemetry.TokenUsageDataKey] = usage.Total;
+        if (_runOptions.Pricing.CostOf(usage.Model, usage.Total) is { } cost)
+        {
+            exception.Data[AgentTelemetry.CostDataKey] = cost;
+        }
+
         return exception;
     }
 
@@ -289,11 +299,17 @@ internal sealed class FoundryAgentRunnerService(IAgentFactory agentFactory, IFou
 
         public int ToolCalls { get; set; }
 
+        /// <summary>The model that answered, from the first response; it prices the run, even one that later fails.</summary>
+        public string? Model { get; set; }
+
         public void Add(ResponseTokenUsage? usage)
         {
             if (usage is not null)
             {
-                Total += new TokenUsage(usage.InputTokenCount, usage.OutputTokenCount, usage.TotalTokenCount);
+                Total += new TokenUsage(usage.InputTokenCount, usage.OutputTokenCount, usage.TotalTokenCount)
+                {
+                    CachedInputTokens = usage.InputTokenDetails?.CachedTokenCount ?? 0,
+                };
             }
         }
     }

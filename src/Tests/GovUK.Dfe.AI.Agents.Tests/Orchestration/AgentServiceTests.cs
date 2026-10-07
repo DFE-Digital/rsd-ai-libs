@@ -67,7 +67,7 @@ public sealed class AgentServiceTests
         recording.OnRunCompleted(Arg.Do<CompletedAgentRun>(run => seen = run));
         _ = CreateSut();
         var sut = new AgentService(_agentRunner, _agentRuntime, new AgentSpecBuilder(_promptProvider, customProviders: [_managedAgentProvider]),
-            observers: [failing, recording]);
+            hooks: new AgentRunHooks([failing, recording]));
 
         var result = await sut.RunAsync(Managed, "Summarise.", "Inspection: Good.", cancellationToken);
 
@@ -83,7 +83,7 @@ public sealed class AgentServiceTests
         var observer = Substitute.For<IAgentRunObserver>();
         _ = CreateSut();
         var sut = new AgentService(_agentRunner, _agentRuntime, new AgentSpecBuilder(_promptProvider, customProviders: [_managedAgentProvider]),
-            observers: [observer]);
+            hooks: new AgentRunHooks([observer]));
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => sut.RunAsync(Managed, "Summarise.", cancellationToken: cancellationToken));
 

@@ -145,4 +145,21 @@ public sealed partial class AgentPlatformEndToEndTests
         Assert.InRange(result.CompletedAt!.Value, before, DateTimeOffset.UtcNow);
         Assert.Equal((result.RunId, result.CompletedAt), (observed!.RunId, observed.CompletedAt));
     }
+
+    // ===================== Answers the app can show =====================
+
+    [Fact]
+    public async Task ACitationWrittenAsALink_IsReturnedAsPlainText_AndStillPassesTheCitationCheck()
+    {
+        WriteSystemPrompt("Ofsted", "You analyse Ofsted reports.");
+        _conversations.Reply("ofsted-agent", FoundryResponses.Completed("r1", "Rated Good [Evidence 1](evidence/1)."));
+        using var provider = Build();
+
+        var result = await provider.GetRequiredService<IAgentService>().RunAsync(new AgentDefinition("ofsted-agent", "Ofsted"), "Summarise.",
+            "--- ofsted_index Evidence 1 ---" + Environment.NewLine + "Rated Good in 2024.", cancellationToken);
+
+        Assert.Equal("Rated Good [Evidence 1].", result.Output);   // no link to the app's own address, so no 404
+        Assert.Single(_conversations.CallsFor("ofsted-agent"));      // the citation counted: no retry
+        Assert.Contains("never as a link", _conversations.CallsFor("ofsted-agent")[0].SerializedInput, StringComparison.Ordinal);
+    }
 }

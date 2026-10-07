@@ -12,15 +12,15 @@ using Xunit;
 
 namespace GovUK.Dfe.AI.Agents.AISearch.Tests;
 
-/// <summary><c>agents.AddAISearch()</c>: the indexes, their search settings and their sign-in, from <c>AiAgents:Search</c>.</summary>
+/// <summary><c>agents.AddAISearch()</c>: the indexes, their search settings and their sign-in, from <c>AiAgents:AISearch</c>.</summary>
 public sealed class AISearchTests
 {
     private static Dictionary<string, string?> Settings() => new()
     {
         ["AiAgents:Foundry:Endpoint"] = "https://example.services.ai.azure.com/api/projects/briefings",
         ["AiAgents:Foundry:DefaultModel"] = "myconnection/gpt-5.1",
-        ["AiAgents:Search:Endpoint"] = "https://example.search.windows.net",
-        ["AiAgents:Search:Indexes:0:Name"] = "ofsted_index",
+        ["AiAgents:AISearch:Endpoint"] = "https://example.search.windows.net",
+        ["AiAgents:AISearch:Indexes:0:Name"] = "ofsted_index",
     };
 
     private static ServiceProvider Build(Dictionary<string, string?> settings, bool useCodeCredential = true)
@@ -42,17 +42,17 @@ public sealed class AISearchTests
     public void RegistersEachIndex_WithItsFields_SemanticRankingAndVectorFields_SignedInWithItsOwnServicePrincipal()
     {
         var settings = Settings();
-        settings["AiAgents:Search:Indexes:0:ContentFields:0"] = "title";
-        settings["AiAgents:Search:Indexes:0:ContentFields:1"] = "content";
-        settings["AiAgents:Search:Indexes:0:SemanticConfiguration"] = "default";
-        settings["AiAgents:Search:Indexes:0:VectorFields:0"] = "contentVector";
-        settings["AiAgents:Search:Indexes:1:Name"] = "news_index";
+        settings["AiAgents:AISearch:Indexes:0:ContentFields:0"] = "title";
+        settings["AiAgents:AISearch:Indexes:0:ContentFields:1"] = "content";
+        settings["AiAgents:AISearch:Indexes:0:SemanticConfiguration"] = "default";
+        settings["AiAgents:AISearch:Indexes:0:VectorFields:0"] = "contentVector";
+        settings["AiAgents:AISearch:Indexes:1:Name"] = "news_index";
         settings["AiAgents:Foundry:Authentication:TenantId"] = "tenant-1";
         settings["AiAgents:Foundry:Authentication:ClientId"] = "foundry-client";
         settings["AiAgents:Foundry:Authentication:ClientSecret"] = "foundry-secret";
-        settings["AiAgents:Search:Authentication:TenantId"] = "tenant-1";
-        settings["AiAgents:Search:Authentication:ClientId"] = "search-client";
-        settings["AiAgents:Search:Authentication:ClientSecret"] = "search-secret";
+        settings["AiAgents:AISearch:Authentication:TenantId"] = "tenant-1";
+        settings["AiAgents:AISearch:Authentication:ClientId"] = "search-client";
+        settings["AiAgents:AISearch:Authentication:ClientSecret"] = "search-secret";
 
         using var provider = Build(settings, useCodeCredential: false);   // no default service principal needed
 
@@ -69,7 +69,7 @@ public sealed class AISearchTests
     public void TwoIndexesWithTheSameName_FailValidation()
     {
         var settings = Settings();
-        settings["AiAgents:Search:Indexes:1:Name"] = "ofsted_index";
+        settings["AiAgents:AISearch:Indexes:1:Name"] = "ofsted_index";
         using var provider = Build(settings);
 
         var ex = Assert.Throws<OptionsValidationException>(() => provider.GetRequiredService<IOptions<AzureSearchContextRetrieverOptions>>().Value);
@@ -81,31 +81,31 @@ public sealed class AISearchTests
     public void AddAISearch_WithoutASearchSection_FailsStartup()
     {
         var settings = Settings();
-        settings.Remove("AiAgents:Search:Endpoint");
-        settings.Remove("AiAgents:Search:Indexes:0:Name");
+        settings.Remove("AiAgents:AISearch:Endpoint");
+        settings.Remove("AiAgents:AISearch:Indexes:0:Name");
 
         var ex = Assert.Throws<InvalidOperationException>(() => Build(settings));
 
-        Assert.Contains("AiAgents:Search (agents.AddAISearch() needs this section)", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("AiAgents:AISearch (agents.AddAISearch() needs this section)", ex.Message, StringComparison.Ordinal);
     }
 
     [Fact]
     public void AnIncompleteSearchServicePrincipal_FailsStartup_NamingTheMissingSetting()
     {
         var settings = Settings();
-        settings["AiAgents:Search:Authentication:TenantId"] = "tenant-1";
-        settings["AiAgents:Search:Authentication:ClientId"] = "search-client";   // no secret
+        settings["AiAgents:AISearch:Authentication:TenantId"] = "tenant-1";
+        settings["AiAgents:AISearch:Authentication:ClientId"] = "search-client";   // no secret
 
         var ex = Assert.Throws<InvalidOperationException>(() => Build(settings));
 
-        Assert.Contains("AiAgents:Search:Authentication:ClientSecret", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("AiAgents:AISearch:Authentication:ClientSecret", ex.Message, StringComparison.Ordinal);
     }
 
     [Fact]
     public void UseAISearchCredential_ReplacesTheSearchServicePrincipal()
     {
         var settings = Settings();
-        settings["AiAgents:Search:Authentication:TenantId"] = "tenant-1";   // incomplete, but the code credential wins
+        settings["AiAgents:AISearch:Authentication:TenantId"] = "tenant-1";   // incomplete, but the code credential wins
 
         var services = new ServiceCollection();
         services.AddAgents(new ConfigurationBuilder().AddInMemoryCollection(settings).Build(), agents => agents
@@ -133,12 +133,12 @@ public sealed class AISearchTests
     public void AnEvidenceLimitBelowOne_FailsValidation(string limit)
     {
         var settings = Settings();
-        settings["AiAgents:Search:MaxEvidenceCharacters"] = limit;
+        settings["AiAgents:AISearch:MaxEvidenceCharacters"] = limit;
         using var provider = Build(settings);
 
         var ex = Assert.Throws<OptionsValidationException>(() => provider.GetRequiredService<IOptions<AzureSearchContextRetrieverOptions>>().Value);
 
-        Assert.Contains("Search:MaxEvidenceCharacters", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("AISearch:MaxEvidenceCharacters", ex.Message, StringComparison.Ordinal);
     }
 
     // ===================== On its own, without agents =====================
@@ -146,8 +146,8 @@ public sealed class AISearchTests
     /// <summary>Only the Search section: no Foundry settings at all.</summary>
     private static Dictionary<string, string?> SearchOnly() => new()
     {
-        ["AiAgents:Search:Endpoint"] = "https://example.search.windows.net",
-        ["AiAgents:Search:Indexes:0:Name"] = "ofsted_index",
+        ["AiAgents:AISearch:Endpoint"] = "https://example.search.windows.net",
+        ["AiAgents:AISearch:Indexes:0:Name"] = "ofsted_index",
     };
 
     private static ServiceProvider BuildSearchOnly(Dictionary<string, string?> settings, TokenCredential? credential = null)
@@ -171,9 +171,9 @@ public sealed class AISearchTests
     public void OnItsOwn_ItCanSignInWithTheSectionsServicePrincipal()
     {
         var settings = SearchOnly();
-        settings["AiAgents:Search:Authentication:TenantId"] = "tenant-1";
-        settings["AiAgents:Search:Authentication:ClientId"] = "search-client";
-        settings["AiAgents:Search:Authentication:ClientSecret"] = "search-secret";
+        settings["AiAgents:AISearch:Authentication:TenantId"] = "tenant-1";
+        settings["AiAgents:AISearch:Authentication:ClientId"] = "search-client";
+        settings["AiAgents:AISearch:Authentication:ClientSecret"] = "search-secret";
 
         using var provider = BuildSearchOnly(settings);
 
@@ -181,15 +181,15 @@ public sealed class AISearchTests
     }
 
     [Theory]
-    [InlineData(false, "AddAISearch needs a credential: pass one, or set AiAgents:Search:Authentication.")]
-    [InlineData(true, "AddAISearch needs a credential: pass one, or set AiAgents:Search:Authentication:ClientSecret.")]
+    [InlineData(false, "AddAISearch needs a credential: pass one, or set AiAgents:AISearch:Authentication.")]
+    [InlineData(true, "AddAISearch needs a credential: pass one, or set AiAgents:AISearch:Authentication:ClientSecret.")]
     public void OnItsOwn_WithoutACredential_FailsAtRegistration_NamingWhatToSet(bool partialBlock, string expected)
     {
         var settings = SearchOnly();
         if (partialBlock)
         {
-            settings["AiAgents:Search:Authentication:TenantId"] = "tenant-1";
-            settings["AiAgents:Search:Authentication:ClientId"] = "search-client";
+            settings["AiAgents:AISearch:Authentication:TenantId"] = "tenant-1";
+            settings["AiAgents:AISearch:Authentication:ClientId"] = "search-client";
         }
 
         var ex = Assert.Throws<InvalidOperationException>(() => BuildSearchOnly(settings));
@@ -202,7 +202,7 @@ public sealed class AISearchTests
     {
         var ex = Assert.Throws<InvalidOperationException>(() => BuildSearchOnly([], Substitute.For<TokenCredential>()));
 
-        Assert.Equal("AddAISearch needs the AiAgents:Search section (Endpoint and Indexes).", ex.Message);
+        Assert.Equal("AddAISearch needs the AiAgents:AISearch section (Endpoint and Indexes).", ex.Message);
     }
 
     [Fact]

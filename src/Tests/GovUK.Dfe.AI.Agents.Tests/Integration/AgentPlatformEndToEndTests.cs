@@ -830,6 +830,29 @@ public sealed partial class AgentPlatformEndToEndTests : IDisposable
             .StartAsync(CancellationToken.None);
 
     [Fact]
+    public async Task ACentralAgent_UsedByAppsWithDifferentTools_RunsItsOneVersion_AndNoAppCreatesAnother()
+    {
+        _foundry.Seed("ofsted-agent", DefaultModel, "Provisioned centrally.", PerformanceTool());
+        _conversations.Reply("ofsted-agent", FoundryResponses.Completed("r1", "Good."), FoundryResponses.Completed("r2", "Good."));
+        var central = new Dictionary<string, string> { ["ExternallyManagedAgents:ofsted-agent"] = "1" };
+
+        // Two apps share the central agent; the second has an extra tool of its own.
+        using var briefingApp = Build(services => services.AddSingleton(new AgentToolBinding("ofsted-agent", PerformanceTools())), central);
+        using var casesApp = Build(services => services.AddSingleton(new AgentToolBinding("ofsted-agent",
+            new FakeToolServer("get_performance_data", "get_absence_data"))), central);
+
+        var fromBriefing = await briefingApp.GetRequiredService<IAgentService>().RunAsync(
+            new AgentDefinition("ofsted-agent", "NotUsedHere") { AllowedTools = ["get_performance_data"] }, "Summarise.", cancellationToken: cancellationToken);
+        var fromCases = await casesApp.GetRequiredService<IAgentService>().RunAsync(
+            new AgentDefinition("ofsted-agent", "NotUsedHere") { AllowedTools = ["get_performance_data", "get_absence_data"] }, "Summarise.",
+            cancellationToken: cancellationToken);
+
+        Assert.Equal(("1", "1"), (fromBriefing.AgentVersion, fromCases.AgentVersion));
+        Assert.Single(_foundry.Versions("ofsted-agent"));   // the apps' own tools never make a new version
+        Assert.Empty(_foundry.CreatedNames);
+    }
+
+    [Fact]
     public async Task ToolCheck_AConsumingAppThatCanRunTheCentralAgentsTools_Starts()
     {
         _foundry.Seed("ofsted-agent", DefaultModel, "Provisioned centrally.", PerformanceTool());

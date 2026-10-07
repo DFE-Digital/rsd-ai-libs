@@ -139,20 +139,22 @@ internal sealed class ScriptedConversationClient : IFoundryConversationClient
 
 internal static class FoundryResponses
 {
-    public static ResponseResult Completed(string id, string text, int totalTokens = 30)
-        => WithOutputItems(id, [ResponseItem.CreateAssistantMessageItem(text, (IEnumerable<ResponseMessageAnnotation>?)null)], totalTokens);
+    public static ResponseResult Completed(string id, string text, int totalTokens = 30, int cachedTokens = 0)
+        => WithOutputItems(id, [ResponseItem.CreateAssistantMessageItem(text, (IEnumerable<ResponseMessageAnnotation>?)null)], totalTokens,
+            cachedTokens: cachedTokens);
 
     public static ResponseResult FunctionCall(string id, string callId, string functionName)
         => WithOutputItems(id, [ResponseItem.CreateFunctionCallItem(callId: callId, functionName: functionName,
             functionArguments: BinaryData.FromString("{}"))]);
 
     /// <summary>Usage always reports 10 input tokens and the rest as output tokens.</summary>
-    public static ResponseResult WithOutputItems(string id, IEnumerable<ResponseItem> items, int? totalTokens = null, string status = "completed")
+    public static ResponseResult WithOutputItems(string id, IEnumerable<ResponseItem> items, int? totalTokens = null, string status = "completed",
+        int cachedTokens = 0)
     {
         var itemsJson = string.Join(',', items.Select(item => ModelReaderWriter.Write(item).ToString()));
         var usageJson = totalTokens is null
             ? ""
-            : $",\"usage\":{{\"input_tokens\":10,\"output_tokens\":{totalTokens - 10},\"total_tokens\":{totalTokens}}}";
+            : $",\"usage\":{{\"input_tokens\":10,\"input_tokens_details\":{{\"cached_tokens\":{cachedTokens}}},\"output_tokens\":{totalTokens - 10},\"total_tokens\":{totalTokens}}}";
         var json = $"{{\"id\":\"{id}\",\"object\":\"response\",\"created_at\":0,\"status\":\"{status}\",\"model\":\"gpt-4o\",\"output\":[{itemsJson}]{usageJson}}}";
         return ModelReaderWriter.Read<ResponseResult>(BinaryData.FromString(json))!;
     }

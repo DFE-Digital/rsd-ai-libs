@@ -218,7 +218,9 @@ public sealed class AddAgentsTests
     [InlineData("AiAgents:MaxEvidenceCharacters", "0", "AiAgents:MaxEvidenceCharacters")]
     [InlineData("AiAgents:AgentCacheDuration", "-00:00:01", "AiAgents:AgentCacheDuration")]
     [InlineData("AiAgents:MaxConcurrency", "0", "AiAgents:MaxConcurrency")]
+    [InlineData("AiAgents:LowRemainingTokensPercent", "150", "AiAgents:LowRemainingTokensPercent (from 0 to 100)")]
     [InlineData("AiAgents:MaxOutputTokensPerRun", "15", "AiAgents:MaxOutputTokensPerRun (must be at least 16)")]
+    [InlineData("AiAgents:Pricing:Models:gpt-4o:CostPer1kTokensCachedInput", "-1", "AiAgents:Pricing:Models:gpt-4o (prices can't be negative)")]
     public void RejectsIncompleteOrInvalidLimits(string setting, string value, string reported)
     {
         var settings = ValidSettings();

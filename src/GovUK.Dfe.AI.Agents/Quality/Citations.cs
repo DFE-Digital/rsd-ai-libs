@@ -11,7 +11,7 @@ internal static partial class Citations
     /// <summary>The prompt and validator for a run: the citation check when required and possible, then the definition's own.</summary>
     public static (string Prompt, Func<AgentResult, string?>? Validate) ForRun(AgentDefinition definition, string prompt, string? evidence)
     {
-        var evidenceCount = definition.RequireCitations ? CountEvidence(evidence) : 0;
+        var evidenceCount = definition.RequiredCitations ? CountEvidence(evidence) : 0;
         if (evidenceCount == 0)
         {
             return (prompt, definition.Validate);

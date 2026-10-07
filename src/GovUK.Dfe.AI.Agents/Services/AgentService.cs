@@ -1,10 +1,8 @@
 using GovUK.Dfe.AI.Agents.Context;
 using GovUK.Dfe.AI.Agents.Diagnostics;
-using GovUK.Dfe.AI.Agents.Extensibility.Interfaces;
 using GovUK.Dfe.AI.Agents.Extensions;
 using GovUK.Dfe.AI.Agents.Quality;
 using GovUK.Dfe.AI.Agents.Tools;
-using GovUK.Dfe.AI.Agents.Tools.Interfaces;
 using GovUK.Dfe.AI.Agents.ValueObjects;
 using GovUK.Dfe.AI.Agents.Resilience;
 using Microsoft.Extensions.Logging;
@@ -18,11 +16,11 @@ namespace GovUK.Dfe.AI.Agents.Services;
 
 internal sealed class AgentService(IAgentRunnerService agentRunner, IAgentRuntimeService agentRuntime, AgentSpecBuilder specs,
     AgentRunOptions? runOptions = null, Factories.Interfaces.IAgentFactory? agentFactory = null, ILogger<AgentService>? logger = null,
-    IEnumerable<IAgentRunObserver>? observers = null, IToolCallApprover? toolApprover = null)
+    AgentRunHooks? hooks = null)
     : IAgentService
 {
+    private readonly AgentRunHooks _hooks = hooks ?? AgentRunHooks.None;
     private readonly AgentRunOptions _runOptions = runOptions ?? new AgentRunOptions();
-    private readonly IAgentRunObserver[] _observers = observers?.ToArray() ?? [];
     private readonly AgentSpecBuilder _specs = specs;
     private readonly ILogger<AgentService> _logger = logger ?? NullLogger<AgentService>.Instance;
     private readonly string _applicationName = runOptions?.ApplicationName ?? AgentTelemetry.DefaultApplicationName;
@@ -60,7 +58,7 @@ internal sealed class AgentService(IAgentRunnerService agentRunner, IAgentRuntim
             .ConfigureAwait(false);
 
         IReadOnlyList<AgentResult> results = [.. steps.Select(step => step.ToAgentResult())];
-        workflow.Completed(results.ToTokenUsageSummary().Total, failedAgents: steps.Count(step => !step.Succeeded));
+        CompleteWorkflow(workflow, results, steps.Count(step => !step.Succeeded));
         return results;
     }
 
@@ -107,7 +105,7 @@ internal sealed class AgentService(IAgentRunnerService agentRunner, IAgentRuntim
             }
         }
 
-        workflow.Completed(results.ToTokenUsageSummary().Total, failedAgents);
+        CompleteWorkflow(workflow, results, failedAgents);
         return results;
     }
 
@@ -169,7 +167,7 @@ internal sealed class AgentService(IAgentRunnerService agentRunner, IAgentRuntim
     {
         // Tools bound to this agent that run in this app (e.g. MCP) execute the model's calls here,
         // limited to the definition's AllowedTools.
-        var resolveToolCalls = AgentToolResolver.CreateToolCallResolver(_specs.ToolProviders, definition, _applicationName, toolApprover, _logger);
+        var resolveToolCalls = AgentToolResolver.CreateToolCallResolver(_specs.ToolProviders, definition, _applicationName, _hooks.ToolApprover, _logger);
         var (runPrompt, validate) = Citations.ForRun(definition, prompt, evidence);
 
         AgentResult result;
@@ -193,7 +191,7 @@ internal sealed class AgentService(IAgentRunnerService agentRunner, IAgentRuntim
                 cancellationToken: cancellationToken, validateOutput: validate).ConfigureAwait(false);
         }
 
-        if (_observers.Length > 0)
+        if (_hooks.Observers.Count > 0)
         {
             // Observers (scoring, audit) get what the model was given: redacted, so no copy keeps data the model never saw.
             Notify(new CompletedAgentRun
@@ -207,10 +205,17 @@ internal sealed class AgentService(IAgentRunnerService agentRunner, IAgentRuntim
         return result;
     }
 
+    /// <summary>Records what the whole run used and cost, e.g. one briefing.</summary>
+    private void CompleteWorkflow(WorkflowTelemetry workflow, IEnumerable<AgentResult> results, int failedAgents)
+    {
+        var summary = results.ToTokenUsageSummary();
+        workflow.Completed(summary.Total, failedAgents, summary.Cost, _runOptions.Pricing.Currency);
+    }
+
     /// <summary>Tells each observer about a finished run; an observer's failure is logged, never the run's.</summary>
     private void Notify(CompletedAgentRun run)
     {
-        foreach (var observer in _observers)
+        foreach (var observer in _hooks.Observers)
         {
             try
             {

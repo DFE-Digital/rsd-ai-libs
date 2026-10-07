@@ -1,6 +1,6 @@
 namespace GovUK.Dfe.AI.Agents.AISearch.Options;
 
-/// <summary>The <c>AiAgents:Search</c> section.</summary>
+/// <summary>The <c>AiAgents:AISearch</c> section.</summary>
 public sealed class AzureSearchContextRetrieverOptions
 {
     public required string Endpoint { get; init; }

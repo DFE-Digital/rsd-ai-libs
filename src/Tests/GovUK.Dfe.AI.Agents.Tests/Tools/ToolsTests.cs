@@ -44,6 +44,29 @@ public sealed class ToolsTests
     }
 
     [Theory]
+    [InlineData("Leeds", "GB", "Leeds")]       // a trust's town: its local news
+    [InlineData(" Leeds ", "GB", "Leeds")]
+    [InlineData(null, "GB", "London")]         // no town known: the default
+    [InlineData("", "GB", "London")]
+    public void ForCity_SearchesNearTheCity_OrTheDefaultWhenThereIsNone(string? city, string country, string expectedCity)
+    {
+        var location = WebSearchLocation.ForCity(city);
+
+        Assert.Equal((country, expectedCity), (location.Country, location.City));
+    }
+
+    [Fact]
+    public async Task WebSearch_ForACity_BiasesTheToolTowardsIt()
+    {
+        var tool = Assert.IsType<WebSearchTool>(Assert.Single(
+            await new WebSearchToolProvider(WebSearchLocation.ForCity("Leeds")).GetToolsAsync(cancellationToken)));
+
+        var sent = System.ClientModel.Primitives.ModelReaderWriter.Write(tool).ToString();   // what Foundry receives
+        Assert.Contains("\"city\":\"Leeds\"", sent, StringComparison.Ordinal);
+        Assert.Contains("\"country\":\"GB\"", sent, StringComparison.Ordinal);
+    }
+
+    [Theory]
     [InlineData(null)]   // defaults to the United Kingdom
     [InlineData("US")]
     public async Task WebSearch_AlwaysSetsAnApproximateLocation(string? country)

@@ -30,7 +30,7 @@ public sealed class AgentsPackageContext
     /// <summary>The app's service collection.</summary>
     public IServiceCollection Services { get; }
 
-    /// <summary>The <c>AiAgents</c> configuration section; a package reads its own block from it, e.g. <c>Section.GetSection("Search")</c>.</summary>
+    /// <summary>The <c>AiAgents</c> configuration section; a package reads its own block from it, e.g. <c>Section.GetSection("AISearch")</c>.</summary>
     public IConfigurationSection Section { get; }
 
     /// <summary>Core's settings, already read and checked.</summary>
@@ -56,7 +56,7 @@ public sealed class AgentsPackageContext
     }
 
     /// <summary>
-    /// Reports a missing or invalid setting, by its path under <c>AiAgents</c>, e.g. <c>"Search:Endpoint"</c>. Startup then
+    /// Reports a missing or invalid setting, by its path under <c>AiAgents</c>, e.g. <c>"AISearch:Endpoint"</c>. Startup then
     /// fails with every problem from core and every package in one message.
     /// </summary>
     public void ReportProblem(string setting)

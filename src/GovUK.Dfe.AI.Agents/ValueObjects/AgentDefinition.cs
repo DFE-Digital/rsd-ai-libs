@@ -29,5 +29,5 @@ public sealed record AgentDefinition(string Name, string SystemPromptKey, bool I
     /// only evidence that exists. No effect on unnumbered evidence. Turn off for an answer with nowhere to cite, e.g. a
     /// schema with no text fields.
     /// </summary>
-    public bool RequireCitations { get; init; } = true;
+    public bool RequiredCitations { get; init; } = true;
 }

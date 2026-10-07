@@ -77,7 +77,6 @@ analysis runs once for the whole solution, with coverage from every test project
   `git tag GovUK.Dfe.AI.Agents.Mcp-2.0.0 && git push origin <branch> --tags`.
 - **Release notes:** add `(%release-note: your notes %)` to the body of the commit being released.
 
-After each release, update the package's [public API files](#public-api-files).
 
 ### Releasing an add-on on its own
 
@@ -108,33 +107,11 @@ Apps can upgrade any package on its own because the packages follow Microsoft's
 - **Add-ons use only core's public API.** They plug in through `IAgentsPackage` and `AgentsPackageContext`.
 - **Add-ons own their settings.** Each one reads, checks and documents its own block under `AiAgents` (e.g.
   `AiAgents:Guardrails`), so a new add-on setting never needs a core release.
-- **Public API is tracked.** Each package lists its public API in two files, and the build fails if the code doesn't
-  match (see [Public API files](#public-api-files)). A breaking change needs a new major version.
+- **Breaking changes need a new major version.** Removing or changing anything public breaks apps that use it, so do
+  it only in a major version. `dotnet pack` validates each package; to have it also catch breaking changes, set
+  `PackageValidationBaselineVersion` in the `.csproj` to the package's last released version.
 - **Dependencies are minimums.** Packages declare the lowest dependency versions that work. Renovate doesn't raise them
   for minor or patch releases, and NuGet audit fails restore on a high or critical vulnerability.
-
-### Public API files
-
-Each package has a `PublicAPI.Shipped.txt` and a `PublicAPI.Unshipped.txt` next to its `.csproj`. They list every public
-type and member, one per line, so a change that could break apps or add-ons fails the build and shows up in the pull
-request diff.
-
-| File | Holds |
-| --- | --- |
-| `PublicAPI.Shipped.txt` | Public API in a released version, which apps may depend on |
-| `PublicAPI.Unshipped.txt` | Public API added since the last release |
-
-| You... | The build fails with | Fix |
-| --- | --- | --- |
-| Add or make something public | `RS0016` (not part of the declared public API) | Run `dotnet format analyzers <project.csproj> --diagnostics RS0016`, which adds the lines to `PublicAPI.Unshipped.txt` |
-| Remove, rename or change something public | `RS0017` (part of the declared API, but not found) | Delete the line the error quotes. There's no automatic fix |
-
-In review, a line removed from `PublicAPI.Shipped.txt` is a breaking change: the package needs a new major version. If
-something shouldn't be public, make it `internal` rather than list it.
-
-After a release, move the package's `PublicAPI.Unshipped.txt` lines into `PublicAPI.Shipped.txt` (keep
-`#nullable enable` as the first line of both), and set `PackageValidationBaselineVersion` in its `.csproj` to the
-version just released.
 
 ## Adding a package
 
@@ -154,17 +131,8 @@ version just released.
    | Register services | `context.Services` |
 
    Set `CoreMinimumVersion` in the `.csproj` to the core version you build on.
-3. Add the [public API files](#public-api-files) next to the `.csproj`. Both are needed, even while empty, and each
-   starts with this line:
-
-   ```text
-   #nullable enable
-   ```
-
-   Then run `dotnet format analyzers src/GovUK.Dfe.AI.Agents.{Name}/GovUK.Dfe.AI.Agents.{Name}.csproj --diagnostics RS0016`
-   to list your public API in `PublicAPI.Unshipped.txt`, and check it holds only what apps should use. Commit both files.
-4. Copy an add-on workflow to `.github/workflows/build-deploy-ai-agents-{name}.yml` and change the package name and paths.
-5. Add a `readme.md`, which is packed into the NuGet package, and add the package to the tables here and in the core
+3. Copy an add-on workflow to `.github/workflows/build-deploy-ai-agents-{name}.yml` and change the package name and paths.
+4. Add a `readme.md`, which is packed into the NuGet package, and add the package to the tables here and in the core
    readme.
 
 ## Contributing

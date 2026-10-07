@@ -8,7 +8,7 @@ internal static class PromptText
     public const string EvidenceTruncated = "\n[Evidence truncated: {0} more characters were not included.]";
     public const string AnswerRejected = "Your answer was rejected: {0} Answer again, fixing that.";
     public const string ToolCallNotApproved = "The call to {0} was not approved, so it didn't run: {1}. Don't retry it; answer without it.";
-    public const string CiteEvidence = "\n\nCite the evidence each point relies on as [Evidence n].";
+    public const string CiteEvidence = "\n\nCite the evidence each point relies on as plain text [Evidence n], never as a link.";
 
     /// <summary>
     /// Fences untrusted evidence in the user turn, never a developer message. The markers carry a random value,

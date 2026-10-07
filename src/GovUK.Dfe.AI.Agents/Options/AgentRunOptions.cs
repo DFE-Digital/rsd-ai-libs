@@ -48,6 +48,9 @@ internal sealed record AgentRunOptions
     /// <summary><paramref name="text"/> after every redactor.</summary>
     public string Redact(string text) => Redactors.Aggregate(text, static (current, redactor) => redactor.Redact(current));
 
+    /// <summary>What each model costs; with no prices, runs report tokens only.</summary>
+    public AgentsOptions.PricingSettings Pricing { get; init; } = new();
+
     /// <summary>Fails startup when nothing records token metrics. Turn off only for local development and tests.</summary>
     public bool RequireTokenUsageTelemetry { get; init; } = true;
 

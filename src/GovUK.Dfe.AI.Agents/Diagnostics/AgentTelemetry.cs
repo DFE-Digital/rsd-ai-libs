@@ -98,13 +98,19 @@ public static class AgentTelemetry
 
     // ===== This library's own metrics =====
 
-    /// <summary>Input tokens one parallel or sequential run used in total, e.g. one whole briefing.</summary>
-    internal static readonly Histogram<long> WorkflowInputTokens = Meter.CreateHistogram<long>(
-        "dfe.ai_agents.workflow.input_tokens", TokenUnit, "Input tokens used by one parallel or sequential run of several agents.");
+    internal const string TokenTypeTag = "gen_ai.token.type";
 
-    /// <summary>Output tokens one parallel or sequential run used in total, e.g. one whole briefing.</summary>
-    internal static readonly Histogram<long> WorkflowOutputTokens = Meter.CreateHistogram<long>(
-        "dfe.ai_agents.workflow.output_tokens", TokenUnit, "Output tokens used by one parallel or sequential run of several agents.");
+    /// <summary>Tokens one parallel or sequential run used in total, e.g. one whole briefing, by <c>gen_ai.token.type</c>.</summary>
+    internal static readonly Histogram<long> WorkflowTokens = Meter.CreateHistogram<long>(
+        "dfe.ai_agents.workflow.tokens", TokenUnit, "Tokens used by one parallel or sequential run of several agents, input or output.");
+
+    /// <summary>The deployment's remaining tokens in its 60-second window, from each Foundry response.</summary>
+    internal static readonly Histogram<long> TokensRemaining = Meter.CreateHistogram<long>(
+        "dfe.ai_agents.tokens.remaining", TokenUnit, "The model deployment's remaining tokens per minute, from each Foundry response.");
+
+    /// <summary>Responses where the remaining tokens were below the app's LowRemainingTokensPercent of the limit.</summary>
+    internal static readonly Counter<long> TokensLow = Meter.CreateCounter<long>(
+        "dfe.ai_agents.tokens.low", "{response}", "Foundry responses where the deployment's remaining tokens were below the app's threshold.");
 
     internal static readonly Histogram<double> RunSlotWaitDuration = Meter.CreateHistogram<double>(
         "dfe.ai_agents.run_slot.wait.duration", "s", "Time agent runs waited for a free run slot.");
@@ -114,6 +120,28 @@ public static class AgentTelemetry
         "dfe.ai_agents.guardrail.blocks", "{block}", "Prompts and answers a Foundry guardrail blocked.");
 
     internal const string RunIdTag = "dfe.ai_agents.run_id";
+    internal const string CurrencyTag = "dfe.ai_agents.currency";
+    internal const string CostDataKey = "dfe.ai_agents.cost";
+
+    internal static readonly Counter<double> Cost = Meter.CreateCounter<double>(
+        "dfe.ai_agents.cost", "{currency}", "What agent runs cost, from AiAgents:Pricing, by agent, model and currency. Failed runs included.");
+
+    internal static readonly Histogram<double> WorkflowCost = Meter.CreateHistogram<double>(
+        "dfe.ai_agents.workflow.cost", "{currency}", "What one parallel or sequential run of several agents cost, e.g. one briefing.");
+
+    /// <summary>The cost a failed run had reached, attached to its exception (or one it wraps); null if unknown.</summary>
+    internal static decimal? CostOf(Exception? exception)
+    {
+        for (var current = exception; current is not null; current = current.InnerException)
+        {
+            if (current.Data[CostDataKey] is decimal cost)
+            {
+                return cost;
+            }
+        }
+
+        return null;
+    }
     internal const string ToolApprovedTag = "dfe.ai_agents.tool.approved";
 
     internal static readonly Counter<long> ToolApprovals = Meter.CreateCounter<long>(

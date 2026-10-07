@@ -20,6 +20,7 @@ public sealed partial class AgentsOptions
         [
             (KeepLatestVersions is < 2, "KeepLatestVersions (must be at least 2)"),
             (MaxConcurrency is < 1, "MaxConcurrency (must be at least 1)"),
+            (LowRemainingTokensPercent is < 0 or > 100, "LowRemainingTokensPercent (from 0 to 100)"),
             (AgentCacheDuration < TimeSpan.Zero, "AgentCacheDuration (0 or more)"),
             (MaxWaitForRunSlot <= TimeSpan.Zero, "MaxWaitForRunSlot (must be positive)"),
             (MaxEvidenceCharacters < 1, "MaxEvidenceCharacters (must be at least 1)"),
@@ -27,7 +28,8 @@ public sealed partial class AgentsOptions
         ];
 
         return checks.Where(static check => check.Invalid).Select(static check => $"{SectionName}:{check.Problem}")
-            .Concat(GlobalConcurrency.Problems().Select(static problem => $"{SectionName}:GlobalConcurrency:{problem}"));
+            .Concat(GlobalConcurrency.Problems().Select(static problem => $"{SectionName}:GlobalConcurrency:{problem}"))
+            .Concat(Pricing.Problems().Select(static problem => $"{SectionName}:{problem}"));
     }
 
     private IEnumerable<string> CredentialProblems()

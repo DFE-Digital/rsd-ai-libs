@@ -27,8 +27,17 @@ public sealed record AgentResult
     /// <summary>The output (completion) tokens used, when Foundry reported them.</summary>
     public long OutputTokens { get; init; }
 
+    /// <summary>Input tokens served from Foundry's prompt cache: part of <see cref="InputTokens"/>, and cheaper.</summary>
+    public long CachedInputTokens { get; init; }
+
+    /// <summary>
+    /// What this run cost, from <c>AiAgents:Pricing</c>, in its currency. Null when the model isn't priced. Includes the
+    /// tokens of a failed run, as Foundry still bills them.
+    /// </summary>
+    public decimal? Cost { get; init; }
+
     /// <summary>This run's token usage.</summary>
-    public TokenUsage Usage => new(InputTokens, OutputTokens, TotalTokens);
+    public TokenUsage Usage => new(InputTokens, OutputTokens, TotalTokens) { CachedInputTokens = CachedInputTokens };
 
     /// <summary>The agent version that ran; null for an ephemeral agent.</summary>
     public string? AgentVersion { get; init; }

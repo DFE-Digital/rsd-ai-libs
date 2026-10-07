@@ -7,13 +7,13 @@ concurrency-limited and records its token usage.
 
 Install the core package, plus any add-ons you need. Each add-on depends on a compatible version of the core package.
 
-| Package | Adds | Register with |
-| --- | --- | --- |
-| `GovUK.Dfe.AI.Agents` | Agents, versions, runs, answer checks, limits, telemetry | `AddAgents(...)` |
-| [`GovUK.Dfe.AI.Agents.Mcp`](https://github.com/DFE-Digital/rsd-ai-libs/blob/main/src/GovUK.Dfe.AI.Agents.Mcp/readme.md) | Tools from your own MCP servers | `.AddMcpServers()` |
-| [`GovUK.Dfe.AI.Agents.AISearch`](https://github.com/DFE-Digital/rsd-ai-libs/blob/main/src/GovUK.Dfe.AI.Agents.AISearch/readme.md) | Evidence from Azure AI Search | `.AddAISearch()` |
-| [`GovUK.Dfe.AI.Agents.Evaluation`](https://github.com/DFE-Digital/rsd-ai-libs/blob/main/src/GovUK.Dfe.AI.Agents.Evaluation/readme.md) | A judge model that scores answers | `.AddQualityEvaluation()` |
-| [`GovUK.Dfe.AI.Agents.Guardrails`](https://github.com/DFE-Digital/rsd-ai-libs/blob/main/src/GovUK.Dfe.AI.Agents.Guardrails/readme.md) | Foundry guardrails on your model deployments | `.AddGuardrails()` |
+| Package                                                                                                                               | Adds                                                     | Register with             |
+| ------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- | ------------------------- |
+| `GovUK.Dfe.AI.Agents`                                                                                                                 | Agents, versions, runs, answer checks, limits, telemetry | `AddAgents(...)`          |
+| [`GovUK.Dfe.AI.Agents.Mcp`](https://github.com/DFE-Digital/rsd-ai-libs/blob/main/src/GovUK.Dfe.AI.Agents.Mcp/readme.md)               | Tools from your own MCP servers                          | `.AddMcpServers()`        |
+| [`GovUK.Dfe.AI.Agents.AISearch`](https://github.com/DFE-Digital/rsd-ai-libs/blob/main/src/GovUK.Dfe.AI.Agents.AISearch/readme.md)     | Evidence from Azure AI Search                            | `.AddAISearch()`          |
+| [`GovUK.Dfe.AI.Agents.Evaluation`](https://github.com/DFE-Digital/rsd-ai-libs/blob/main/src/GovUK.Dfe.AI.Agents.Evaluation/readme.md) | A judge model that scores answers                        | `.AddQualityEvaluation()` |
+| [`GovUK.Dfe.AI.Agents.Guardrails`](https://github.com/DFE-Digital/rsd-ai-libs/blob/main/src/GovUK.Dfe.AI.Agents.Guardrails/readme.md) | Foundry guardrails on your model deployments             | `.AddGuardrails()`        |
 
 ## Quick start
 
@@ -35,7 +35,12 @@ dotnet add package Azure.Monitor.OpenTelemetry.AspNetCore   # sends token usage 
       "DefaultModel": "<connection>/gpt-5.1"
     },
     "Authentication": { "TenantId": "<tenant>", "ClientId": "<client id>" },
-    "PromptFiles": { "SystemPrompts": { "Ofsted": "Prompts/Ofsted.md", "Synthesis": "Prompts/Synthesis.md" } },
+    "PromptFiles": {
+      "SystemPrompts": {
+        "Ofsted": "Prompts/Ofsted.md",
+        "Synthesis": "Prompts/Synthesis.md"
+      }
+    },
     "RunTimeout": "00:02:00",
     "MaxConcurrency": 4
   }
@@ -45,7 +50,7 @@ dotnet add package Azure.Monitor.OpenTelemetry.AspNetCore   # sends token usage 
 - Give the identity the **Foundry User** role on the Foundry project.
 - Load `Authentication:ClientSecret` from Key Vault, never from appsettings.json. To use managed identities instead,
   see [Credentials](#credentials).
-- Set each prompt file to *Copy to output directory*.
+- Set each prompt file to _Copy to output directory_.
 
 ### 3. Register
 
@@ -110,21 +115,21 @@ Put your instructions in `prompt`. Put untrusted material (documents, search res
 
 ### Namespaces
 
-| `using GovUK.Dfe.AI.Agents…` | For |
-| --- | --- |
-| `.Builders` | `AgentsBuilder` |
-| `.ValueObjects` | `AgentDefinition`, `AgentOutputSchema`, `AgentResult`, `AgentSpec`, `CompletedAgentRun` |
-| `.Services.Interfaces` | `IAgentService`, `IAgentRunnerService`, `IAgentRuntimeService` |
-| `.Extensions` | `ReadOutputAs<T>()`, `ToTokenUsageSummary()` |
-| `.Context` / `.Context.Interfaces` | `AgentContext` / `IContextRetriever` |
-| `.Filters` | `ODataFilter` |
-| `.Quality` / `.Quality.Interfaces` | `AgentTestCase`, `AgentEvaluationReport` / `IAgentTestRunner`, `IAgentRunEvaluator` |
-| `.Extensibility.Interfaces` | `IAgentsPackage`, `IAgentRunObserver` (told about each successful run) |
-| `.Enums` | `AzureCredentialTarget`, `AgentTestTarget` |
-| `.Tools.Interfaces` / `.Privacy` | `IToolCallApprover` / `PatternRedactor` |
-| `.Providers` / `.Tools.WebSearch` / `.Prompts.Interfaces` | `ManagedAgentProviderBase` / `WebSearchToolProvider` / `IPromptTemplateBuilder` |
-| `.Diagnostics` | `AgentTelemetry` |
-| `.Exceptions` | `AgentGuardrailException` |
+| `using GovUK.Dfe.AI.Agents…`                              | For                                                                                     |
+| --------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| `.Builders`                                               | `AgentsBuilder`                                                                         |
+| `.ValueObjects`                                           | `AgentDefinition`, `AgentOutputSchema`, `AgentResult`, `AgentSpec`, `CompletedAgentRun` |
+| `.Services.Interfaces`                                    | `IAgentService`, `IAgentRunnerService`, `IAgentRuntimeService`                          |
+| `.Extensions`                                             | `ReadOutputAs<T>()`, `ToTokenUsageSummary()`                                            |
+| `.Context` / `.Context.Interfaces`                        | `AgentContext` / `IContextRetriever`                                                    |
+| `.Filters`                                                | `ODataFilter`                                                                           |
+| `.Quality` / `.Quality.Interfaces`                        | `AgentTestCase`, `AgentEvaluationReport` / `IAgentTestRunner`, `IAgentRunEvaluator`     |
+| `.Extensibility.Interfaces`                               | `IAgentsPackage`, `IAgentRunObserver` (told about each successful run)                  |
+| `.Enums`                                                  | `AzureCredentialTarget`, `AgentTestTarget`                                              |
+| `.Tools.Interfaces` / `.Privacy`                          | `IToolCallApprover` / `PatternRedactor`                                                 |
+| `.Providers` / `.Tools.WebSearch` / `.Prompts.Interfaces` | `ManagedAgentProviderBase` / `WebSearchToolProvider` / `IPromptTemplateBuilder`         |
+| `.Diagnostics`                                            | `AgentTelemetry`                                                                        |
+| `.Exceptions`                                             | `AgentGuardrailException`                                                               |
 
 `AddAgents` and every add-on's `Add…()` method are in `Microsoft.Extensions.DependencyInjection`, so registering needs no
 extra usings.
@@ -141,30 +146,43 @@ extra usings.
 
 ## Running agents
 
-| `IAgentService` method | Use for | When an agent fails |
-| --- | --- | --- |
-| `RunAsync(definition, prompt, evidence)` | One agent | Throws |
-| `RunParallelAsync(definitions, resolvePrompt, context, resolveEvidence: ...)` | Independent agents | That agent gets a fallback result; the others carry on |
-| `RunSequentialAsync(definitions, resolvePrompt, initialInput, context)` | A chain, e.g. draft then review | That agent gets a fallback; the next agent gets the last good output |
-| `ProvisionAsync(definitions)` | A [provisioning job](#centrally-managed-agents) | Throws |
+| `IAgentService` method                                                        | Use for                                         | When an agent fails                                                  |
+| ----------------------------------------------------------------------------- | ----------------------------------------------- | -------------------------------------------------------------------- |
+| `RunAsync(definition, prompt, evidence)`                                      | One agent                                       | Throws                                                               |
+| `RunParallelAsync(definitions, resolvePrompt, context, resolveEvidence: ...)` | Independent agents                              | That agent gets a fallback result; the others carry on               |
+| `RunSequentialAsync(definitions, resolvePrompt, initialInput, context)`       | A chain, e.g. draft then review                 | That agent gets a fallback; the next agent gets the last good output |
+| `ProvisionAsync(definitions)`                                                 | A [provisioning job](#centrally-managed-agents) | Throws                                                               |
 
 - Results come back in the same order as the definitions. To total their tokens, call `results.ToTokenUsageSummary()`.
 - To throw instead of returning fallbacks, pass `shouldSuppress: _ => false`. This also cancels the other agents.
 
-| `AgentDefinition` property | Meaning |
-| --- | --- |
-| `Name` | The agent's name in Foundry. Must be unique per app if the project is shared |
-| `SystemPromptKey` | Its key under `PromptFiles:SystemPrompts` |
-| `IsManagedAgent` | `true` (default): kept and reused. `false`: created and deleted on every run |
-| `AllowedTools` | The only tools the agent may call. Empty (the default) means no tools |
-| `ToolsRequiringApproval` | Tools that only run once approved, e.g. ones that change records ([Responsible AI](#responsible-ai)) |
-| `OutputSchema` | A JSON schema for a typed answer; read it with `ReadOutputAs<T>()` |
-| `Validate`, `RequireCitations` | [Answer checks](#answer-checks) |
+| `AgentDefinition` property      | Meaning                                                                                              |
+| ------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `Name`                          | The agent's name in Foundry. Must be unique per app if the project is shared                         |
+| `SystemPromptKey`               | Its key under `PromptFiles:SystemPrompts`                                                            |
+| `IsManagedAgent`                | `true` (default): kept and reused. `false`: created and deleted on every run                         |
+| `AllowedTools`                  | The only tools the agent may call. Empty (the default) means no tools                                |
+| `ToolsRequiringApproval`        | Tools that only run once approved, e.g. ones that change records ([Responsible AI](#responsible-ai)) |
+| `OutputSchema`                  | A JSON schema for a typed answer; read it with `ReadOutputAs<T>()`                                   |
+| `Validate`, `RequiredCitations` | [Answer checks](#answer-checks)                                                                      |
 
 Other extension points:
 
 - **Agents built in code:** subclass `ManagedAgentProviderBase` and add it with `agents.AddAgentProvider<T>()`.
 - **Non-MCP tools:** `agents.AddTools("news-agent", new WebSearchToolProvider())`.
+- **Local news, e.g. about a trust:** web search is biased towards a location (default: London, England). To search near
+  each trust's or school's own town, run a temporary agent with that town; with no town, the default is used:
+
+  ```csharp
+  var tools = await new WebSearchToolProvider(WebSearchLocation.ForCity(trust.Town)).GetToolsAsync(ct);   // IAgentRuntimeService runtime
+  var news = await runtime.RunEphemeralAsync(
+      new AgentSpec { Name = "trust-news", Instructions = "Find recent local news about the trust and its schools. Cite each source.", Tools = tools },
+      $"Recent news about {trust.Name} in {trust.Town}.", cancellationToken: ct);
+  ```
+
+  The location only biases results, so name the town in the prompt too. A temporary agent is created and deleted for each
+  run, so every run can search a different town.
+
 - **User prompt templates:** add them under `PromptFiles:UserPrompts` with `{{Name}}` placeholders, then fill one with
   `IPromptTemplateBuilder.Build("Key", values)`.
 
@@ -172,7 +190,10 @@ Other extension points:
 
 - **Citations (on by default):** if the evidence is numbered (as search results are), the answer must cite it as
   `[Evidence n]` and may only cite evidence that exists. Unnumbered evidence isn't checked. Set
-  `RequireCitations = false` when the answer has nowhere to put citations.
+  `RequiredCitations = false` when the answer has nowhere to put citations.
+- **No broken links:** citations are plain text, `[Evidence n]`, never links. Any link in an answer without a full web
+  address (e.g. `[the report](files/report.pdf)`) is turned back into text, because it would point at your app and give
+  a 404. Full `https://` links, such as web search sources, are kept.
 - **Your own rules:** `Validate` returns a reason the answer is wrong, or `null` if it's fine.
 - **Retry:** a failed check is sent back once, in the same conversation. If the answer fails again, the run fails.
 
@@ -334,8 +355,26 @@ An agent can be in `VersionPins` or `ExternallyManagedAgents`, but not both.
   The identity needs **Storage Blob Data Contributor**: on the storage account if the library should create the
   container, or on the container if you create it yourself. Only HTTPS and Entra ID are supported; a SAS URI fails startup.
   To use another store, such as Redis, implement `IRunSlotStore`.
-- **Cost per run:** `MaxOutputTokensPerRun` caps output tokens across tool rounds and the retry, including reasoning
+
+- **Cost cap per run:** `MaxOutputTokensPerRun` caps output tokens across tool rounds and the retry, including reasoning
   tokens. A run that reaches the cap fails.
+- **What runs cost:** add each model's prices per 1,000 tokens:
+
+  ```json
+  "Pricing": {
+    "Currency": "GBP",
+    "Models": {
+      "gpt-5.1": { "CostPer1kTokensInput": 0.001, "CostPer1kTokensCachedInput": 0.0001, "CostPer1kTokensOutput": 0.008 }
+    }
+  }
+  ```
+
+  Then `result.Cost` is one run's cost, and `results.ToTokenUsageSummary().Cost` is the cost of several runs together,
+  e.g. one whole briefing. Failed runs are included, as Foundry still bills them. A model name matches any model that
+  starts with it, so `gpt-5.1` covers `gpt-5.1-2025-11-13`. A model with no price reports tokens only. Input tokens
+  Foundry served from its prompt cache (`result.CachedInputTokens`) are charged at `CostPer1kTokensCachedInput`, or the
+  input price if that isn't set.
+
 - **Orphaned agents:** a crash can leave temporary agents behind. Add `agents.AddEphemeralAgentSweep()` to delete them
   every 30 minutes. The sweep only deletes this app's agents, and only ones older than any run could be, so it's safe to
   run on every instance. Keep `ApplicationName` unique per app.
@@ -344,16 +383,16 @@ An agent can be in `VersionPins` or `ExternallyManagedAgents`, but not both.
 
 ### Set by this library
 
-| Limit | Default | Setting | When reached |
-| --- | --- | --- | --- |
-| Output tokens per run, including reasoning, tool rounds and the retry | 64,000 | `MaxOutputTokensPerRun` | The run fails |
-| Evidence per run | 200,000 characters (about 50,000 tokens) | `MaxEvidenceCharacters` | Cut, keeping the start, with a note to the model |
-| Evidence per search (AISearch) | No limit | `Search:MaxEvidenceCharacters` | Whole results kept, most relevant first; the rest left out with a note |
-| One tool output | 40,000 characters (about 10,000 tokens) | `MaxToolOutputCharacters` | Cut, with a note to the model |
-| Tool-call rounds per run | 10 | Fixed | The run fails |
-| Time per run | No limit | `RunTimeout` | `TimeoutException` |
-| Runs at once | No limit | `MaxConcurrency`, `GlobalConcurrency` | The run waits up to `MaxWaitForRunSlot` (2 minutes), then `TimeoutException` |
-| Retries of a rate-limited (429) or failed Foundry call | 6, honouring `Retry-After` | `MaxRetries` | The run fails; a rate limit says what to change |
+| Limit                                                                 | Default                                  | Setting                               | When reached                                                                 |
+| --------------------------------------------------------------------- | ---------------------------------------- | ------------------------------------- | ---------------------------------------------------------------------------- |
+| Output tokens per run, including reasoning, tool rounds and the retry | 64,000                                   | `MaxOutputTokensPerRun`               | The run fails                                                                |
+| Evidence per run                                                      | 200,000 characters (about 50,000 tokens) | `MaxEvidenceCharacters`               | Cut, keeping the start, with a note to the model                             |
+| Evidence per search (AISearch)                                        | No limit                                 | `AISearch:MaxEvidenceCharacters`      | Whole results kept, most relevant first; the rest left out with a note       |
+| One tool output                                                       | 40,000 characters (about 10,000 tokens)  | `MaxToolOutputCharacters`             | Cut, with a note to the model                                                |
+| Tool-call rounds per run                                              | 10                                       | Fixed                                 | The run fails                                                                |
+| Time per run                                                          | No limit                                 | `RunTimeout`                          | `TimeoutException`                                                           |
+| Runs at once                                                          | No limit                                 | `MaxConcurrency`, `GlobalConcurrency` | The run waits up to `MaxWaitForRunSlot` (2 minutes), then `TimeoutException` |
+| Retries of a rate-limited (429) or failed Foundry call                | 6, honouring `Retry-After`               | `MaxRetries`                          | The run fails; a rate limit says what to change                              |
 
 Characters become tokens at about 4 to 1 for English text. The defaults are sized for **gpt-5.1** (up to 272,000 input
 tokens): full evidence (~50,000 tokens) plus ten full tool outputs (~100,000) still leaves room for the instructions and
@@ -363,12 +402,12 @@ conversation. For a model with a smaller window, such as gpt-4o (128,000), lower
 
 Check the current figures for your model and region: they change. These are from Microsoft Learn, September 2026.
 
-| Model | Context window (input + output) | Max output tokens |
-| --- | --- | --- |
-| gpt-5, gpt-5-mini, gpt-5.1 | 400,000 (input up to 272,000) | 128,000 |
-| gpt-4.1, gpt-4.1-mini | 1,047,576, but 300,000 on standard deployments | 32,768 |
-| o3, o4-mini | Input 200,000 | 100,000 |
-| gpt-4o, gpt-4o-mini | Input 128,000 | 16,384 |
+| Model                      | Context window (input + output)                | Max output tokens |
+| -------------------------- | ---------------------------------------------- | ----------------- |
+| gpt-5, gpt-5-mini, gpt-5.1 | 400,000 (input up to 272,000)                  | 128,000           |
+| gpt-4.1, gpt-4.1-mini      | 1,047,576, but 300,000 on standard deployments | 32,768            |
+| o3, o4-mini                | Input 200,000                                  | 100,000           |
+| gpt-4o, gpt-4o-mini        | Input 128,000                                  | 16,384            |
 
 - **The context window is shared:** instructions, prompt, evidence, tool outputs, the conversation so far, reasoning and
   the answer all count. Keep `MaxEvidenceCharacters` and tool outputs well within the model's input limit.
@@ -376,6 +415,10 @@ Check the current figures for your model and region: they change. These are from
   deployment type and your subscription's quota tier. For example, gpt-5.1 on Global Standard starts at 1,000,000 TPM
   and 10,000 RPM. Size `MaxConcurrency` and `GlobalConcurrency` to stay under them; over the limit, calls get HTTP 429,
   which the library retries.
+- **Tokens per minute is a rolling 60-second window,** shared by every app using the deployment: each request's tokens
+  come back 60 seconds after it. The library reads the real figure from each response (`remaining-tokens` or
+  `x-ratelimit-remaining-tokens`) into `dfe.ai_agents.tokens.remaining`, and counts each response below
+  `LowRemainingTokensPercent` (default 10%) of the limit in `dfe.ai_agents.tokens.low`. Set the threshold per app.
 - **Agent Service limits:** up to 128 tools per agent. The Agent Service has no rate limit of its own; the model
   deployment's limits apply.
 
@@ -391,19 +434,23 @@ development only, you can set `"RequireTokenUsageTelemetry": false`.
 Names follow the [OpenTelemetry generative AI conventions](https://github.com/open-telemetry/semantic-conventions-genai)
 (`gen_ai.*`), so standard GenAI dashboards understand them. Signals the conventions don't cover use `dfe.ai_agents.*`.
 
-| Metric | Records |
-| --- | --- |
-| `gen_ai.client.inference.usage.input_tokens` | Input tokens per run, including tool rounds and failed runs |
-| `gen_ai.client.inference.usage.output_tokens` | Output tokens per run, including reasoning, tool rounds and failed runs |
-| `gen_ai.invoke_agent.duration` | Seconds per run; `error.type` is set when it failed |
-| `gen_ai.invoke_agent.inference_calls` | Model calls per run (more than 1 means tool rounds or a retry) |
-| `gen_ai.invoke_agent.tool_calls` | Tool calls per run |
-| `gen_ai.execute_tool.duration` | Seconds per tool call, by tool |
-| `gen_ai.invoke_workflow.duration` | Seconds per parallel or sequential run |
-| `dfe.ai_agents.workflow.input_tokens` / `.output_tokens` | Total tokens per parallel or sequential run, e.g. one briefing |
-| `dfe.ai_agents.run_slot.wait.duration` | Seconds spent waiting for a slot. If this keeps rising, the limits are too low |
-| `dfe.ai_agents.guardrail.blocks` | Prompts and answers a Foundry guardrail blocked |
-| `dfe.ai_agents.tool.approvals` | Tool calls that needed approval, by tool and `dfe.ai_agents.tool.approved` |
+| Metric                                        | Records                                                                                                    |
+| --------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `gen_ai.client.inference.usage.input_tokens`  | Input tokens per run, including tool rounds and failed runs                                                |
+| `gen_ai.client.inference.usage.output_tokens` | Output tokens per run, including reasoning, tool rounds and failed runs                                    |
+| `gen_ai.invoke_agent.duration`                | Seconds per run; `error.type` is set when it failed                                                        |
+| `gen_ai.invoke_agent.inference_calls`         | Model calls per run (more than 1 means tool rounds or a retry)                                             |
+| `gen_ai.invoke_agent.tool_calls`              | Tool calls per run                                                                                         |
+| `gen_ai.execute_tool.duration`                | Seconds per tool call, by tool                                                                             |
+| `gen_ai.invoke_workflow.duration`             | Seconds per parallel or sequential run                                                                     |
+| `dfe.ai_agents.workflow.tokens`               | Total tokens per parallel or sequential run, e.g. one briefing, by `gen_ai.token.type` (`input`, `output`) |
+| `dfe.ai_agents.cost`                          | What each run cost, by agent, model and `dfe.ai_agents.currency` (needs `Pricing`)                         |
+| `dfe.ai_agents.workflow.cost`                 | What each parallel or sequential run cost, e.g. one briefing (needs `Pricing`)                             |
+| `dfe.ai_agents.run_slot.wait.duration`        | Seconds spent waiting for a slot. If this keeps rising, the limits are too low                             |
+| `dfe.ai_agents.guardrail.blocks`              | Prompts and answers a Foundry guardrail blocked                                                            |
+| `dfe.ai_agents.tool.approvals`                | Tool calls that needed approval, by tool and `dfe.ai_agents.tool.approved`                                 |
+| `dfe.ai_agents.tokens.remaining`              | The deployment's remaining tokens per minute, from each Foundry response                                   |
+| `dfe.ai_agents.tokens.low`                    | Responses below `LowRemainingTokensPercent` of the deployment's token limit                                |
 
 Metrics are tagged with `gen_ai.agent.name`, the model (`gen_ai.response.model`) and the application
 (`dfe.ai_agents.application`). The spans are `invoke_workflow` (a parallel or sequential run), `invoke_agent {agent}` and
@@ -417,6 +464,23 @@ Tokens per app and agent per day:
 customMetrics
 | where name in ("gen_ai.client.inference.usage.input_tokens", "gen_ai.client.inference.usage.output_tokens")
 | summarize tokens = sum(valueSum) by cloud_RoleName, agent = tostring(customDimensions["gen_ai.agent.name"]), bin(timestamp, 1d)
+```
+
+Cost per app and agent per day:
+
+```kusto
+customMetrics
+| where name == "dfe.ai_agents.cost"
+| summarize cost = sum(valueSum) by cloud_RoleName, agent = tostring(customDimensions["gen_ai.agent.name"]),
+    currency = tostring(customDimensions["dfe.ai_agents.currency"]), bin(timestamp, 1d)
+```
+
+Times per hour an app ran low on tokens:
+
+```kusto
+customMetrics
+| where name == "dfe.ai_agents.tokens.low"
+| summarize times = sum(valueSum) by cloud_RoleName, bin(timestamp, 1h)
 ```
 
 When a guardrail blocks a prompt or answer, the run fails and the inner exception is an `AgentGuardrailException`. In
@@ -446,29 +510,31 @@ the role its service needs.
 
 All options sit under `AiAgents`. You can also change them in code with `agents.Configure(o => ...)`.
 
-| Setting | Default | Purpose |
-| --- | --- | --- |
-| `ApplicationName` | Entry assembly name | Telemetry tag, and scope of the orphan sweep |
-| `RunTimeout` | None | Longest time one run may take |
-| `MaxOutputTokensPerRun` | 64000 | Output tokens one run may use (minimum 16) |
-| `MaxEvidenceCharacters` | 200000 | Longer evidence is cut, keeping the start |
-| `MaxToolOutputCharacters` | 40000 | Longer tool output is cut |
-| `FenceToolOutput` | `true` | Fences tool output as data |
-| `DeleteConversationsAfterRun` | `true` | Keeps prompts and evidence out of Foundry |
-| `MaxConcurrency` | None | Runs at once on one instance |
-| `GlobalConcurrency` | Off | `MaxConcurrentRuns` across instances, and the `BlobContainerUri` that holds the slots |
-| `MaxWaitForRunSlot` | 2 minutes | Longest time a run waits for a slot |
-| `AgentCacheDuration` | 30 seconds | How long a resolved version is reused; `0` turns caching off |
-| `VersionPins` | None | The version this environment runs, per agent |
-| `ProtectedVersions` | None | Versions pruning must keep, per agent |
-| `KeepLatestVersions` | None | Versions kept each time one is created (minimum 2) |
-| `ExternallyManagedAgents` | None | Agents from a provisioning job, with their versions; optional `Endpoint` and `Authentication` |
-| `ResponseFormatKey` | None | A system prompt appended to every agent's instructions |
-| `ResponseFormatExemptPromptTypes` | None | Prompt keys that `ResponseFormatKey` isn't appended to |
-| `RequireTokenUsageTelemetry` | `true` | Fails startup when token metrics aren't recorded |
-| `ValidateAgentToolsAtStartup` | `true` | Fails startup if a pinned or external agent's tools can't run here |
-| `EnableDriftDetection` | `false` | Warns when a pinned version no longer matches its definition |
-| `MaxRetries` | 6 | Retries on a rate limit or transient failure, honouring `Retry-After` (rides out about a minute of throttling). A retried 5xx call may be billed twice |
+| Setting                           | Default             | Purpose                                                                                                                                                |
+| --------------------------------- | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `ApplicationName`                 | Entry assembly name | Telemetry tag, and scope of the orphan sweep                                                                                                           |
+| `RunTimeout`                      | None                | Longest time one run may take                                                                                                                          |
+| `MaxOutputTokensPerRun`           | 64000               | Output tokens one run may use (minimum 16)                                                                                                             |
+| `MaxEvidenceCharacters`           | 200000              | Longer evidence is cut, keeping the start                                                                                                              |
+| `MaxToolOutputCharacters`         | 40000               | Longer tool output is cut                                                                                                                              |
+| `FenceToolOutput`                 | `true`              | Fences tool output as data                                                                                                                             |
+| `DeleteConversationsAfterRun`     | `true`              | Keeps prompts and evidence out of Foundry                                                                                                              |
+| `MaxConcurrency`                  | None                | Runs at once on one instance                                                                                                                           |
+| `GlobalConcurrency`               | Off                 | `MaxConcurrentRuns` across instances, and the `BlobContainerUri` that holds the slots                                                                  |
+| `MaxWaitForRunSlot`               | 2 minutes           | Longest time a run waits for a slot                                                                                                                    |
+| `AgentCacheDuration`              | 30 seconds          | How long a resolved version is reused; `0` turns caching off                                                                                           |
+| `VersionPins`                     | None                | The version this environment runs, per agent                                                                                                           |
+| `ProtectedVersions`               | None                | Versions pruning must keep, per agent                                                                                                                  |
+| `KeepLatestVersions`              | None                | Versions kept each time one is created (minimum 2)                                                                                                     |
+| `ExternallyManagedAgents`         | None                | Agents from a provisioning job, with their versions; optional `Endpoint` and `Authentication`                                                          |
+| `ResponseFormatKey`               | None                | A system prompt appended to every agent's instructions                                                                                                 |
+| `ResponseFormatExemptPromptTypes` | None                | Prompt keys that `ResponseFormatKey` isn't appended to                                                                                                 |
+| `RequireTokenUsageTelemetry`      | `true`              | Fails startup when token metrics aren't recorded                                                                                                       |
+| `ValidateAgentToolsAtStartup`     | `true`              | Fails startup if a pinned or external agent's tools can't run here                                                                                     |
+| `EnableDriftDetection`            | `false`             | Warns when a pinned version no longer matches its definition                                                                                           |
+| `Pricing`                         | None                | Prices per model, so results and metrics report cost                                                                                                   |
+| `MaxRetries`                      | 6                   | Retries on a rate limit or transient failure, honouring `Retry-After` (rides out about a minute of throttling). A retried 5xx call may be billed twice |
+| `LowRemainingTokensPercent`       | 10                  | Counts responses below this % of the deployment's token limit (`dfe.ai_agents.tokens.low`); 0 turns it off                                             |
 
 ## Production checklist
 

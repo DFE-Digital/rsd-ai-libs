@@ -11,7 +11,7 @@ dotnet add package GovUK.Dfe.AI.Agents.AISearch
 
 ```json
 "AiAgents": {
-  "Search": {
+  "AISearch": {
     "Endpoint": "https://<search>.search.windows.net",
     "Indexes": [ { "Name": "ofsted_index", "ContentFields": [ "title", "content" ] } ]
   }
@@ -25,7 +25,7 @@ builder.Services.AddAgents(builder.Configuration, agents => agents
 ```
 
 Give the app's identity the **Search Index Data Reader** role. To use a different identity for search, add
-`Search:Authentication`, or set one in code with `agents.UseAISearchCredential(credential)`.
+`AISearch:Authentication`, or set one in code with `agents.UseAISearchCredential(credential)`.
 
 ### Search without agents
 
@@ -36,8 +36,8 @@ no agents:
 builder.Services.AddAISearch(builder.Configuration, new ManagedIdentityCredential());
 ```
 
-It reads the same `AiAgents:Search` section. Pass a credential, or leave it out and set a complete
-`AiAgents:Search:Authentication` block (`TenantId`, `ClientId`, `ClientSecret`). If you later add agents with
+It reads the same `AiAgents:AISearch` section. Pass a credential, or leave it out and set a complete
+`AiAgents:AISearch:Authentication` block (`TenantId`, `ClientId`, `ClientSecret`). If you later add agents with
 `agents.AddAISearch()`, search is still registered only once.
 
 ## Use
@@ -57,9 +57,9 @@ var result = await agents.RunAsync(BriefingAgents.Ofsted, "Summarise the latest 
   filter (e.g. from `SearchFilter.Create`), pass it with `ODataFilter.Raw(filter)`.
 - **Set `ContentFields`** on each index. Otherwise every string field, including ids and URLs, is sent to the model.
 - **Weak matches are dropped:** results scoring below half the top score are removed. Change this with
-  `Search:MinimumRelevanceFilter` (default `0.5`).
+  `AISearch:MinimumRelevanceFilter` (default `0.5`).
 - **Large results:** every relevant result is returned by default. To cap the evidence, set
-  `Search:MaxEvidenceCharacters`: whole results are kept, most relevant first, and the rest are left out with a note, so
+  `AISearch:MaxEvidenceCharacters`: whole results are kept, most relevant first, and the rest are left out with a note, so
   no result is cut mid-way and citations still match. To fetch less from the search service, lower `size`.
 
 ## Better matches: semantic and hybrid search

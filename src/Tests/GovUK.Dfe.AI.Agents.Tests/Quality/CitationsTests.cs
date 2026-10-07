@@ -34,7 +34,7 @@ public sealed class CitationsTests
 
         var (prompt, validate) = Citations.ForRun(definition, "Summarise.", NumberedEvidence);
 
-        Assert.EndsWith("as [Evidence n].", prompt, StringComparison.Ordinal);
+        Assert.EndsWith("as plain text [Evidence n], never as a link.", prompt, StringComparison.Ordinal);
         Assert.Contains("Cite the evidence", validate!(new AgentResult { AgentName = "ofsted-agent", Output = "No citations.", TotalTokens = 0 }), StringComparison.Ordinal);
         Assert.Equal("own check", validate(new AgentResult { AgentName = "ofsted-agent", Output = "Good [Evidence 1].", TotalTokens = 0 }));
     }
@@ -43,9 +43,9 @@ public sealed class CitationsTests
     [InlineData(null, true)]
     [InlineData("Another agent's unnumbered output.", true)]   // unnumbered evidence isn't checked
     [InlineData(NumberedEvidence, false)]                      // the agent turned citations off
-    public void ForRun_ChangesNothing_WhenTheEvidenceIsntNumbered_OrCitationsAreOff(string? evidence, bool requireCitations)
+    public void ForRun_ChangesNothing_WhenTheEvidenceIsntNumbered_OrCitationsAreOff(string? evidence, bool RequiredCitations)
     {
-        var definition = new AgentDefinition("ofsted-agent", "Ofsted") { RequireCitations = requireCitations };
+        var definition = new AgentDefinition("ofsted-agent", "Ofsted") { RequiredCitations = RequiredCitations };
 
         var (prompt, validate) = Citations.ForRun(definition, "Summarise.", evidence);
 

@@ -22,9 +22,9 @@ namespace Microsoft.Extensions.DependencyInjection;
 /// <summary>Adds Azure AI Search: to <c>AddAgents</c> for agents' evidence, or on its own for an app that only searches.</summary>
 public static class AISearchExtensions
 {
-    private const string SectionName = "Search";
+    private const string SectionName = "AISearch";
 
-    /// <summary>Registers <c>IContextRetriever</c> over the indexes under <c>AiAgents:Search</c>, for agents' evidence.</summary>
+    /// <summary>Registers <c>IContextRetriever</c> over the indexes under <c>AiAgents:AISearch</c>, for agents' evidence.</summary>
     public static AgentsBuilder AddAISearch(this AgentsBuilder agents)
     {
         ArgumentNullException.ThrowIfNull(agents);
@@ -33,10 +33,10 @@ public static class AISearchExtensions
 
     /// <summary>
     /// Registers <c>IContextRetriever</c> on its own, without <c>AddAgents</c> or Foundry, from the same
-    /// <c>AiAgents:Search</c> section. Signs in with <paramref name="credential"/>, else the section's <c>Authentication</c> block.
+    /// <c>AiAgents:AISearch</c> section. Signs in with <paramref name="credential"/>, else the section's <c>Authentication</c> block.
     /// Calling this and <c>agents.AddAISearch()</c> registers search once.
     /// </summary>
-    /// <param name="credential">E.g. <c>new ManagedIdentityCredential()</c>. Null: the <c>AiAgents:Search:Authentication</c> block.</param>
+    /// <param name="credential">E.g. <c>new ManagedIdentityCredential()</c>. Null: the <c>AiAgents:AISearch:Authentication</c> block.</param>
     /// <exception cref="InvalidOperationException">The section is missing, or there's no credential and no complete block.</exception>
     public static IServiceCollection AddAISearch(this IServiceCollection services, IConfiguration configuration, TokenCredential? credential = null)
     {
@@ -52,7 +52,7 @@ public static class AISearchExtensions
         return services.AddAzureSearchContextRetriever(section, credential ?? CredentialFrom(section));
     }
 
-    /// <summary>A credential for Azure AI Search. Overrides <c>Search:Authentication</c> and the default.</summary>
+    /// <summary>A credential for Azure AI Search. Overrides <c>AISearch:Authentication</c> and the default.</summary>
     public static AgentsBuilder UseAISearchCredential(this AgentsBuilder agents, TokenCredential credential)
     {
         ArgumentNullException.ThrowIfNull(agents);

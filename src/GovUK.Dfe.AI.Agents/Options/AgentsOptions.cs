@@ -30,10 +30,19 @@ public sealed partial class AgentsOptions
     /// </summary>
     public int MaxRetries { get; set; } = 6;
 
+    /// <summary>
+    /// Counts each Foundry response where the model deployment's remaining tokens per minute are below this percentage of
+    /// its limit (<c>dfe.ai_agents.tokens.low</c>), so teams can see how often they run close. 0 turns the count off.
+    /// </summary>
+    public double LowRemainingTokensPercent { get; set; } = 10;
+
     // ===== Each run =====
 
     /// <summary>The longest one run may take, tool rounds included. Unset: no limit.</summary>
     public TimeSpan? RunTimeout { get; set; }
+
+    /// <summary>What each model costs, so results and metrics report cost. Unset: tokens only.</summary>
+    public PricingSettings Pricing { get; set; } = new();
 
     // Defaults are sized for gpt-5.1 (400,000-token context: up to 272,000 input, 128,000 output).
 
@@ -126,6 +135,7 @@ public sealed partial class AgentsOptions
         MaxWaitForRunSlot = MaxWaitForRunSlot,
         DeleteConversationsAfterRun = DeleteConversationsAfterRun,
         RequireTokenUsageTelemetry = RequireTokenUsageTelemetry,
+        Pricing = Pricing,
         ValidateAgentToolsAtStartup = ValidateAgentToolsAtStartup,
     };
 }

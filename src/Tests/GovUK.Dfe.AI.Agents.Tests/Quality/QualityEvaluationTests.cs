@@ -28,7 +28,7 @@ public sealed class QualityEvaluationTests
     private static IAgentService Answers(string output)
     {
         var agents = Substitute.For<IAgentService>();
-        agents.RunAsync(Arg.Any<AgentDefinition>(), Arg.Any<string>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
+        agents.RunAsync(Arg.Any<AgentDefinition>(), Arg.Any<string>(), Arg.Any<AgentEvidence?>(), Arg.Any<CancellationToken>())
             .Returns(new AgentResult { AgentName = "ofsted-agent", Output = output, TotalTokens = 30, AgentVersion = "4" });
         return agents;
     }
@@ -55,7 +55,7 @@ public sealed class QualityEvaluationTests
 
         await new AgentTestRunner(agents).RunAsync(Ofsted, [GoodSchool], AgentTestTarget.Deployed, cancellationToken: TestContext.Current.CancellationToken);
 
-        await agents.Received(1).RunAsync(Ofsted, GoodSchool.Prompt, Arg.Any<string?>(), Arg.Any<CancellationToken>());
+        await agents.Received(1).RunAsync(Ofsted, GoodSchool.Prompt, Arg.Any<AgentEvidence?>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -72,7 +72,7 @@ public sealed class QualityEvaluationTests
     public async Task TestRunner_RecordsAFailedRun_AsAFailedCase_AndCarriesOn()
     {
         var agents = Substitute.For<IAgentService>();
-        agents.RunAsync(Arg.Any<AgentDefinition>(), Arg.Any<string>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
+        agents.RunAsync(Arg.Any<AgentDefinition>(), Arg.Any<string>(), Arg.Any<AgentEvidence?>(), Arg.Any<CancellationToken>())
             .Throws(new InvalidOperationException("outer", new TimeoutException("Took too long.")));
 
         var report = await new AgentTestRunner(agents).RunAsync(Ofsted, [GoodSchool, GoodSchool with { Name = "second" }], cancellationToken: TestContext.Current.CancellationToken);
@@ -219,7 +219,7 @@ public sealed class QualityEvaluationTests
     public async Task Repeats_AverageEachCasesScores_AndAFactWrongInAnyRunFailsTheCase()
     {
         var agents = Substitute.For<IAgentService>();
-        agents.RunAsync(Arg.Any<AgentDefinition>(), Arg.Any<string>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
+        agents.RunAsync(Arg.Any<AgentDefinition>(), Arg.Any<string>(), Arg.Any<AgentEvidence?>(), Arg.Any<CancellationToken>())
             .Returns(new AgentResult { AgentName = "ofsted-agent", Output = "Rated good in 2024." },
                      new AgentResult { AgentName = "ofsted-agent", Output = "Rated good." });
         var evaluator = Substitute.For<IAgentRunEvaluator>();

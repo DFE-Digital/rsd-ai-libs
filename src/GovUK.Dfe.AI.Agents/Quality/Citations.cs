@@ -1,11 +1,15 @@
 using GovUK.Dfe.AI.Agents.Constants;
 using GovUK.Dfe.AI.Agents.ValueObjects;
 using System.Globalization;
+using System.Net;
 using System.Text.RegularExpressions;
 
 namespace GovUK.Dfe.AI.Agents.Quality;
 
-/// <summary>Checks answers cite numbered evidence (<c>--- index Evidence n ---</c>) as <c>[Evidence n]</c>.</summary>
+/// <summary>
+/// Checks answers cite numbered evidence (<c>--- index Evidence n ---</c>) as <c>[Evidence n]</c>, and, once an answer is
+/// checked, shows each citation as a link to its source or its source's name.
+/// </summary>
 internal static partial class Citations
 {
     /// <summary>The prompt and validator for a run: the citation check when required and possible, then the definition's own.</summary>
@@ -38,6 +42,33 @@ internal static partial class Citations
         return unknown.Count == 0
             ? null
             : $"{string.Join(", ", unknown.Select(number => $"[Evidence {number}]"))} doesn't exist; cite only [Evidence 1] to [Evidence {evidenceCount}].";
+    }
+
+    /// <summary>
+    /// Replaces each <c>[Evidence n]</c> that has a source with <c>&lt;a href="link"&gt;name&lt;/a&gt;</c>, or the name alone
+    /// when it has no web address. Names and links come from search results, so both are HTML-encoded. A number without a
+    /// source is left as it is. Run only on an answer that has passed <see cref="Check"/>.
+    /// </summary>
+    public static string? Render(string? answer, IReadOnlyList<EvidenceSource> sources)
+    {
+        if (string.IsNullOrEmpty(answer) || sources.Count == 0)
+        {
+            return answer;
+        }
+
+        // Built once, so every citation of the same evidence reads the same.
+        var shown = sources.ToDictionary(static source => source.Number, Show);
+        return CitationPattern().Replace(answer, citation =>
+            int.TryParse(citation.Groups[1].ValueSpan, NumberStyles.None, CultureInfo.InvariantCulture, out var number)
+            && shown.TryGetValue(number, out var text) ? text : citation.Value);
+    }
+
+    private static string Show(EvidenceSource source)
+    {
+        var name = WebUtility.HtmlEncode(source.Name.Trim());
+        return source.Link is { IsAbsoluteUri: true } link && (link.Scheme == Uri.UriSchemeHttps || link.Scheme == Uri.UriSchemeHttp)
+            ? $"<a href=\"{WebUtility.HtmlEncode(link.AbsoluteUri)}\">{name}</a>"
+            : name;
     }
 
     private static IEnumerable<int> Numbers(Regex pattern, string text)

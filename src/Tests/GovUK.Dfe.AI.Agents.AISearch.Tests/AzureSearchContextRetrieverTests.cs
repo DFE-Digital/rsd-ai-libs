@@ -298,4 +298,99 @@ public sealed class AzureSearchContextRetrieverTests
         Assert.Contains(new string('b', 5_000), text);
         Assert.DoesNotContain("left out", text);
     }
+
+    // ===================== Citation sources =====================
+
+    private void SetUpDocuments(params SearchDocument[] documents)
+    {
+        var results = SearchModelFactory.SearchResults(
+            values: documents.Select(document => SearchModelFactory.SearchResult(document, 1.0, highlights: null)),
+            totalCount: documents.Length, facets: null, coverage: null, rawResponse: null!);
+        _client.SearchAsync<SearchDocument>(Arg.Any<string>(), Arg.Any<SearchOptions>(), Arg.Any<CancellationToken>())
+            .Returns(Response.FromValue(results, null!));
+    }
+
+    private AzureSearchContextRetriever CitingSut(AzureSearchIndexOptions index, bool renderCitations = true, int? maxEvidenceCharacters = null)
+        => new(new Dictionary<string, SearchClient> { [Scope] = _client }, _relevanceFilter, indexes: new Dictionary<string, AzureSearchIndexOptions> { [Scope] = index },
+            maxEvidenceCharacters: maxEvidenceCharacters, renderCitations: renderCitations);
+
+    private static AzureSearchIndexOptions Index(string? linkField = "url", string? nameField = "title", params string[] contentFields)
+        => new() { Name = Scope, ContentFields = contentFields.Length > 0 ? contentFields : ["content"], LinkField = linkField, NameField = nameField };
+
+    [Fact]
+    public async Task EachNumberedResult_HasASource_NamedAndLinkedFromItsFields_AndTheLinkIsNeverSentToTheModel()
+    {
+        SearchOptions? sent = null;
+        _client.SearchAsync<SearchDocument>(Arg.Any<string>(), Arg.Do<SearchOptions>(options => sent = options), Arg.Any<CancellationToken>())
+            .Returns(Response.FromValue(SearchModelFactory.SearchResults(
+                values: [SearchModelFactory.SearchResult(new SearchDocument
+                {
+                    ["content"] = "Rated Good.", ["title"] = "Ofsted report, March 2024", ["url"] = "https://reports.ofsted.gov.uk/provider/21/100000",
+                }, 1.0, highlights: null)],
+                totalCount: 1, facets: null, coverage: null, rawResponse: null!), null!));
+
+        var result = await CitingSut(Index()).GetContextAsync(Scope, "query", cancellationToken: cancellationToken);
+
+        var source = Assert.Single(result.Sources);
+        Assert.Equal(new EvidenceSource(1, "Ofsted report, March 2024", new Uri("https://reports.ofsted.gov.uk/provider/21/100000")), source);
+        Assert.Equal(["content", "url", "title"], sent!.Select);                        // fetched for the source...
+        Assert.DoesNotContain("reports.ofsted.gov.uk", result.Text, StringComparison.Ordinal);   // ...but not sent to the model
+    }
+
+    [Fact]
+    public async Task WithoutANameField_ATitleOrNameFieldIsUsed_OnOneLineAndCapped_ElseTheIndexAndNumber()
+    {
+        SetUpDocuments(
+            new SearchDocument { ["content"] = "First.", ["Name"] = "  Oak \n  Academy  " },
+            new SearchDocument { ["content"] = "Second." },
+            new SearchDocument { ["content"] = "Third.", ["title"] = new string('a', 500) });
+
+        var result = await CitingSut(new AzureSearchIndexOptions { Name = Scope, LinkField = "url" }).GetContextAsync(Scope, "query", cancellationToken: cancellationToken);
+
+        var names = result.Sources.Select(source => source.Name).ToList();
+        Assert.Equal(["Oak Academy", $"{Scope} record 2"], names[..2]);
+        Assert.Equal(AzureSearchContextRetriever.MaxCitationNameLength, names[2].Length);   // a long name is cut, so it stays readable
+        Assert.EndsWith("…", names[2], StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("javascript:alert(1)")]
+    [InlineData("/relative/report")]
+    [InlineData("not a link")]
+    public async Task ALinkFieldThatIsntAWebAddress_GivesNoLink_OnlyTheName(string link)
+    {
+        SetUpDocuments(new SearchDocument { ["content"] = "Rated Good.", ["title"] = "Report", ["url"] = link });
+
+        var result = await CitingSut(Index()).GetContextAsync(Scope, "query", cancellationToken: cancellationToken);
+
+        Assert.Equal(new EvidenceSource(1, "Report"), Assert.Single(result.Sources));
+    }
+
+    [Fact]
+    public async Task OnlyResultsKeptWithinTheEvidenceLimit_HaveSources_SoNumbersStillMatch()
+    {
+        SetUpDocuments(
+            new SearchDocument { ["content"] = new string('a', 60), ["title"] = "First" },
+            new SearchDocument { ["content"] = new string('b', 60), ["title"] = "Second" });
+
+        var result = await CitingSut(Index(), maxEvidenceCharacters: 100).GetContextAsync(Scope, "query", cancellationToken: cancellationToken);
+
+        Assert.Equal(new EvidenceSource(1, "First"), Assert.Single(result.Sources));
+        Assert.DoesNotContain("Evidence 2", result.Text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task WithRenderCitationsOff_ThereAreNoSources_AndTheLinkFieldIsntFetched()
+    {
+        SearchOptions? sent = null;
+        _client.SearchAsync<SearchDocument>(Arg.Any<string>(), Arg.Do<SearchOptions>(options => sent = options), Arg.Any<CancellationToken>())
+            .Returns(Response.FromValue(SearchModelFactory.SearchResults(
+                values: [SearchModelFactory.SearchResult(new SearchDocument { ["content"] = "Rated Good.", ["title"] = "Report" }, 1.0, highlights: null)],
+                totalCount: 1, facets: null, coverage: null, rawResponse: null!), null!));
+
+        var result = await CitingSut(Index(), renderCitations: false).GetContextAsync(Scope, "query", cancellationToken: cancellationToken);
+
+        Assert.Empty(result.Sources);
+        Assert.Equal(["content"], sent!.Select);
+    }
 }

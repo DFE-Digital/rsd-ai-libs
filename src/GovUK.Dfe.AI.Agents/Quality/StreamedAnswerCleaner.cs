@@ -48,12 +48,15 @@ internal sealed class StreamedAnswerCleaner
         return text.Length;
     }
 
+    private static bool IsTagStart(char next) => char.IsAsciiLetter(next) || next is '/' or '!' or '?';
+
     private static bool IsFinished(string text, int start)
     {
         switch (text[start])
         {
             case '<':
-                return text.IndexOf('>', start) >= 0;
+                // Only a "<" before a letter, "/", "!" or "?" starts a tag; at the very end, the next character is still to come.
+                return start + 1 < text.Length && (!IsTagStart(text[start + 1]) || text.IndexOf('>', start) >= 0);
             case '!':
                 // "!" ends a sentence unless "[" follows; at the very end it might still become an image.
                 return start + 1 < text.Length && (text[start + 1] != '[' || IsFinished(text, start + 1));

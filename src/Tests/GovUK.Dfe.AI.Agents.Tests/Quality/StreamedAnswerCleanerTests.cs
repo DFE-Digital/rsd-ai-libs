@@ -13,6 +13,8 @@ public sealed class StreamedAnswerCleanerTests
     [InlineData("See [GOV.UK](https://www.gov.uk) or [the report](files/report.pdf).")]
     [InlineData("Wow! Great results! [Evidence 3] confirms it!")]
     [InlineData("Unclosed [bracket at the end")]
+    [InlineData("Rated Good<script>alert(1)</script> overall.")]
+    [InlineData("Attendance is < 90% and 3<5, then <b>bold</b>.")]
     public void SplitAnyWay_TheResultMatchesCleaningTheWholeAnswer(string answer)
     {
         foreach (var size in new[] { 1, 2, 5, 11 })
@@ -26,9 +28,11 @@ public sealed class StreamedAnswerCleanerTests
         }
     }
 
-    [Fact]
-    public void PlainText_IsPassedOnStraightAway()
-        => Assert.Equal("Rated Good", new StreamedAnswerCleaner().Add("Rated Good"));
+    [Theory]
+    [InlineData("Rated Good")]
+    [InlineData("Attendance is < 90% overall")]   // a "<" that can't start a tag doesn't hold back the rest
+    public void TextThatCantStartAnImageLinkOrTag_IsPassedOnStraightAway(string text)
+        => Assert.Equal(text, new StreamedAnswerCleaner().Add(text));
 
     [Fact]
     public void TextAfterAPossibleImage_WaitsUntilTheImageIsComplete()

@@ -266,7 +266,7 @@ public sealed class ProductionScenarioTests : IDisposable
         var specialists = await Agents(app).RunParallelAsync([ofsted, trust, news],
             (definition, _) => Task.FromResult($"Brief me on URN 100000 ({definition.Name})."), new AgentContext(),
             cancellationToken: cancellationToken,
-            resolveEvidence: (definition, _) => Task.FromResult(definition == trust ? "Trust record: 12 academies." : null));
+            resolveEvidence: (definition, _) => Task.FromResult<AgentEvidence?>(definition == trust ? "Trust record: 12 academies." : null));
         var succeeded = specialists.Where(result => result.Output != FallbackText).ToList();
         var briefing = await Agents(app).RunAsync(synthesis, "Write the briefing.",
             string.Join("\n\n", succeeded.Select(result => $"{result.AgentName}: {result.Output}")), cancellationToken);

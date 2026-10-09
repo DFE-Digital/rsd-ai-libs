@@ -116,19 +116,19 @@ which is fenced as data so text inside it can't act as an instruction.
 
 `AddAgents` and every add-on's `Add…()` are in `Microsoft.Extensions.DependencyInjection`, so registering needs no usings.
 
-| `using GovUK.Dfe.AI.Agents…`                              | For                                                                                                          |
-| --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| `.ValueObjects`                                           | `AgentDefinition`, `AgentOutputSchema`, `AgentResult`, `AgentStreamUpdate`, `AgentSpec`, `CompletedAgentRun` |
-| `.Services.Interfaces`                                    | `IAgentService`, `IAgentRunnerService`, `IAgentRuntimeService`                                               |
-| `.Extensions`                                             | `ReadOutputAs<T>()`, `ToTokenUsageSummary()`                                                                 |
-| `.Builders`                                               | `AgentsBuilder`                                                                                              |
-| `.Context` / `.Context.Interfaces`                        | `AgentContext` / `IContextRetriever`                                                                         |
-| `.Filters`                                                | `ODataFilter`                                                                                                |
-| `.Quality` / `.Quality.Interfaces`                        | `AgentTestCase`, `AgentEvaluationReport` / `IAgentTestRunner`, `IAgentRunEvaluator`                          |
-| `.Extensibility.Interfaces`                               | `IAgentsPackage`, `IAgentRunObserver`                                                                        |
-| `.Tools` / `.Tools.Interfaces` / `.Privacy`               | `AgentTool` / `IAgentToolProvider`, `IToolCallApprover` / `PatternRedactor`, `IAgentInputRedactor`           |
-| `.Providers` / `.Tools.WebSearch` / `.Prompts.Interfaces` | `ManagedAgentProviderBase` / `WebSearchToolProvider` / `IPromptTemplateBuilder`                              |
-| `.Enums` / `.Diagnostics` / `.Exceptions`                 | `AzureCredentialTarget`, `AgentTestTarget` / `AgentTelemetry` / `AgentGuardrailException`                    |
+| `using GovUK.Dfe.AI.Agents…`                              | For                                                                                                                                             |
+| --------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `.ValueObjects`                                           | `AgentDefinition`, `AgentOutputSchema`, `AgentResult`, `AgentStreamUpdate`, `AgentSpec`, `AgentEvidence`, `EvidenceSource`, `CompletedAgentRun` |
+| `.Services.Interfaces`                                    | `IAgentService`, `IAgentRunnerService`, `IAgentRuntimeService`                                                                                  |
+| `.Extensions`                                             | `ReadOutputAs<T>()`, `ToTokenUsageSummary()`                                                                                                    |
+| `.Builders`                                               | `AgentsBuilder`                                                                                                                                 |
+| `.Context` / `.Context.Interfaces`                        | `AgentContext` / `IContextRetriever`                                                                                                            |
+| `.Filters`                                                | `ODataFilter`                                                                                                                                   |
+| `.Quality` / `.Quality.Interfaces`                        | `AgentTestCase`, `AgentEvaluationReport` / `IAgentTestRunner`, `IAgentRunEvaluator`                                                             |
+| `.Extensibility.Interfaces`                               | `IAgentsPackage`, `IAgentRunObserver`                                                                                                           |
+| `.Tools` / `.Tools.Interfaces` / `.Privacy`               | `AgentTool` / `IAgentToolProvider`, `IToolCallApprover` / `PatternRedactor`, `IAgentInputRedactor`                                              |
+| `.Providers` / `.Tools.WebSearch` / `.Prompts.Interfaces` | `ManagedAgentProviderBase` / `WebSearchToolProvider` / `IPromptTemplateBuilder`                                                                 |
+| `.Enums` / `.Diagnostics` / `.Exceptions`                 | `AzureCredentialTarget`, `AgentTestTarget` / `AgentTelemetry` / `AgentGuardrailException`                                                       |
 
 ## What happens in a run
 
@@ -205,6 +205,9 @@ await foreach (var update in agents.RunStreamingAsync(BriefingAgents.Synthesis, 
 
 - **Citations (on by default):** when evidence is numbered, as search results are, the answer must cite it as
   `[Evidence n]` and only cite evidence that exists. Set `RequiredCitations = false` when there's nowhere to cite.
+- **Citations as links:** pass a search result (`ContextResult`) as evidence and turn on AISearch's `RenderCitations`,
+  and each `[Evidence n]` in the checked answer becomes a link to its source, or its name. Your own evidence can carry
+  sources too: `new AgentEvidence(text, [new EvidenceSource(1, "Trust record", link)])`.
 - **Your own rules:** `Validate` returns why the answer is wrong, or `null` if it's fine.
 - **Retry:** a failed check is sent back once, with the run so far. If it fails again, the run fails.
 
@@ -217,12 +220,14 @@ public static readonly AgentDefinition Ofsted = new("ofsted-agent", "Ofsted")
 };
 ```
 
-Every answer is also cleaned, so it's safe to show as Markdown:
+Every answer is also cleaned, so it's safe to show as Markdown or HTML:
 
 - **Images become their alt text.** A browser loads an image without a click, so an injected image address could
   leak data. To show images, render them in your app from your data.
 - **Links without a full address become text,** e.g. `[the report](files/report.pdf)`, as they'd 404 in your app.
 - **Full `https://` and `mailto:` links are kept.** Show each link's domain in your app, so users see where it goes.
+- **HTML the model writes is shown as text,** e.g. `<script>` becomes `&lt;script>`, so injected markup can't run in an
+  app that renders HTML. A `<` that can't start a tag, as in "below < 90%", is left alone.
 
 ## Release gate
 
@@ -476,7 +481,7 @@ All under `AiAgents`, or in code with `agents.Configure(o => ...)`.
 - **Unit tests:** substitute `IAgentService`:
 
   ```csharp
-  agents.RunAsync(BriefingAgents.Ofsted, Arg.Any<string>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
+  agents.RunAsync(BriefingAgents.Ofsted, Arg.Any<string>(), Arg.Any<AgentEvidence?>(), Arg.Any<CancellationToken>())
       .Returns(new AgentResult { AgentName = "ofsted-agent", Output = """{"rating":"Good","strengths":[]}""" });
   ```
 

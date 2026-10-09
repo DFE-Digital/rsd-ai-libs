@@ -11,10 +11,13 @@ public interface IAgentService
 {
     /// <summary>Runs one agent.</summary>
     /// <param name="prompt">Your instruction.</param>
-    /// <param name="evidence">Untrusted material (search results, other agents' output), sent fenced as data.</param>
+    /// <param name="evidence">
+    /// Untrusted material (search results, other agents' output), sent fenced as data. Pass a search's <c>ContextResult</c> as it
+    /// is, so each <c>[Evidence n]</c> in the answer is shown as a link to its source, or its name.
+    /// </param>
     /// <exception cref="InvalidOperationException">The run failed; the cause is the inner exception.</exception>
     /// <exception cref="TimeoutException">The run exceeded <c>RunTimeout</c>, or no run slot came free in time.</exception>
-    Task<AgentResult> RunAsync(AgentDefinition definition, string prompt, string? evidence = null,
+    Task<AgentResult> RunAsync(AgentDefinition definition, string prompt, AgentEvidence? evidence = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -24,7 +27,7 @@ public interface IAgentService
     /// </summary>
     /// <exception cref="InvalidOperationException">The run failed or its answer failed a check; the cause is the inner exception.</exception>
     /// <exception cref="TimeoutException">The run exceeded <c>RunTimeout</c>, or no run slot came free in time.</exception>
-    IAsyncEnumerable<AgentStreamUpdate> RunStreamingAsync(AgentDefinition definition, string prompt, string? evidence = null,
+    IAsyncEnumerable<AgentStreamUpdate> RunStreamingAsync(AgentDefinition definition, string prompt, AgentEvidence? evidence = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -33,12 +36,12 @@ public interface IAgentService
     /// </summary>
     /// <param name="context">Unused here; matches <see cref="RunSequentialAsync"/>.</param>
     /// <param name="shouldSuppress">Which failures become fallback results. Default: all but cancellation.</param>
-    /// <param name="resolveEvidence">Each agent's untrusted material, sent fenced; null for none.</param>
+    /// <param name="resolveEvidence">Each agent's untrusted material, sent fenced; null for none. A <c>ContextResult</c> brings its sources.</param>
     /// <returns>One result per definition, in order.</returns>
     Task<IReadOnlyList<AgentResult>> RunParallelAsync(IReadOnlyCollection<AgentDefinition> definitions,
         Func<AgentDefinition, CancellationToken, Task<string>> resolvePrompt, AgentContext context,
         Func<Exception, bool>? shouldSuppress = null,
-        Func<AgentDefinition, CancellationToken, Task<string?>>? resolveEvidence = null, CancellationToken cancellationToken = default);
+        Func<AgentDefinition, CancellationToken, Task<AgentEvidence?>>? resolveEvidence = null, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Runs agents in order. Each gets the previous output (the first gets <paramref name="initialInput"/>) as fenced

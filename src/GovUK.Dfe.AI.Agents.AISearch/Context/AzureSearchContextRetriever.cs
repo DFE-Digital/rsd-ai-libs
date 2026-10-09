@@ -23,11 +23,20 @@ namespace GovUK.Dfe.AI.Agents.AISearch.Context;
 /// Optional: the most characters of evidence one search returns, added a whole result at a time, most relevant first.
 /// Null: every relevant result.
 /// </param>
+/// <param name="renderCitations">
+/// Returns each numbered result's name and link as <see cref="ContextResult.Sources"/>, so a run can show its citations.
+/// </param>
 public sealed class AzureSearchContextRetriever(IReadOnlyDictionary<string, SearchClient> clients, IRelevanceFilter relevanceFilter,
     ILogger<AzureSearchContextRetriever>? logger = null, IReadOnlyDictionary<string, IReadOnlyList<string>>? contentFields = null,
-    IReadOnlyDictionary<string, AzureSearchIndexOptions>? indexes = null, int? maxEvidenceCharacters = null)
+    IReadOnlyDictionary<string, AzureSearchIndexOptions>? indexes = null, int? maxEvidenceCharacters = null, bool renderCitations = false)
     : IContextRetriever
 {
+    /// <summary>The longest name a citation shows; longer ones are cut with an ellipsis.</summary>
+    internal const int MaxCitationNameLength = 200;
+
+    /// <summary>Fields used as a record's name when the index sets no <c>NameField</c>, in order.</summary>
+    private static readonly string[] DefaultNameFields = ["title", "name"];
+
     private readonly ILogger<AzureSearchContextRetriever> _logger = logger ?? NullLogger<AzureSearchContextRetriever>.Instance;
     private readonly IReadOnlyDictionary<string, IReadOnlyList<string>> _contentFields =
         contentFields ?? new Dictionary<string, IReadOnlyList<string>>();
@@ -53,20 +62,27 @@ public sealed class AzureSearchContextRetriever(IReadOnlyDictionary<string, Sear
             return new ContextResult(string.Format(ErrorMessages.NoAzureSearchInformationFound, scope), HasEvidence: false);
         }
 
-        return new ContextResult(JoinWithinLimit(scope, relevant), HasEvidence: true);
+        var (text, kept) = JoinWithinLimit(scope, relevant);
+        return new ContextResult(text, HasEvidence: true)
+        {
+            Sources = renderCitations
+                ? [.. relevant.Take(kept).Select((item, i) => new EvidenceSource(i + 1, item.Name ?? $"{scope} record {i + 1}", item.Link))]
+                : [],
+        };
     }
 
     /// <summary>
     /// Numbers the results as evidence, most relevant first. With a limit, whole results are added until the next would go
     /// over, so no result is cut mid-way and the citations still match. The first result is always kept, cut if needed.
     /// </summary>
-    private string JoinWithinLimit(string scope, IReadOnlyList<SearchResultItem> relevant)
+    /// <returns>The evidence, and how many results it holds (the first that many of <paramref name="relevant"/>).</returns>
+    private (string Text, int Kept) JoinWithinLimit(string scope, IReadOnlyList<SearchResultItem> relevant)
     {
         var separator = Environment.NewLine + Environment.NewLine;
         var blocks = relevant.Select((item, i) => $"--- {scope} Evidence {i + 1} ---\n{item.Content}").ToList();
         if (maxEvidenceCharacters is not { } limit || blocks.Sum(static block => block.Length) + separator.Length * (blocks.Count - 1) <= limit)
         {
-            return string.Join(separator, blocks);
+            return (string.Join(separator, blocks), blocks.Count);
         }
 
         var kept = new List<string> { blocks[0].Length <= limit ? blocks[0] : blocks[0][..limit] };
@@ -83,7 +99,8 @@ public sealed class AzureSearchContextRetriever(IReadOnlyDictionary<string, Sear
         }
 
         _logger.KeptResultsWithinLimit(kept.Count, blocks.Count, scope, limit);
-        return string.Join(separator, kept) + separator + string.Format(ErrorMessages.EvidenceResultsLeftOut, blocks.Count - kept.Count, limit);
+        return (string.Join(separator, kept) + separator + string.Format(ErrorMessages.EvidenceResultsLeftOut, blocks.Count - kept.Count, limit),
+            kept.Count);
     }
 
     private async Task<IReadOnlyList<SearchResultItem>> SearchAsync(SearchClient client, string scope, string query, int size, string? filter,
@@ -91,8 +108,9 @@ public sealed class AzureSearchContextRetriever(IReadOnlyDictionary<string, Sear
     {
         var fields = FieldsFor(scope);
         var index = _indexes.GetValueOrDefault(scope);
+        var (linkField, nameField) = renderCitations ? (Set(index?.LinkField), Set(index?.NameField)) : (null, null);
         var searchOptions = new SearchOptions { Size = size, Filter = filter };
-        foreach (var field in fields)
+        foreach (var field in fields.Concat([linkField, nameField]).OfType<string>().Distinct(StringComparer.Ordinal))
         {
             searchOptions.Select.Add(field);
         }
@@ -125,11 +143,15 @@ public sealed class AzureSearchContextRetriever(IReadOnlyDictionary<string, Sear
 
             await foreach (var result in response.GetResultsAsync().WithCancellation(cancellationToken).ConfigureAwait(false))
             {
-                var content = ExtractContent(result.Document, fields);
+                var content = ExtractContent(result.Document, fields, linkField);
                 if (!string.IsNullOrWhiteSpace(content))
                 {
                     // The semantic ranker's score reflects meaning; without it, the keyword or hybrid score.
-                    results.Add(new SearchResultItem(content, semantic ? result.SemanticSearch?.RerankerScore ?? result.Score : result.Score));
+                    results.Add(new SearchResultItem(content, semantic ? result.SemanticSearch?.RerankerScore ?? result.Score : result.Score)
+                    {
+                        Name = renderCitations ? NameOf(result.Document, nameField) : null,
+                        Link = renderCitations ? LinkOf(result.Document, linkField) : null,
+                    });
                 }
             }
         }
@@ -152,12 +174,35 @@ public sealed class AzureSearchContextRetriever(IReadOnlyDictionary<string, Sear
         return _contentFields.TryGetValue(scope, out var fields) ? fields : [];
     }
 
-    private static string ExtractContent(SearchDocument document, IReadOnlyList<string> fields)
+    /// <param name="linkField">Left out of the evidence, so the model never sees the link.</param>
+    private static string ExtractContent(SearchDocument document, IReadOnlyList<string> fields, string? linkField)
     {
         var values = fields.Count > 0
-            ? fields.Select(field => document.TryGetValue(field, out var value) ? value : null)
-            : document.Select(field => field.Value);
+            ? fields.Where(field => field != linkField).Select(field => document.TryGetValue(field, out var value) ? value : null)
+            : document.Where(field => field.Key != linkField).Select(field => field.Value);
 
         return string.Join(" ", values.OfType<string>().Where(value => !string.IsNullOrWhiteSpace(value)));
     }
+
+    /// <summary>The record's name: its <c>NameField</c>, else a <c>title</c> or <c>name</c> field it has, on one line and capped.</summary>
+    private static string? NameOf(SearchDocument document, string? nameField)
+    {
+        var candidates = nameField is not null ? [nameField] : DefaultNameFields;
+        var name = candidates
+            .Select(field => document.FirstOrDefault(pair => string.Equals(pair.Key, field, StringComparison.OrdinalIgnoreCase)).Value)
+            .OfType<string>()
+            .Select(static value => string.Join(' ', value.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)))
+            .FirstOrDefault(static value => value.Length > 0);
+
+        return name is { Length: > MaxCitationNameLength } ? string.Concat(name.AsSpan(0, MaxCitationNameLength - 1), "…") : name;
+    }
+
+    /// <summary>The record's web address, when its <c>LinkField</c> holds an absolute https or http one.</summary>
+    private static Uri? LinkOf(SearchDocument document, string? linkField)
+        => linkField is not null && document.TryGetValue(linkField, out var value) && value is string text
+           && Uri.TryCreate(text.Trim(), UriKind.Absolute, out var link) && (link.Scheme == Uri.UriSchemeHttps || link.Scheme == Uri.UriSchemeHttp)
+            ? link
+            : null;
+
+    private static string? Set(string? field) => string.IsNullOrWhiteSpace(field) ? null : field.Trim();
 }

@@ -22,6 +22,12 @@ public sealed class AzureSearchContextRetrieverOptions
     /// <summary>Just under core's 200,000-character evidence limit, leaving room for the note and fencing.</summary>
     public const int DefaultMaxEvidenceCharacters = 190_000;
 
+    /// <summary>
+    /// Shows each <c>[Evidence n]</c> in a checked answer as a link to that result's <see cref="AzureSearchIndexOptions.LinkField"/>,
+    /// or its name when it has none. Off: citations stay as <c>[Evidence n]</c>. Pass the search's <c>ContextResult</c> to the run.
+    /// </summary>
+    public bool RenderCitations { get; init; }
+
     /// <summary>Every index has a name, and no name appears twice.</summary>
     internal bool IndexesAreValid
         => Indexes.Count > 0
@@ -52,4 +58,16 @@ public sealed class AzureSearchIndexOptions
     /// vector, so the app needs no embedding model; the index must have one. <c>filter</c> applies before the vector search.
     /// </summary>
     public IReadOnlyList<string> VectorFields { get; init; } = [];
+
+    /// <summary>
+    /// Optional, with <c>RenderCitations</c>: the field holding each record's web address, its citation's link. It's never sent
+    /// to the model, so the model can't write links itself. Only absolute https and http addresses are used.
+    /// </summary>
+    public string? LinkField { get; init; }
+
+    /// <summary>
+    /// Optional, with <c>RenderCitations</c>: the field holding each record's name, e.g. its title, shown as its citation. Unset:
+    /// a <c>title</c> or <c>name</c> field among those returned, else "{index} record {n}".
+    /// </summary>
+    public string? NameField { get; init; }
 }

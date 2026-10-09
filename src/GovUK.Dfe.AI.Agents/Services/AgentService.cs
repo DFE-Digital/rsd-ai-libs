@@ -27,7 +27,7 @@ internal sealed class AgentService(IAgentRunnerService agentRunner, IAgentRuntim
     private readonly ILogger<AgentService> _logger = logger ?? NullLogger<AgentService>.Instance;
     private readonly string _applicationName = runOptions?.ApplicationName ?? AgentTelemetry.DefaultApplicationName;
 
-    public Task<AgentResult> RunAsync(AgentDefinition definition, string prompt, string? evidence = null,
+    public Task<AgentResult> RunAsync(AgentDefinition definition, string prompt, AgentEvidence? evidence = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(definition);
@@ -36,7 +36,7 @@ internal sealed class AgentService(IAgentRunnerService agentRunner, IAgentRuntim
         return RunAgentAsync(definition, prompt, evidence, cancellationToken);
     }
 
-    public IAsyncEnumerable<AgentStreamUpdate> RunStreamingAsync(AgentDefinition definition, string prompt, string? evidence = null,
+    public IAsyncEnumerable<AgentStreamUpdate> RunStreamingAsync(AgentDefinition definition, string prompt, AgentEvidence? evidence = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(definition);
@@ -47,9 +47,11 @@ internal sealed class AgentService(IAgentRunnerService agentRunner, IAgentRuntim
 
     /// <summary>
     /// Runs the agent as <see cref="RunAsync"/> does, with the runner passing each piece of the answer to a channel that's
-    /// read here, cleaned and passed on. Stopping early cancels the run, which still cleans up after itself.
+    /// read here, cleaned, its citations shown, and passed on. Stopping early cancels the run, which still cleans up after
+    /// itself. A piece never holds part of a citation (the cleaner waits for a "[" to close), so the pieces join up to the
+    /// result's <see cref="AgentResult.Output"/>.
     /// </summary>
-    private async IAsyncEnumerable<AgentStreamUpdate> StreamAgentAsync(AgentDefinition definition, string prompt, string? evidence,
+    private async IAsyncEnumerable<AgentStreamUpdate> StreamAgentAsync(AgentDefinition definition, string prompt, AgentEvidence? evidence,
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         var pieces = Channel.CreateUnbounded<string>(new UnboundedChannelOptions { SingleReader = true, SingleWriter = true });
@@ -63,7 +65,7 @@ internal sealed class AgentService(IAgentRunnerService agentRunner, IAgentRuntim
         {
             await foreach (var piece in pieces.Reader.ReadAllAsync(cancellationToken).ConfigureAwait(false))
             {
-                if (cleaner.Add(piece) is { Length: > 0 } text)
+                if (ShowCitations(cleaner.Add(piece), evidence) is { Length: > 0 } text)
                 {
                     if (firstText)
                     {
@@ -87,7 +89,7 @@ internal sealed class AgentService(IAgentRunnerService agentRunner, IAgentRuntim
             }
         }
 
-        if (cleaner.Flush() is { Length: > 0 } rest)
+        if (ShowCitations(cleaner.Flush(), evidence) is { Length: > 0 } rest)
         {
             yield return new AgentStreamUpdate { Text = rest };
         }
@@ -112,7 +114,7 @@ internal sealed class AgentService(IAgentRunnerService agentRunner, IAgentRuntim
     public async Task<IReadOnlyList<AgentResult>> RunParallelAsync(IReadOnlyCollection<AgentDefinition> definitions,
         Func<AgentDefinition, CancellationToken, Task<string>> resolvePrompt, AgentContext context,
         Func<Exception, bool>? shouldSuppress = null,
-        Func<AgentDefinition, CancellationToken, Task<string?>>? resolveEvidence = null, CancellationToken cancellationToken = default)
+        Func<AgentDefinition, CancellationToken, Task<AgentEvidence?>>? resolveEvidence = null, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(definitions);
         ArgumentNullException.ThrowIfNull(resolvePrompt);
@@ -221,7 +223,7 @@ internal sealed class AgentService(IAgentRunnerService agentRunner, IAgentRuntim
     /// throwing, unless <paramref name="shouldSuppress"/> says otherwise.
     /// </summary>
     private Task<AgentStepResult> RunStepAsync(AgentDefinition definition,
-        Func<CancellationToken, Task<(string Prompt, string? Evidence)>> resolveInput,
+        Func<CancellationToken, Task<(string Prompt, AgentEvidence? Evidence)>> resolveInput,
         Func<Exception, bool>? shouldSuppress, CancellationToken cancellationToken)
         => ResilientAgentStep.ExecuteAsync(
             step: async () =>
@@ -237,20 +239,21 @@ internal sealed class AgentService(IAgentRunnerService agentRunner, IAgentRuntim
             },
             shouldSuppress: shouldSuppress);
 
-    private async Task<AgentResult> RunAgentAsync(AgentDefinition definition, string prompt, string? evidence,
+    private async Task<AgentResult> RunAgentAsync(AgentDefinition definition, string prompt, AgentEvidence? evidence,
         CancellationToken cancellationToken)
     {
+        var evidenceText = evidence?.Text;
         // Tools bound to this agent that run in this app (e.g. MCP) execute the model's calls here,
         // limited to the definition's AllowedTools.
         var resolveToolCalls = AgentToolResolver.CreateToolCallResolver(_specs.ToolProviders, definition, _applicationName, _hooks.ToolApprover, _logger);
-        var (runPrompt, validate) = Citations.ForRun(definition, prompt, evidence);
+        var (runPrompt, validate) = Citations.ForRun(definition, prompt, evidenceText);
 
         AgentResult result;
         if (!definition.IsManagedAgent)
         {
             var spec = await _specs.BuildAsync(definition, cancellationToken).ConfigureAwait(false)
                 ?? throw new InvalidOperationException(string.Format(Constants.ErrorMessages.EphemeralAgentNeedsSpec, definition.Name));
-            result = await agentRuntime.RunEphemeralAsync(spec, runPrompt, resolveToolCalls, evidence, validate, cancellationToken)
+            result = await agentRuntime.RunEphemeralAsync(spec, runPrompt, resolveToolCalls, evidenceText, validate, cancellationToken)
                 .ConfigureAwait(false);
         }
         else
@@ -262,24 +265,30 @@ internal sealed class AgentService(IAgentRunnerService agentRunner, IAgentRuntim
 
             // An agent from another Foundry project runs there.
             var runner = _specs.CustomProviderFor(definition) is ExternalProjectAgentProvider external ? external.Project.Runner : agentRunner;
-            result = await runner.RunAsync(agent, runPrompt, additionalContext: evidence, resolveToolCalls: resolveToolCalls,
+            result = await runner.RunAsync(agent, runPrompt, additionalContext: evidenceText, resolveToolCalls: resolveToolCalls,
                 cancellationToken: cancellationToken, validateOutput: validate).ConfigureAwait(false);
         }
 
         if (_hooks.Observers.Count > 0)
         {
-            // Observers (scoring, audit) get what the model was given: redacted, so no copy keeps data the model never saw.
+            // Observers (scoring, audit) get what the model was given and wrote: redacted, so no copy keeps data the model never
+            // saw, and with citations as [Evidence n], so they still match the evidence.
             Notify(new CompletedAgentRun
             {
                 AgentName = definition.Name, RunId = result.RunId, CompletedAt = result.CompletedAt, AgentVersion = result.AgentVersion,
                 Model = result.Model, Prompt = await _runOptions.RedactAsync(prompt, cancellationToken).ConfigureAwait(false),
-                Evidence = evidence is null ? null : await _runOptions.RedactAsync(evidence, cancellationToken).ConfigureAwait(false),
+                Evidence = evidenceText is null ? null : await _runOptions.RedactAsync(evidenceText, cancellationToken).ConfigureAwait(false),
                 Output = result.Output ?? string.Empty,
             });
         }
 
-        return result;
+        // Only now, with the answer checked: every [Evidence n] left refers to evidence that exists.
+        return evidence is { Sources.Count: > 0 } ? result with { Output = ShowCitations(result.Output, evidence) } : result;
     }
+
+    /// <summary>Shows each <c>[Evidence n]</c> as a link to its source, or its name; unchanged without sources.</summary>
+    private static string? ShowCitations(string? answer, AgentEvidence? evidence)
+        => evidence is { Sources.Count: > 0 } ? Citations.Render(answer, evidence.Sources) : answer;
 
     /// <summary>Records what the whole run used and cost, e.g. one briefing.</summary>
     private void CompleteWorkflow(WorkflowTelemetry workflow, IEnumerable<AgentResult> results, int failedAgents)

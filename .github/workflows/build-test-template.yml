@@ -1,0 +1,56 @@
+name: .NET Build and Test Template
+
+on:
+  workflow_call:
+    inputs:
+      project_name:
+        required: true
+        type: string
+        description: "The name of the project"
+      project_path:
+        required: true
+        type: string
+        description: "The relative path to the project directory"
+      run_tests:
+        required: false
+        type: boolean
+        default: true
+        description: "Flag to run or skip tests"
+env:
+  DOTNET_VERSION: '10.0.x'
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    permissions:
+      packages: read
+      contents: read
+    steps:
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      with:
+        fetch-depth: 0
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+
+    - name: Add nuget package source
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: dotnet nuget add source --username USERNAME --password "$GITHUB_TOKEN" --store-password-in-clear-text --name github "https://nuget.pkg.github.com/DFE-Digital/index.json"
+
+    - name: Set Test Project Path
+      env:
+        PROJECT_PATH: ${{ inputs.project_path }}
+      run: echo "test_project_path=${PROJECT_PATH/src\//src\/Tests\/}.Tests" >> "$GITHUB_ENV"
+
+    - name: Build
+      env:
+        PROJECT_PATH: ${{ inputs.project_path }}
+      run: dotnet build -p:CI=true "$PROJECT_PATH"
+
+    # SonarCloud analysis and coverage run once for the whole solution, in sonarcloud.yml.
+    - name: Run Tests
+      if: ${{ inputs.run_tests }}
+      run: dotnet test --verbosity normal "$test_project_path"

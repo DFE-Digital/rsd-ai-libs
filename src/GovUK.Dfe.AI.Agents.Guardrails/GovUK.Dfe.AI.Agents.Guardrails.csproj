@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <PackageReadmeFile>readme.md</PackageReadmeFile>
+    <Title>GovUK.Dfe.AI.Agents.Guardrails</Title>
+    <Description>Azure AI Foundry guardrails for GovUK.Dfe.AI.Agents: apply content filters and Prompt Shields to the model deployments agents use, and check them at startup.</Description>
+    <Authors>DFE-Digital</Authors>
+    <NoWarn>$(NoWarn);OPENAI001</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="readme.md" Pack="true" PackagePath="\" />
+    <InternalsVisibleTo Include="GovUK.Dfe.AI.Agents.Guardrails.Tests" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <!-- The lowest core version this add-on needs: its package depends on core >= this. Set it after core's first
+         release, and raise it only when the add-on starts using something newer from core. -->
+    <CoreMinimumVersion>0.0.1-prerelease.331</CoreMinimumVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\GovUK.Dfe.AI.Agents\GovUK.Dfe.AI.Agents.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Azure.ResourceManager.CognitiveServices" Version="1.6.0" />
+  </ItemGroup>
+
+</Project>

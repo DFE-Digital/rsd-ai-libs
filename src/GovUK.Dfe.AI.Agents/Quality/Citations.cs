@@ -63,6 +63,10 @@ internal static partial class Citations
             && shown.TryGetValue(number, out var text) ? text : citation.Value);
     }
 
+    /// <summary>Removes every <c>[Evidence n]</c>, with the space before it, for an agent that doesn't show citations.</summary>
+    public static string? Remove(string? answer)
+        => string.IsNullOrEmpty(answer) ? answer : CitationWithSpaceBefore().Replace(answer, string.Empty);
+
     private static string Show(EvidenceSource source)
     {
         var name = WebUtility.HtmlEncode(source.Name.Trim());
@@ -87,4 +91,7 @@ internal static partial class Citations
 
     [GeneratedRegex(@"\[Evidence (\d{1,6})\]", RegexOptions.CultureInvariant)]
     private static partial Regex CitationPattern();
+
+    [GeneratedRegex(@"[ \t]*\[Evidence \d{1,6}\]", RegexOptions.CultureInvariant)]
+    private static partial Regex CitationWithSpaceBefore();
 }

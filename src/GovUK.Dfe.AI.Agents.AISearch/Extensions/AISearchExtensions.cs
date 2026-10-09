@@ -86,7 +86,7 @@ public static class AISearchExtensions
             return new AzureSearchContextRetriever(clients, sp.GetRequiredService<IRelevanceFilter>(),
                 sp.GetRequiredService<ILogger<AzureSearchContextRetriever>>(),
                 config.Indexes.ToDictionary(index => index.Name, index => index.ContentFields),
-                config.Indexes.ToDictionary(index => index.Name), config.MaxEvidenceCharacters, config.RenderCitations);
+                config.Indexes.ToDictionary(index => index.Name), config.MaxEvidenceCharacters);
         });
 
         return services;

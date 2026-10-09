@@ -61,8 +61,10 @@ public sealed partial class AgentPlatformEndToEndTests
         Assert.Contains("[Evidence 9] doesn't exist", ex.InnerException?.Message, StringComparison.Ordinal);
     }
 
-    [Fact]
-    public async Task AStreamedAnswer_ShowsCitationsAsItsSources_AndItsPiecesMatchTheResult()
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task AStreamedAnswer_ShowsCitations_OrRemovesThemWhenNotRequired_AndItsPiecesMatchTheResult(bool required)
     {
         WriteSystemPrompt("Ofsted", "You analyse Ofsted reports.");
         _responses.Reply("ofsted-agent", FoundryResponses.Completed("r1", "Rated Good [Evidence 1], in a trust [Evidence 2]."));
@@ -70,15 +72,29 @@ public sealed partial class AgentPlatformEndToEndTests
 
         var pieces = new List<string>();
         AgentResult? result = null;
-        await foreach (var update in provider.GetRequiredService<IAgentService>()
-            .RunStreamingAsync(new AgentDefinition("ofsted-agent", "Ofsted"), "Summarise.", SearchEvidence(), cancellationToken))
+        await foreach (var update in provider.GetRequiredService<IAgentService>().RunStreamingAsync(
+            new AgentDefinition("ofsted-agent", "Ofsted") { RequiredCitations = required }, "Summarise.", SearchEvidence(), cancellationToken))
         {
             pieces.AddRange(update.Text is { } text ? [text] : []);
             result = update.Result ?? result;
         }
 
-        Assert.Equal($"Rated Good {Link}, in a trust ofsted_index record 2.", string.Concat(pieces));
+        Assert.Equal(required ? $"Rated Good {Link}, in a trust ofsted_index record 2." : "Rated Good, in a trust.", string.Concat(pieces));
         Assert.Equal(string.Concat(pieces), result!.Output);
+    }
+
+    [Fact]
+    public async Task WithCitationsNotRequired_TheyArentAskedFor_AndAnyTheModelWritesAreRemoved()
+    {
+        WriteSystemPrompt("Ofsted", "You analyse Ofsted reports.");
+        _responses.Reply("ofsted-agent", FoundryResponses.Completed("r1", "Rated Good [Evidence 1]. In a trust [Evidence 9]."));
+        using var provider = Build();
+
+        var result = await provider.GetRequiredService<IAgentService>().RunAsync(
+            new AgentDefinition("ofsted-agent", "Ofsted") { RequiredCitations = false }, "Summarise.", SearchEvidence(), cancellationToken);
+
+        Assert.Equal("Rated Good. In a trust.", result.Output);   // not checked either, so even [Evidence 9] passes, then goes
+        Assert.DoesNotContain("Cite the evidence", Assert.Single(_responses.CallsFor("ofsted-agent")).SerializedInput, StringComparison.Ordinal);
     }
 
     [Fact]

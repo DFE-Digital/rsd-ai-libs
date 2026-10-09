@@ -58,6 +58,7 @@ internal sealed class AgentService(IAgentRunnerService agentRunner, IAgentRuntim
         using var runCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         var run = RunWithStreamAsync();
         var cleaner = new StreamedAnswerCleaner();
+        var heldSpace = string.Empty;
         var started = System.Diagnostics.Stopwatch.GetTimestamp();
         var firstText = true;
         AgentResult result;
@@ -65,7 +66,7 @@ internal sealed class AgentService(IAgentRunnerService agentRunner, IAgentRuntim
         {
             await foreach (var piece in pieces.Reader.ReadAllAsync(cancellationToken).ConfigureAwait(false))
             {
-                if (ShowCitations(cleaner.Add(piece), evidence) is { Length: > 0 } text)
+                if (Present(cleaner.Add(piece)) is { Length: > 0 } text)
                 {
                     if (firstText)
                     {
@@ -89,12 +90,21 @@ internal sealed class AgentService(IAgentRunnerService agentRunner, IAgentRuntim
             }
         }
 
-        if (ShowCitations(cleaner.Flush(), evidence) is { Length: > 0 } rest)
+        if (PresentCitations(definition, heldSpace + cleaner.Flush(), evidence) is { Length: > 0 } rest)
         {
             yield return new AgentStreamUpdate { Text = rest };
         }
 
         yield return new AgentStreamUpdate { Result = result };
+
+        // Trailing spaces wait for the next piece: a citation removed there takes the space before it, as in the whole answer.
+        string? Present(string cleaned)
+        {
+            var text = heldSpace + cleaned;
+            var shown = text.TrimEnd(' ', '\t');
+            heldSpace = text[shown.Length..];
+            return PresentCitations(definition, shown, evidence);
+        }
 
         async Task<AgentResult> RunWithStreamAsync()
         {
@@ -283,12 +293,22 @@ internal sealed class AgentService(IAgentRunnerService agentRunner, IAgentRuntim
         }
 
         // Only now, with the answer checked: every [Evidence n] left refers to evidence that exists.
-        return evidence is { Sources.Count: > 0 } ? result with { Output = ShowCitations(result.Output, evidence) } : result;
+        return result with { Output = PresentCitations(definition, result.Output, evidence) };
     }
 
-    /// <summary>Shows each <c>[Evidence n]</c> as a link to its source, or its name; unchanged without sources.</summary>
-    private static string? ShowCitations(string? answer, AgentEvidence? evidence)
-        => evidence is { Sources.Count: > 0 } ? Citations.Render(answer, evidence.Sources) : answer;
+    /// <summary>
+    /// The answer's citations as the agent shows them: each <c>[Evidence n]</c> as a link to its source or its text, or, for an
+    /// agent with <see cref="AgentDefinition.RequiredCitations"/> off, removed. Without sources, shown citations stay as written.
+    /// </summary>
+    private static string? PresentCitations(AgentDefinition definition, string? answer, AgentEvidence? evidence)
+    {
+        if (!definition.RequiredCitations)
+        {
+            return Citations.Remove(answer);
+        }
+
+        return evidence is { Sources.Count: > 0 } ? Citations.Render(answer, evidence.Sources) : answer;
+    }
 
     /// <summary>Records what the whole run used and cost, e.g. one briefing.</summary>
     private void CompleteWorkflow(WorkflowTelemetry workflow, IEnumerable<AgentResult> results, int failedAgents)

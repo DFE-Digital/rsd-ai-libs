@@ -42,6 +42,13 @@ public sealed class CitationRenderingTests
     public void ACitationWithoutASource_IsLeftAsTheModelWroteIt(bool otherSources)
         => Assert.Equal("Good [Evidence 3].", Citations.Render("Good [Evidence 3].", otherSources ? [Report] : []));
 
+    [Theory]
+    [InlineData("Rated Good [Evidence 1], in a trust [Evidence 2].", "Rated Good, in a trust.")]
+    [InlineData("[Evidence 1] Rated Good.", " Rated Good.")]
+    [InlineData("No citations.", "No citations.")]
+    public void HiddenCitations_AreRemoved_WithTheSpaceBeforeThem(string answer, string expected)
+        => Assert.Equal(expected, Citations.Remove(answer));
+
     // ===================== AgentEvidence =====================
 
     [Fact]

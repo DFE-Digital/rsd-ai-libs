@@ -128,23 +128,6 @@ public sealed class AISearchTests
     }
 
     [Fact]
-    public void Citations_AreOptIn_AndEachIndexNamesItsLinkAndNameFields()
-    {
-        using var defaults = Build(Settings());
-        Assert.False(defaults.GetRequiredService<IOptions<AzureSearchContextRetrieverOptions>>().Value.RenderCitations);
-
-        var settings = Settings();
-        settings["AiAgents:AISearch:RenderCitations"] = "true";
-        settings["AiAgents:AISearch:Indexes:0:LinkField"] = "url";
-        settings["AiAgents:AISearch:Indexes:0:NameField"] = "title";
-        using var provider = Build(settings);
-
-        var options = provider.GetRequiredService<IOptions<AzureSearchContextRetrieverOptions>>().Value;
-        Assert.True(options.RenderCitations);
-        Assert.Equal(("url", "title"), (options.Indexes[0].LinkField, options.Indexes[0].NameField));
-    }
-
-    [Fact]
     public void Evidence_IsCappedJustUnderCoresLimitByDefault_SoARunNeverCutsAResultMidWay()
     {
         using var provider = Build(Settings());

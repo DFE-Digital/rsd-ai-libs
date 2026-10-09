@@ -25,9 +25,10 @@ public sealed record AgentDefinition(string Name, string SystemPromptKey, bool I
     public Func<AgentResult, string?>? Validate { get; init; }
 
     /// <summary>
-    /// On by default: given numbered evidence (e.g. search results), the answer must cite it as <c>[Evidence n]</c>, and
-    /// only evidence that exists. No effect on unnumbered evidence. Turn off for an answer with nowhere to cite, e.g. a
-    /// schema with no text fields.
+    /// On by default: given numbered evidence (e.g. search results), the answer must cite it as <c>[Evidence n]</c>, only
+    /// evidence that exists, and each citation is shown as a link to its source, or its text when it has no web address.
+    /// Off: citations aren't asked for, and any the model writes are removed, so readers never see a bare
+    /// <c>[Evidence n]</c>. Turn off for an answer with nowhere to cite, e.g. a schema with no text fields.
     /// </summary>
     public bool RequiredCitations { get; init; } = true;
 }

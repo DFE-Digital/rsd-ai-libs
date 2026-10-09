@@ -205,9 +205,10 @@ await foreach (var update in agents.RunStreamingAsync(BriefingAgents.Synthesis, 
 
 - **Citations (on by default):** when evidence is numbered, as search results are, the answer must cite it as
   `[Evidence n]` and only cite evidence that exists. Set `RequiredCitations = false` when there's nowhere to cite.
-- **Citations as links:** pass a search result (`ContextResult`) as evidence and turn on AISearch's `RenderCitations`,
-  and each `[Evidence n]` in the checked answer becomes a link to its source, or its name. Your own evidence can carry
-  sources too: `new AgentEvidence(text, [new EvidenceSource(1, "Trust record", link)])`.
+- **Citations readers can use:** pass a search result (`ContextResult`) as evidence, and each `[Evidence n]` in the
+  checked answer becomes a link to its source, or its text when it has no web address. With `RequiredCitations = false`,
+  citations aren't asked for and any the model writes are removed. Your own evidence can carry sources too:
+  `new AgentEvidence(text, [new EvidenceSource(1, "Trust record", link)])`.
 - **Your own rules:** `Validate` returns why the answer is wrong, or `null` if it's fine.
 - **Retry:** a failed check is sent back once, with the run so far. If it fails again, the run fails.
 

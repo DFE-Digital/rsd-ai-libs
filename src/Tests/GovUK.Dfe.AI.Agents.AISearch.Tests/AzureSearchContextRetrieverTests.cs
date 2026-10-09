@@ -301,12 +301,15 @@ public sealed class AzureSearchContextRetrieverTests
 
     // ===================== Citation sources =====================
 
+    /// <summary>The options of the last search, as the search service received them.</summary>
+    private SearchOptions? _sent;
+
     private void SetUpDocuments(params SearchDocument[] documents)
     {
         var results = SearchModelFactory.SearchResults(
             values: documents.Select(document => SearchModelFactory.SearchResult(document, 1.0, highlights: null)),
             totalCount: documents.Length, facets: null, coverage: null, rawResponse: null!);
-        _client.SearchAsync<SearchDocument>(Arg.Any<string>(), Arg.Any<SearchOptions>(), Arg.Any<CancellationToken>())
+        _client.SearchAsync<SearchDocument>(Arg.Any<string>(), Arg.Do<SearchOptions>(options => _sent = options), Arg.Any<CancellationToken>())
             .Returns(Response.FromValue(results, null!));
     }
 
@@ -320,20 +323,16 @@ public sealed class AzureSearchContextRetrieverTests
     [Fact]
     public async Task EachNumberedResult_HasASource_NamedAndLinkedFromItsFields_AndTheLinkIsNeverSentToTheModel()
     {
-        SearchOptions? sent = null;
-        _client.SearchAsync<SearchDocument>(Arg.Any<string>(), Arg.Do<SearchOptions>(options => sent = options), Arg.Any<CancellationToken>())
-            .Returns(Response.FromValue(SearchModelFactory.SearchResults(
-                values: [SearchModelFactory.SearchResult(new SearchDocument
-                {
-                    ["content"] = "Rated Good.", ["title"] = "Ofsted report, March 2024", ["url"] = "https://reports.ofsted.gov.uk/provider/21/100000",
-                }, 1.0, highlights: null)],
-                totalCount: 1, facets: null, coverage: null, rawResponse: null!), null!));
+        SetUpDocuments(new SearchDocument
+        {
+            ["content"] = "Rated Good.", ["title"] = "Ofsted report, March 2024", ["url"] = "https://reports.ofsted.gov.uk/provider/21/100000",
+        });
 
         var result = await CitingSut(Index()).GetContextAsync(Scope, "query", cancellationToken: cancellationToken);
 
         var source = Assert.Single(result.Sources);
         Assert.Equal(new EvidenceSource(1, "Ofsted report, March 2024", new Uri("https://reports.ofsted.gov.uk/provider/21/100000")), source);
-        Assert.Equal(["content", "url", "title"], sent!.Select);                        // fetched for the source...
+        Assert.Equal(["content", "url", "title"], _sent!.Select);                       // fetched for the source...
         Assert.DoesNotContain("reports.ofsted.gov.uk", result.Text, StringComparison.Ordinal);   // ...but not sent to the model
     }
 
@@ -347,6 +346,7 @@ public sealed class AzureSearchContextRetrieverTests
 
         var result = await CitingSut(new AzureSearchIndexOptions { Name = Scope, LinkField = "url" }).GetContextAsync(Scope, "query", cancellationToken: cancellationToken);
 
+        Assert.Empty(_sent!.Select);   // no content fields: every field comes back, so listing only the citation fields would drop the content
         var names = result.Sources.Select(source => source.Name).ToList();
         Assert.Equal(["Oak Academy", $"{Scope} record 2"], names[..2]);
         Assert.Equal(AzureSearchContextRetriever.MaxCitationNameLength, names[2].Length);   // a long name is cut, so it stays readable
@@ -382,15 +382,11 @@ public sealed class AzureSearchContextRetrieverTests
     [Fact]
     public async Task WithRenderCitationsOff_ThereAreNoSources_AndTheLinkFieldIsntFetched()
     {
-        SearchOptions? sent = null;
-        _client.SearchAsync<SearchDocument>(Arg.Any<string>(), Arg.Do<SearchOptions>(options => sent = options), Arg.Any<CancellationToken>())
-            .Returns(Response.FromValue(SearchModelFactory.SearchResults(
-                values: [SearchModelFactory.SearchResult(new SearchDocument { ["content"] = "Rated Good.", ["title"] = "Report" }, 1.0, highlights: null)],
-                totalCount: 1, facets: null, coverage: null, rawResponse: null!), null!));
+        SetUpDocuments(new SearchDocument { ["content"] = "Rated Good.", ["title"] = "Report" });
 
         var result = await CitingSut(Index(), renderCitations: false).GetContextAsync(Scope, "query", cancellationToken: cancellationToken);
 
         Assert.Empty(result.Sources);
-        Assert.Equal(["content"], sent!.Select);
+        Assert.Equal(["content"], _sent!.Select);
     }
 }

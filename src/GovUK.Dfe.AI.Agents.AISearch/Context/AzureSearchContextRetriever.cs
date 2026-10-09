@@ -108,18 +108,52 @@ public sealed class AzureSearchContextRetriever(IReadOnlyDictionary<string, Sear
     {
         var fields = FieldsFor(scope);
         var index = _indexes.GetValueOrDefault(scope);
-        var (linkField, nameField) = renderCitations ? (Set(index?.LinkField), Set(index?.NameField)) : (null, null);
-        var searchOptions = new SearchOptions { Size = size, Filter = filter };
-        foreach (var field in fields.Concat([linkField, nameField]).OfType<string>().Distinct(StringComparer.Ordinal))
+        var citation = renderCitations ? new CitationFields(Set(index?.LinkField), Set(index?.NameField)) : (CitationFields?)null;
+        var searchOptions = BuildSearchOptions(query, size, filter, fields, index, citation);
+        var semantic = searchOptions.QueryType == SearchQueryType.Semantic;
+        var results = new List<SearchResultItem>();
+
+        try
         {
-            searchOptions.Select.Add(field);
+            SearchResults<SearchDocument> response = await client.SearchAsync<SearchDocument>(query, searchOptions, cancellationToken)
+                .ConfigureAwait(false);
+
+            await foreach (var result in response.GetResultsAsync().WithCancellation(cancellationToken).ConfigureAwait(false))
+            {
+                if (ToItem(result, fields, citation, semantic) is { } item)
+                {
+                    results.Add(item);
+                }
+            }
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogError(ex, "Azure Search query against {Scope} failed", scope);
+            throw new InvalidOperationException(string.Format(ErrorMessages.AzureSearchQueryFailed, scope), ex);
         }
 
-        var semantic = index?.SemanticConfiguration is { Length: > 0 };
-        if (semantic)
+        return results;
+    }
+
+    /// <summary>The query: its fields, semantic ranking and vector search, as the index is set up.</summary>
+    private static SearchOptions BuildSearchOptions(string query, int size, string? filter, IReadOnlyList<string> fields,
+        AzureSearchIndexOptions? index, CitationFields? citation)
+    {
+        var searchOptions = new SearchOptions { Size = size, Filter = filter };
+
+        // With no content fields every field comes back, citation fields included; listing only those would drop the content.
+        if (fields.Count > 0)
+        {
+            foreach (var field in fields.Concat([citation?.Link, citation?.Name]).OfType<string>().Distinct(StringComparer.Ordinal))
+            {
+                searchOptions.Select.Add(field);
+            }
+        }
+
+        if (index?.SemanticConfiguration is { Length: > 0 } semanticConfiguration)
         {
             searchOptions.QueryType = SearchQueryType.Semantic;
-            searchOptions.SemanticSearch = new SemanticSearchOptions { SemanticConfigurationName = index!.SemanticConfiguration };
+            searchOptions.SemanticSearch = new SemanticSearchOptions { SemanticConfigurationName = semanticConfiguration };
         }
 
         if (index?.VectorFields is { Count: > 0 } vectorFields)
@@ -134,35 +168,29 @@ public sealed class AzureSearchContextRetriever(IReadOnlyDictionary<string, Sear
             searchOptions.VectorSearch = new VectorSearchOptions { Queries = { vector }, FilterMode = VectorFilterMode.PreFilter };
         }
 
-        var results = new List<SearchResultItem>();
-
-        try
-        {
-            SearchResults<SearchDocument> response = await client.SearchAsync<SearchDocument>(query, searchOptions, cancellationToken)
-                .ConfigureAwait(false);
-
-            await foreach (var result in response.GetResultsAsync().WithCancellation(cancellationToken).ConfigureAwait(false))
-            {
-                var content = ExtractContent(result.Document, fields, linkField);
-                if (!string.IsNullOrWhiteSpace(content))
-                {
-                    // The semantic ranker's score reflects meaning; without it, the keyword or hybrid score.
-                    results.Add(new SearchResultItem(content, semantic ? result.SemanticSearch?.RerankerScore ?? result.Score : result.Score)
-                    {
-                        Name = renderCitations ? NameOf(result.Document, nameField) : null,
-                        Link = renderCitations ? LinkOf(result.Document, linkField) : null,
-                    });
-                }
-            }
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            _logger.LogError(ex, "Azure Search query against {Scope} failed", scope);
-            throw new InvalidOperationException(string.Format(ErrorMessages.AzureSearchQueryFailed, scope), ex);
-        }
-
-        return results;
+        return searchOptions;
     }
+
+    /// <summary>One result as evidence, with its citation name and link when they're wanted; null when it has no content.</summary>
+    private static SearchResultItem? ToItem(SearchResult<SearchDocument> result, IReadOnlyList<string> fields, CitationFields? citation,
+        bool semantic)
+    {
+        var content = ExtractContent(result.Document, fields, citation?.Link);
+        if (string.IsNullOrWhiteSpace(content))
+        {
+            return null;
+        }
+
+        // The semantic ranker's score reflects meaning; without it, the keyword or hybrid score.
+        return new SearchResultItem(content, semantic ? result.SemanticSearch?.RerankerScore ?? result.Score : result.Score)
+        {
+            Name = citation is { } fieldsForName ? NameOf(result.Document, fieldsForName.Name) : null,
+            Link = citation is { } fieldsForLink ? LinkOf(result.Document, fieldsForLink.Link) : null,
+        };
+    }
+
+    /// <summary>The fields a citation's link and name come from, as the index sets them.</summary>
+    private readonly record struct CitationFields(string? Link, string? Name);
 
     private IReadOnlyList<string> FieldsFor(string scope)
     {

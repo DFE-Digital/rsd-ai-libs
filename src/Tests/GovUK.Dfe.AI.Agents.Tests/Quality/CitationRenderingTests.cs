@@ -55,15 +55,14 @@ public sealed class CitationRenderingTests
         Assert.Null((AgentEvidence?)(string?)null);
     }
 
-    public static TheoryData<EvidenceSource[]> InvalidSources => new()
-    {
-        { [new EvidenceSource(0, "Report")] },                       // no number 0
-        { [new EvidenceSource(1, " ")] },                            // a name is needed to show it
-        { [Report, Report with { Name = "Another" }] },              // ambiguous: two sources for one number
-    };
-
     [Theory]
-    [MemberData(nameof(InvalidSources))]
-    public void SourcesThatCantBeShownUnambiguously_AreRejected(EvidenceSource[] sources)
-        => Assert.Throws<ArgumentException>(() => new AgentEvidence("text", sources));
+    [InlineData(0, "Report", false)]   // no number 0
+    [InlineData(1, " ", false)]        // a name is needed to show it
+    [InlineData(1, "Report", true)]    // ambiguous: two sources for one number
+    public void SourcesThatCantBeShownUnambiguously_AreRejected(int number, string name, bool twice)
+    {
+        EvidenceSource[] sources = twice ? [new(number, name), new(number, "Another")] : [new(number, name)];
+
+        Assert.Throws<ArgumentException>(() => new AgentEvidence("text", sources));
+    }
 }

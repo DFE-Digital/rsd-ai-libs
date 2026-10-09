@@ -132,15 +132,22 @@ public sealed partial class AgentPlatformEndToEndTests
     {
         WriteSystemPrompt("Performance", "You summarise school performance.");
         _responses.Reply("performance-agent", FoundryResponses.Completed("r1", "Summarised."));
-        var redactor = Substitute.For<IAgentInputRedactor>();
-        redactor.RedactAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
-            .Returns<ValueTask<string>>(_ => throw new InvalidOperationException("PII service unavailable"));
+        using var provider = Build(agents: agents => agents.AddRedactor(new UnavailableRedactor()));
 
-        using var provider = Build(agents: agents => agents.AddRedactor(redactor));
-        await Assert.ThrowsAnyAsync<Exception>(async () => await provider.GetRequiredService<IAgentService>().RunAsync(
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(async () => await provider.GetRequiredService<IAgentService>().RunAsync(
             new AgentDefinition("performance-agent", "Performance"), $"Summarise pupil {Upn}.", cancellationToken: cancellationToken));
 
+        Assert.Equal(UnavailableRedactor.Error, ex.InnerException?.Message);
         Assert.Empty(_responses.CallsFor("performance-agent"));
+    }
+
+    /// <summary>A redactor whose service is down, e.g. a PII detection API.</summary>
+    private sealed class UnavailableRedactor : IAgentInputRedactor
+    {
+        public const string Error = "PII service unavailable";
+
+        public ValueTask<string> RedactAsync(string text, CancellationToken cancellationToken)
+            => ValueTask.FromException<string>(new InvalidOperationException(Error));
     }
 
     // ===================== Traceability =====================
@@ -177,7 +184,7 @@ public sealed partial class AgentPlatformEndToEndTests
             "--- ofsted_index Evidence 1 ---" + Environment.NewLine + "Rated Good in 2024.", cancellationToken);
 
         Assert.Equal("Rated Good [Evidence 1].", result.Output);   // no link to the app's own address, so no 404
-        Assert.Single(_responses.CallsFor("ofsted-agent"));      // the citation counted: no retry
-        Assert.Contains("never as a link", _responses.CallsFor("ofsted-agent")[0].SerializedInput, StringComparison.Ordinal);
+        var call = Assert.Single(_responses.CallsFor("ofsted-agent"));   // the citation counted: no retry
+        Assert.Contains("never as a link", call.SerializedInput, StringComparison.Ordinal);
     }
 }

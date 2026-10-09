@@ -68,12 +68,13 @@ Pass the result itself, not `evidence.Text`, so its [citation sources](#citation
 
 Agents cite results as `[Evidence n]`. Each one reaches your app as something a reader can use, with no settings:
 
-| The result has                     | `Rated Good [Evidence 1].` becomes                                                            |
-| ---------------------------------- | --------------------------------------------------------------------------------------------- |
-| A field holding a full web address | `Rated Good <a href="https://reports.ofsted.gov.uk/...">Copthorne School – Key Stage 2…</a>.` |
-| No web address                     | `Rated Good Copthorne School – Key Stage 2….`                                                 |
+| The result has                     | `Rated Good [Evidence 1].` becomes                                                              |
+| ---------------------------------- | ----------------------------------------------------------------------------------------------- |
+| A field holding a full web address | `Rated Good [<a href="https://reports.ofsted.gov.uk/...">Copthorne School – Key Stage 2…</a>].` |
+| No web address                     | `Rated Good [Copthorne School – Key Stage 2…].`                                                 |
 
-- **The text** is the start of the result itself, on one line and cut at about 80 characters.
+- **The text** is the start of the result itself, on one line and cut at about 80 characters. Square brackets set each
+  citation apart from the answer's own text.
 - **The link** is the first field whose whole value is a full `https` or `http` address. That field isn't sent to the
   model, so it can't write links itself. With `ContentFields` set, only those fields come back, so include the address
   field to get links.

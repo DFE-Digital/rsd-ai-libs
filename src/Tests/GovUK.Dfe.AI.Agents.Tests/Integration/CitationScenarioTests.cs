@@ -15,7 +15,7 @@ namespace GovUK.Dfe.AI.Agents.Tests.Integration;
 /// </summary>
 public sealed partial class AgentPlatformEndToEndTests
 {
-    private const string Link = """<a href="https://reports.ofsted.gov.uk/provider/21/100000">Ofsted report, March 2024</a>""";
+    private const string Link = """[<a href="https://reports.ofsted.gov.uk/provider/21/100000">Ofsted report, March 2024</a>]""";
 
     private static ContextResult SearchEvidence() => new(
         "--- ofsted_index Evidence 1 ---\nRated Good in March 2024.\n\n--- ofsted_index Evidence 2 ---\nPart of a trust of 12 academies.",
@@ -43,7 +43,7 @@ public sealed partial class AgentPlatformEndToEndTests
             "Summarise.", SearchEvidence(), cancellationToken);
 
         // The same evidence reads the same everywhere; injected markup is shown as text, so it can't run in the app.
-        Assert.Equal($"Rated Good {Link}, in a trust ofsted_index record 2. Since 2024 {Link}.&lt;script>alert(1)&lt;/script>", result.Output);
+        Assert.Equal($"Rated Good {Link}, in a trust [ofsted_index record 2]. Since 2024 {Link}.&lt;script>alert(1)&lt;/script>", result.Output);
         Assert.StartsWith("Rated Good [Evidence 1], in a trust [Evidence 2].", checkedAnswer, StringComparison.Ordinal);
         observer.Received(1).OnRunCompleted(Arg.Is<CompletedAgentRun>(run => run.Output.Contains("[Evidence 1]")));
     }
@@ -79,7 +79,7 @@ public sealed partial class AgentPlatformEndToEndTests
             result = update.Result ?? result;
         }
 
-        Assert.Equal(required ? $"Rated Good {Link}, in a trust ofsted_index record 2." : "Rated Good, in a trust.", string.Concat(pieces));
+        Assert.Equal(required ? $"Rated Good {Link}, in a trust [ofsted_index record 2]." : "Rated Good, in a trust.", string.Concat(pieces));
         Assert.Equal(string.Concat(pieces), result!.Output);
     }
 

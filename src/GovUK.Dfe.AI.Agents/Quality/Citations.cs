@@ -45,10 +45,11 @@ internal static partial class Citations
     }
 
     /// <summary>
-    /// Replaces each <c>[Evidence n]</c> that has a source with <c>&lt;a href="link"&gt;name&lt;/a&gt;</c>, or the name alone
-    /// when it has no web address. Names and links come from search results, so both are HTML-encoded. A number without a
-    /// source is left as it is. Run only on an answer that has passed <see cref="Check"/>.
+    /// Renders an answer with citations as HTML links to the evidence sources, or just the source names when the link is invalid.
     /// </summary>
+    /// <param name="answer">The answer to render.</param>
+    /// <param name="sources">The evidence sources.</param>
+    /// <returns>The rendered answer.</returns>
     public static string? Render(string? answer, IReadOnlyList<EvidenceSource> sources)
     {
         if (string.IsNullOrEmpty(answer) || sources.Count == 0)
@@ -70,9 +71,10 @@ internal static partial class Citations
     private static string Show(EvidenceSource source)
     {
         var name = WebUtility.HtmlEncode(source.Name.Trim());
-        return source.Link is { IsAbsoluteUri: true } link && (link.Scheme == Uri.UriSchemeHttps || link.Scheme == Uri.UriSchemeHttp)
+        var shown = source.Link is { IsAbsoluteUri: true } link && (link.Scheme == Uri.UriSchemeHttps || link.Scheme == Uri.UriSchemeHttp)
             ? $"<a href=\"{WebUtility.HtmlEncode(link.AbsoluteUri)}\">{name}</a>"
             : name;
+        return $"[{shown}]";
     }
 
     private static IEnumerable<int> Numbers(Regex pattern, string text)

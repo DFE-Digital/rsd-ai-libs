@@ -206,10 +206,10 @@ public static readonly AgentDefinition Ofsted = new("ofsted-agent", "Ofsted")
 
 When evidence is numbered, as search results are, `RequiredCitations` decides what readers see:
 
-| `RequiredCitations` | The model must                                    | Readers see                                                  |
-| ------------------- | ------------------------------------------------- | ------------------------------------------------------------ |
-| `true` (default)    | Cite as `[Evidence n]`, only evidence that exists | A link to the source, or its text when it has no web address |
-| `false`             | Nothing                                           | No citations: any the model writes are removed               |
+| `RequiredCitations` | The model must                                    | Readers see                                                        |
+| ------------------- | ------------------------------------------------- | ------------------------------------------------------------------ |
+| `true` (default)    | Cite as `[Evidence n]`, only evidence that exists | `[link to the source]`, or `[its text]` when it has no web address |
+| `false`             | Nothing                                           | No citations: any the model writes are removed                     |
 
 - Pass a search result itself as evidence (`evidence: searchResult`, not `searchResult.Text`) so its sources come too.
 - Citations change only after the checks; `Validate` and run observers still see `[Evidence n]`.

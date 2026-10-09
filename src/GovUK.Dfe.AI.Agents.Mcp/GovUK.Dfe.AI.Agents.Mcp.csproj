@@ -19,7 +19,7 @@
   <PropertyGroup>
     <!-- The lowest core version this add-on needs: its package depends on core >= this. Set it after core's first
          release, and raise it only when the add-on starts using something newer from core. -->
-    <CoreMinimumVersion>0.0.1-prerelease.170</CoreMinimumVersion>
+    <CoreMinimumVersion>0.0.1-prerelease.233</CoreMinimumVersion>
   </PropertyGroup>
 
   <ItemGroup>

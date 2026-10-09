@@ -3,6 +3,7 @@ using GovUK.Dfe.AI.Agents.Mcp.Clients;
 using GovUK.Dfe.AI.Agents.Mcp.Exceptions;
 using GovUK.Dfe.AI.Agents.Mcp.Options;
 using GovUK.Dfe.AI.Agents.Mcp.Sessions.Interfaces;
+using GovUK.Dfe.AI.Agents.Tools;
 using GovUK.Dfe.AI.Agents.ValueObjects;
 using Microsoft.Extensions.Logging.Abstractions;
 using ModelContextProtocol.Protocol;
@@ -83,7 +84,7 @@ public sealed class McpToolClientTests
 
         var tools = await sut.GetToolsAsync(cancellationToken: cancellationToken);
 
-        Assert.Equal("get_performance_data", Assert.IsType<FunctionTool>(Assert.Single(tools)).FunctionName);
+        Assert.Equal("get_performance_data", Assert.IsType<FunctionTool>(Assert.Single(tools).Tool).FunctionName);
         Assert.True(broken.Disposed);
         Assert.Equal(1, healthy.ListCalls);
     }
@@ -128,7 +129,7 @@ public sealed class McpToolClientTests
         var described = await sut.GetToolsAsync(cancellationToken: cancellationToken);
         var viaExecutor = await sut.TryExecuteAsync(new ToolCallRequest("call-1", "update_school_record", "{}"), cancellationToken);
 
-        Assert.DoesNotContain(described.OfType<FunctionTool>(), tool => tool.FunctionName == "update_school_record");
+        Assert.DoesNotContain(described, tool => tool.FunctionName == "update_school_record");
         Assert.Null(viaExecutor);
         await Assert.ThrowsAsync<InvalidOperationException>(() => sut.CallToolAsync("update_school_record", "{}", cancellationToken));
         await Assert.ThrowsAsync<McpToolConfigurationException>(() => sut.GetToolsAsync(["update_school_record"], cancellationToken));

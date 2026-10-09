@@ -13,10 +13,14 @@ public sealed class AzureSearchContextRetrieverOptions
     public int MaxRetryAttempts { get; init; } = 3;
 
     /// <summary>
-    /// Optional: the most characters of evidence one search returns. Results are added whole, most relevant first, until the
-    /// next would go over; the rest are left out, with a note. Unset (default): every relevant result is returned.
+    /// The most characters of evidence one search returns. Results are added whole, most relevant first, until the next
+    /// would go over; the rest are left out, with a note. The default fits within core's <c>MaxEvidenceCharacters</c>
+    /// (200,000), so a run never cuts a result mid-way. Raise both together for a model with a larger context.
     /// </summary>
-    public int? MaxEvidenceCharacters { get; init; }
+    public int? MaxEvidenceCharacters { get; init; } = DefaultMaxEvidenceCharacters;
+
+    /// <summary>Just under core's 200,000-character evidence limit, leaving room for the note and fencing.</summary>
+    public const int DefaultMaxEvidenceCharacters = 190_000;
 
     /// <summary>Every index has a name, and no name appears twice.</summary>
     internal bool IndexesAreValid

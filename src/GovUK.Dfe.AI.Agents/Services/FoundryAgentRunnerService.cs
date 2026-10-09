@@ -1,4 +1,5 @@
 using System.ClientModel;
+using System.Diagnostics;
 using System.Text.Json;
 using GovUK.Dfe.AI.Agents.Clients.Interfaces;
 using GovUK.Dfe.AI.Agents.Concurrency.Interfaces;
@@ -18,22 +19,23 @@ namespace GovUK.Dfe.AI.Agents.Services;
 
 /// <summary>
 /// Runs one Foundry agent: sends the prompt (with evidence fenced), runs the tool calls the model asks for, retries one
-/// invalid answer, and enforces the run's timeout, token budget and run slot. Records tokens and deletes the conversation.
+/// invalid answer, and enforces the run's timeout, token budget and run slot. Records tokens.
 /// </summary>
-internal sealed class FoundryAgentRunnerService(IAgentFactory agentFactory, IFoundryConversationClient conversationClient,
-    ILogger<FoundryAgentRunnerService>? logger = null, AgentRunOptions? runOptions = null, IAgentRunLimiter? runLimiter = null) : IAgentRunnerService
+/// <remarks>
+/// Runs are stateless, so nothing is stored in Foundry. The runner keeps the run's history (input, the model's output
+/// items, including encrypted reasoning, and tool outputs) and sends it with each call.
+/// </remarks>
+internal sealed class FoundryAgentRunnerService(IAgentFactory agentFactory, IFoundryResponsesClient responsesClient,
+    ILogger<FoundryAgentRunnerService>? logger = null, AgentRunOptions? runOptions = null, IAgentRunLimiter? runLimiter = null)
+    : IAgentRunnerService
 {
     /// <summary>The most tool-call rounds in one run.</summary>
     private const int MaxToolCallRounds = 10;
 
-    /// <summary>How long conversation clean-up may take once a run has finished (or been cancelled).</summary>
-    private static readonly TimeSpan ConversationCleanupTimeout = TimeSpan.FromSeconds(30);
-
     private readonly ILogger<FoundryAgentRunnerService> _logger = logger ?? NullLogger<FoundryAgentRunnerService>.Instance;
     private readonly AgentRunOptions _runOptions = runOptions ?? new AgentRunOptions();
 
-    public async Task<AgentResult> RunFromSpecAsync(AgentSpec spec, string prompt, string? conversationId = null,
-        string? additionalContext = null, ToolCallResolver? resolveToolCalls = null, Func<AgentResult, string?>? validateOutput = null,
+    public async Task<AgentResult> RunFromSpecAsync(AgentSpec spec, string prompt, string? additionalContext = null, ToolCallResolver? resolveToolCalls = null, Func<AgentResult, string?>? validateOutput = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(spec);
@@ -43,12 +45,11 @@ internal sealed class FoundryAgentRunnerService(IAgentFactory agentFactory, IFou
 
         var agent = await agentFactory.GetOrCreateAsync(spec, cancellationToken).ConfigureAwait(false);
 
-        return await RunCoreAsync(agent, prompt, conversationId, additionalContext, resolveToolCalls, validateOutput, cancellationToken)
+        return await RunCoreAsync(agent, prompt, additionalContext, resolveToolCalls, validateOutput, cancellationToken)
             .ConfigureAwait(false);
     }
 
-    public async Task<AgentResult> RunAsync(AgentReference agent, string prompt, string? conversationId = null,
-        string? additionalContext = null,
+    public async Task<AgentResult> RunAsync(AgentReference agent, string prompt, string? additionalContext = null,
         ToolCallResolver? resolveToolCalls = null,
         Func<AgentResult, string?>? validateOutput = null,
         CancellationToken cancellationToken = default)
@@ -58,13 +59,12 @@ internal sealed class FoundryAgentRunnerService(IAgentFactory agentFactory, IFou
 
         cancellationToken.ThrowIfCancellationRequested();
 
-        return await RunCoreAsync(agent, prompt, conversationId, additionalContext, resolveToolCalls, validateOutput, cancellationToken)
+        return await RunCoreAsync(agent, prompt, additionalContext, resolveToolCalls, validateOutput, cancellationToken)
             .ConfigureAwait(false);
     }
 
     /// <summary>One run, start to finish. Every failure is rethrown wrapped, carrying the tokens used so far.</summary>
-    private async Task<AgentResult> RunCoreAsync(AgentReference agent, string prompt, string? conversationId,
-        string? additionalContext, ToolCallResolver? resolveToolCalls, Func<AgentResult, string?>? validateOutput,
+    private async Task<AgentResult> RunCoreAsync(AgentReference agent, string prompt, string? additionalContext, ToolCallResolver? resolveToolCalls, Func<AgentResult, string?>? validateOutput,
         CancellationToken cancellationToken)
     {
         // Held for the whole run. Waiting for it doesn't count towards RunTimeout.
@@ -74,29 +74,27 @@ internal sealed class FoundryAgentRunnerService(IAgentFactory agentFactory, IFou
         var runToken = timeoutSource?.Token ?? cancellationToken;
 
         var usage = new UsageTally();
-        string? createdConversationId = null;
         var runId = Guid.CreateVersion7().ToString("N");   // time-ordered, so audit records sort by when they ran
         telemetry.Identified(runId);
 
         try
         {
-            createdConversationId = conversationId is null
-                ? await conversationClient.CreateConversationAsync(runToken).ConfigureAwait(false)
-                : null;
-
-            var conversation = conversationId ?? createdConversationId!;
-            telemetry.InConversation(conversation);
-            var response = await RunResponsesAsync(agent, conversation,
-                BuildInitialInputItems(agent.Name, prompt, additionalContext), resolveToolCalls, usage, runToken).ConfigureAwait(false);
+            var history = new List<ResponseItem>(
+                await BuildInitialInputItemsAsync(agent.Name, prompt, additionalContext, runToken).ConfigureAwait(false));
+            var response = await RunResponsesAsync(agent, history, resolveToolCalls, usage, runToken).ConfigureAwait(false);
             telemetry.AnsweredBy(response.Model);
 
-            // One retry in the same conversation: only the reason goes back, not the prompt and evidence.
+            // One retry, with the run so far and the reason. A streamed answer has already been shown, so it fails instead.
             if (validateOutput?.Invoke(ToResult(agent, response, usage, runId)) is { } problem)
             {
+                if (AnswerStream.Current is not null)
+                {
+                    throw new InvalidOperationException(string.Format(ErrorMessages.StreamedAnswerInvalid, agent.Name, problem));
+                }
+
                 _logger.LogWarning("Agent {AgentName} gave an invalid answer; asking once more: {Problem}", agent.Name, problem);
-                response = await RunResponsesAsync(agent, conversation,
-                    [ResponseItem.CreateUserMessageItem(string.Format(PromptText.AnswerRejected, problem))], resolveToolCalls, usage, runToken)
-                    .ConfigureAwait(false);
+                history.Add(ResponseItem.CreateUserMessageItem(string.Format(PromptText.AnswerRejected, problem)));
+                response = await RunResponsesAsync(agent, history, resolveToolCalls, usage, runToken).ConfigureAwait(false);
 
                 if (validateOutput(ToResult(agent, response, usage, runId)) is { } stillInvalid)
                 {
@@ -136,10 +134,6 @@ internal sealed class FoundryAgentRunnerService(IAgentFactory agentFactory, IFou
             telemetry.AnsweredBy(usage.Model);
             telemetry.Record(usage.Total, usage.InferenceCalls, usage.ToolCalls, _runOptions.Pricing.CostOf(usage.Model, usage.Total),
                 _runOptions.Pricing.Currency);
-            if (createdConversationId is not null && _runOptions.DeleteConversationsAfterRun)
-            {
-                await DeleteConversationQuietlyAsync(agent.Name, createdConversationId).ConfigureAwait(false);
-            }
         }
     }
 
@@ -150,7 +144,7 @@ internal sealed class FoundryAgentRunnerService(IAgentFactory agentFactory, IFou
             AgentName = agent.Name,
             RunId = runId,
             CompletedAt = DateTimeOffset.UtcNow,
-            Output = Quality.AnswerLinks.RemoveRelativeLinks(response.GetOutputText()),
+            Output = Quality.AnswerLinks.Clean(response.GetOutputText()),
             TotalTokens = usage.Total.TotalTokens,
             InputTokens = usage.Total.InputTokens,
             OutputTokens = usage.Total.OutputTokens,
@@ -159,15 +153,19 @@ internal sealed class FoundryAgentRunnerService(IAgentFactory agentFactory, IFou
             Model = response.Model,
         };
 
-    /// <summary>Sends input, then runs the tool calls the model asks for until it answers, for at most <see cref="MaxToolCallRounds"/> rounds.</summary>
-    private async Task<ResponseResult> RunResponsesAsync(AgentReference agent, string conversationId, IReadOnlyList<ResponseItem> inputItems,
+    /// <summary>
+    /// Sends the history, then runs the tool calls the model asks for until it answers, for at most
+    /// <see cref="MaxToolCallRounds"/> rounds. Each response's output items and tool outputs are added to the history.
+    /// </summary>
+    private async Task<ResponseResult> RunResponsesAsync(AgentReference agent, List<ResponseItem> history,
         ToolCallResolver? resolveToolCalls, UsageTally usage, CancellationToken cancellationToken)
     {
         for (var round = 1; round <= MaxToolCallRounds; round++)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            var response = await SendAsync(agent, conversationId, inputItems, usage, cancellationToken).ConfigureAwait(false);
+            var response = await SendAsync(agent, history, usage, cancellationToken).ConfigureAwait(false);
+            history.AddRange(response.OutputItems);
             var toolCalls = response.OutputItems.OfType<FunctionCallResponseItem>().ToList();
             if (toolCalls.Count == 0)
             {
@@ -177,7 +175,7 @@ internal sealed class FoundryAgentRunnerService(IAgentFactory agentFactory, IFou
 
             usage.ToolCalls += toolCalls.Count;
 
-            inputItems = await ResolveToolCallsAsync(response, toolCalls, resolveToolCalls, cancellationToken).ConfigureAwait(false);
+            history.AddRange(await ResolveToolCallsAsync(response, toolCalls, resolveToolCalls, cancellationToken).ConfigureAwait(false));
         }
 
         throw new InvalidOperationException(string.Format(ErrorMessages.ToolCallRoundLimitExceeded, agent.Name, MaxToolCallRounds));
@@ -187,8 +185,8 @@ internal sealed class FoundryAgentRunnerService(IAgentFactory agentFactory, IFou
     /// Sends one request, capped at the run's remaining output tokens, and adds its usage. Throws when the budget is used up, the
     /// model stops at the cap, or a guardrail blocks the prompt or answer.
     /// </summary>
-    private async Task<ResponseResult> SendAsync(AgentReference agent, string conversationId, IReadOnlyList<ResponseItem> inputItems,
-        UsageTally usage, CancellationToken cancellationToken)
+    private async Task<ResponseResult> SendAsync(AgentReference agent, IReadOnlyList<ResponseItem> inputItems, UsageTally usage,
+        CancellationToken cancellationToken)
     {
         var outputTokensLeft = (int)Math.Max(0, _runOptions.MaxOutputTokensPerRun - usage.Total.OutputTokens);
         if (outputTokensLeft < AgentRunOptions.MinOutputTokens)
@@ -198,15 +196,27 @@ internal sealed class FoundryAgentRunnerService(IAgentFactory agentFactory, IFou
 
         ResponseResult response;
         usage.InferenceCalls++;   // counted when sent, so failed calls count too
+        var started = Stopwatch.GetTimestamp();
         try
         {
-            response = await conversationClient.CreateResponseAsync(agent.Name, conversationId, inputItems, agent.Version,
-                outputTokensLeft, cancellationToken).ConfigureAwait(false);
+            response = AnswerStream.Current is { } onText
+                ? await responsesClient.StreamResponseAsync(agent.Name, inputItems, onText, agent.Version, outputTokensLeft, cancellationToken)
+                    .ConfigureAwait(false)
+                : await responsesClient.CreateResponseAsync(agent.Name, inputItems, agent.Version, outputTokensLeft, cancellationToken)
+                    .ConfigureAwait(false);
         }
         catch (ClientResultException ex) when (IsGuardrailBlock(ex))
         {
+            RecordCall(agent, started, null, "content_filter");
             throw new AgentGuardrailException(agent.Name, AgentGuardrailException.PromptStage, ex);
         }
+        catch (Exception ex)
+        {
+            RecordCall(agent, started, null, ex is OperationCanceledException ? "cancelled" : ex.GetType().FullName ?? AgentTelemetry.OtherError);
+            throw;
+        }
+
+        RecordCall(agent, started, response.Model, null);
 
         usage.Add(response.Usage);   // every response is billed, even in a run that later fails
         usage.Model ??= response.Model;
@@ -257,23 +267,13 @@ internal sealed class FoundryAgentRunnerService(IAgentFactory agentFactory, IFou
                 : null;
     }
 
+    /// <summary>How long one Foundry call took, so a slow model or deployment shows up in the metrics.</summary>
+    private void RecordCall(AgentReference agent, long started, string? model, string? errorType)
+        => AgentTelemetry.RecordOperation(_runOptions.ApplicationName, agent.Name, model,
+            Stopwatch.GetElapsedTime(started).TotalSeconds, errorType);
+
     private InvalidOperationException OutputTokenLimitReached(string agentName)
         => new(string.Format(ErrorMessages.OutputTokenLimitReached, agentName, _runOptions.MaxOutputTokensPerRun));
-
-    private async Task DeleteConversationQuietlyAsync(string agentName, string conversationId)
-    {
-        // Runs after cancellation too, so it gets its own short budget rather than the run's token.
-        using var cleanupSource = new CancellationTokenSource(ConversationCleanupTimeout);
-        try
-        {
-            await conversationClient.DeleteConversationAsync(conversationId, cleanupSource.Token).ConfigureAwait(false);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Failed to delete conversation {ConversationId} for agent {AgentName}; it will be retained in Foundry.",
-                conversationId, agentName);
-        }
-    }
 
     /// <summary>
     /// Attaches the tokens a failed run used to its exception, so a fallback result (and the briefing
@@ -321,12 +321,22 @@ internal sealed class FoundryAgentRunnerService(IAgentFactory agentFactory, IFou
         return source;
     }
 
-    /// <summary>The first input: the evidence, cut to size and fenced as data, then the prompt.</summary>
-    private IReadOnlyList<ResponseItem> BuildInitialInputItems(string agentName, string prompt, string? additionalContext)
-        => string.IsNullOrWhiteSpace(additionalContext)
-            ? [ResponseItem.CreateUserMessageItem(_runOptions.Redact(prompt))]
-            : [ResponseItem.CreateUserMessageItem(PromptText.FenceReferenceMaterial(LimitEvidence(agentName, _runOptions.Redact(additionalContext)))),
-               ResponseItem.CreateUserMessageItem(_runOptions.Redact(prompt))];
+    /// <summary>
+    /// The first input: the evidence, cut to size, redacted and fenced as data, then the prompt. Cut before redacting, so a
+    /// redactor that calls a service only checks what's sent.
+    /// </summary>
+    private async Task<IReadOnlyList<ResponseItem>> BuildInitialInputItemsAsync(string agentName, string prompt, string? additionalContext,
+        CancellationToken cancellationToken)
+    {
+        var redactedPrompt = ResponseItem.CreateUserMessageItem(await _runOptions.RedactAsync(prompt, cancellationToken).ConfigureAwait(false));
+        if (string.IsNullOrWhiteSpace(additionalContext))
+        {
+            return [redactedPrompt];
+        }
+
+        var evidence = await _runOptions.RedactAsync(LimitEvidence(agentName, additionalContext), cancellationToken).ConfigureAwait(false);
+        return [ResponseItem.CreateUserMessageItem(PromptText.FenceReferenceMaterial(evidence)), redactedPrompt];
+    }
 
     /// <summary>
     /// Keeps evidence within <see cref="AgentRunOptions.MaxEvidenceCharacters"/>, keeping the start (the most relevant
@@ -366,7 +376,7 @@ internal sealed class FoundryAgentRunnerService(IAgentFactory agentFactory, IFou
             string.Format(ErrorMessages.ResponseDidNotComplete, agentName, response.Id, response.Status, detail));
     }
 
-    /// <summary>Runs the model's tool calls in this app and returns their outputs, capped and fenced, as the next input.</summary>
+    /// <summary>Runs the model's tool calls in this app and returns their outputs, capped, redacted and fenced.</summary>
     private async Task<IReadOnlyList<ResponseItem>> ResolveToolCallsAsync(ResponseResult response,
         IReadOnlyList<FunctionCallResponseItem> toolCalls,
         ToolCallResolver? resolveToolCalls,
@@ -390,7 +400,7 @@ internal sealed class FoundryAgentRunnerService(IAgentFactory agentFactory, IFou
 
         var outputByCallId = outputs.ToDictionary(o => o.CallId, o => o.Output);
 
-        var nextInputItems = new List<ResponseItem>(response.OutputItems);
+        var outputItems = new List<ResponseItem>();
         foreach (var callId in toolCalls.Select(toolCall => toolCall.CallId))
         {
             if (!outputByCallId.TryGetValue(callId, out var output))
@@ -398,12 +408,12 @@ internal sealed class FoundryAgentRunnerService(IAgentFactory agentFactory, IFou
                 throw new InvalidOperationException(string.Format(ErrorMessages.MissingToolCallOutput, callId));
             }
 
-            var limited = LimitToolOutput(callId, _runOptions.Redact(output));
-            nextInputItems.Add(ResponseItem.CreateFunctionCallOutputItem(callId,
+            var limited = await _runOptions.RedactAsync(LimitToolOutput(callId, output), cancellationToken).ConfigureAwait(false);
+            outputItems.Add(ResponseItem.CreateFunctionCallOutputItem(callId,
                 _runOptions.FenceToolOutput ? PromptText.FenceToolOutput(limited) : limited));
         }
 
-        return nextInputItems;
+        return outputItems;
     }
 
     /// <summary>

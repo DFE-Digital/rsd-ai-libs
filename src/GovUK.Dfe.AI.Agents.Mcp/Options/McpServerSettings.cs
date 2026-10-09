@@ -22,9 +22,13 @@ public sealed class McpServerSettings
 
     internal IEnumerable<string> Problems()
     {
-        if (!Uri.TryCreate(ServerUri, UriKind.Absolute, out _))
+        if (!Uri.TryCreate(ServerUri, UriKind.Absolute, out var uri))
         {
             yield return "ServerUri";
+        }
+        else if (!McpServerConnectionOptions.IsSecure(uri))
+        {
+            yield return "ServerUri (must use https://, or http:// for localhost only)";
         }
 
         if (string.IsNullOrWhiteSpace(Scope))

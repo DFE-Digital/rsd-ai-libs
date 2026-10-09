@@ -1,5 +1,5 @@
+using GovUK.Dfe.AI.Agents.Tools;
 using GovUK.Dfe.AI.Agents.Tools.Interfaces;
-using OpenAI.Responses;
 
 namespace GovUK.Dfe.AI.Agents.Mcp.Clients.Interfaces;
 
@@ -13,7 +13,7 @@ public interface IMcpToolClient : IAgentToolProvider, IAgentToolExecutor, IAsync
     /// Describes the server's tools as function tools, restricted to <paramref name="allowedToolNames"/>
     /// (or every tool the server reports, when null/empty).
     /// </summary>
-    Task<IReadOnlyList<ResponseTool>> GetToolsAsync(IReadOnlyList<string>? allowedToolNames = null, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<AgentTool>> GetToolsAsync(IReadOnlyList<string>? allowedToolNames = null, CancellationToken cancellationToken = default);
 
     /// <summary>Calls a tool on the server with this app's credential.</summary>
     /// <param name="functionName">The function name the model used (the tool's name, made safe for a function name).</param>

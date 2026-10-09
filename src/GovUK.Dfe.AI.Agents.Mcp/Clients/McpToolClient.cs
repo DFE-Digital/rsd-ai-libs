@@ -12,7 +12,7 @@ using GovUK.Dfe.AI.Agents.ValueObjects;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
-using OpenAI.Responses;
+using GovUK.Dfe.AI.Agents.Tools;
 using GovUK.Dfe.AI.Agents.Mcp.Diagnostics;
 
 namespace GovUK.Dfe.AI.Agents.Mcp.Clients;
@@ -75,7 +75,7 @@ public sealed class McpToolClient : IMcpToolClient, IDisposable
     /// Describes the server's tools in <see cref="McpServerConnectionOptions.AllowedToolNames"/> as function tools.
     /// Implemented explicitly, so the public overload below is the only one with optional parameters.
     /// </summary>
-    Task<IReadOnlyList<ResponseTool>> IAgentToolProvider.GetToolsAsync(CancellationToken cancellationToken)
+    Task<IReadOnlyList<AgentTool>> IAgentToolProvider.GetToolsAsync(CancellationToken cancellationToken)
         => GetToolsAsync(allowedToolNames: null, cancellationToken);
 
     /// <summary>
@@ -84,7 +84,7 @@ public sealed class McpToolClient : IMcpToolClient, IDisposable
     /// agent can have; <see cref="McpAllowedToolsProvider"/> gives an agent a subset.
     /// </summary>
     /// <param name="allowedToolNames">The tools to describe, or null/empty for all of the server's allowed tools.</param>
-    public async Task<IReadOnlyList<ResponseTool>> GetToolsAsync(IReadOnlyList<string>? allowedToolNames = null,
+    public async Task<IReadOnlyList<AgentTool>> GetToolsAsync(IReadOnlyList<string>? allowedToolNames = null,
         CancellationToken cancellationToken = default)
     {
         var names = allowedToolNames is { Count: > 0 } requested ? requested : _options.AllowedToolNames ?? [];
@@ -224,7 +224,7 @@ public sealed class McpToolClient : IMcpToolClient, IDisposable
     /// Describes MCP tools as function tools, ordered by name. Deterministic for the same tools, so it
     /// never causes a new agent version on its own, and it carries no credential of any kind.
     /// </summary>
-    internal static IReadOnlyList<ResponseTool> BuildFunctionTools(string serverLabel, IEnumerable<Tool> serverTools)
+    internal static IReadOnlyList<AgentTool> BuildFunctionTools(string serverLabel, IEnumerable<Tool> serverTools)
     {
         var tools = serverTools.OrderBy(tool => tool.Name, StringComparer.Ordinal).ToList();
 
@@ -235,11 +235,8 @@ public sealed class McpToolClient : IMcpToolClient, IDisposable
                 string.Join(", ", clash.Select(tool => tool.Name)), clash.Key));
         }
 
-        return [.. tools.Select(tool => ResponseTool.CreateFunctionTool(
-            functionName: ToFunctionName(tool.Name),
-            functionParameters: BinaryData.FromString(tool.InputSchema.GetRawText()),
-            strictModeEnabled: false,
-            functionDescription: tool.Description))];
+        return [.. tools.Select(tool => AgentTool.Function(ToFunctionName(tool.Name), tool.Description,
+            BinaryData.FromString(tool.InputSchema.GetRawText())))];
     }
 
     /// <summary>

@@ -1,7 +1,6 @@
 using GovUK.Dfe.AI.Agents.Constants;
 using GovUK.Dfe.AI.Agents.Tools.Interfaces;
 using GovUK.Dfe.AI.Agents.ValueObjects;
-using OpenAI.Responses;
 
 namespace GovUK.Dfe.AI.Agents.Tools;
 
@@ -15,7 +14,7 @@ internal static class AgentToolResolver
             .ToDictionary(static group => group.Key, static group => group.Select(static binding => binding.Provider).ToList());
 
     /// <summary>Resolves every tool the agent's bound providers offer, with no filtering.</summary>
-    public static async Task<IReadOnlyList<ResponseTool>> ResolveAsync(
+    public static async Task<IReadOnlyList<AgentTool>> ResolveAsync(
         IReadOnlyDictionary<string, List<IAgentToolProvider>> toolProvidersByAgentName, string agentName, CancellationToken cancellationToken)
     {
         if (!toolProvidersByAgentName.TryGetValue(agentName, out var providers))
@@ -32,7 +31,7 @@ internal static class AgentToolResolver
     /// only the function tools named in <see cref="AgentDefinition.AllowedTools"/>.
     /// </summary>
     /// <exception cref="InvalidOperationException">An allowed tool isn't offered by any of the agent's bindings.</exception>
-    public static async Task<IReadOnlyList<ResponseTool>> ResolveAsync(
+    public static async Task<IReadOnlyList<AgentTool>> ResolveAsync(
         IReadOnlyDictionary<string, List<IAgentToolProvider>> toolProvidersByAgentName, AgentDefinition definition, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(definition);
@@ -43,20 +42,20 @@ internal static class AgentToolResolver
 
     /// <summary>Keeps built-in tools and only the function tools in <see cref="AgentDefinition.AllowedTools"/>.</summary>
     /// <exception cref="InvalidOperationException">An allowed tool isn't among <paramref name="offered"/>.</exception>
-    public static IReadOnlyList<ResponseTool> FilterToAllowed(IReadOnlyList<ResponseTool> offered, AgentDefinition definition)
+    public static IReadOnlyList<AgentTool> FilterToAllowed(IReadOnlyList<AgentTool> offered, AgentDefinition definition)
     {
         ArgumentNullException.ThrowIfNull(offered);
         ArgumentNullException.ThrowIfNull(definition);
 
         var allowed = definition.AllowedTools.ToHashSet(StringComparer.Ordinal);
 
-        var missing = allowed.Where(name => !offered.OfType<FunctionTool>().Any(tool => tool.FunctionName == name)).ToList();
+        var missing = allowed.Where(name => !offered.Any(tool => tool.FunctionName == name)).ToList();
         if (missing.Count > 0)
         {
             throw new InvalidOperationException(string.Format(ErrorMessages.AllowedToolNotOffered, definition.Name, string.Join(", ", missing)));
         }
 
-        return [.. offered.Where(tool => tool is not FunctionTool function || allowed.Contains(function.FunctionName))];
+        return [.. offered.Where(tool => tool.FunctionName is not { } name || allowed.Contains(name))];
     }
 
     /// <summary>

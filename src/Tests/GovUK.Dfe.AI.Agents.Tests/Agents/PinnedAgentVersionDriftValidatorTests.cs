@@ -100,7 +100,7 @@ public sealed class PinnedAgentVersionDriftValidatorTests
     public async Task StartAsync_IncludesToolsFromRegisteredBindings_InTheComparedSpec()
     {
         _definitionProvider.Definitions = [Pinned];
-        var tool = ResponseTool.CreateWebSearchTool();
+        var tool = AgentTool.FromResponseTool(ResponseTool.CreateWebSearchTool());
         var toolProvider = Substitute.For<IAgentToolProvider>();
         toolProvider.GetToolsAsync(Arg.Any<CancellationToken>()).Returns([tool]);
         SetUpNoDrift(Pinned.Name, "3");

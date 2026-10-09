@@ -80,7 +80,7 @@ internal sealed class AgentToolCompatibilityValidator(IServiceProvider services,
             }
 
             var offered = await AgentToolResolver.ResolveAsync(_toolProviders, definition.Name, cancellationToken).ConfigureAwait(false);
-            offeredTools = [.. offered.OfType<FunctionTool>().Select(static tool => tool.FunctionName)];
+            offeredTools = [.. offered.Select(static tool => tool.FunctionName).OfType<string>()];
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {

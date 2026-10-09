@@ -2,6 +2,7 @@ using System.ClientModel.Primitives;
 using System.Text.Json;
 using GovUK.Dfe.AI.Agents.Mcp.Clients;
 using GovUK.Dfe.AI.Agents.Mcp.Exceptions;
+using GovUK.Dfe.AI.Agents.Tools;
 using ModelContextProtocol.Protocol;
 using OpenAI.Responses;
 using Xunit;
@@ -22,13 +23,13 @@ public sealed class McpToolDefinitionTests
         InputSchema = JsonDocument.Parse("""{"type":"object","properties":{"urn":{"type":"string"}},"required":["urn"]}""").RootElement,
     };
 
-    private static string Serialize(ResponseTool tool) => ModelReaderWriter.Write(tool).ToString();
+    private static string Serialize(AgentTool tool) => ModelReaderWriter.Write(tool.Tool).ToString();
 
     [Fact]
     public void BuildFunctionTools_DescribesEachServerToolAsAFunction_WithItsSchemaAndDescription()
     {
         var tool = Assert.IsType<FunctionTool>(Assert.Single(McpToolClient.BuildFunctionTools("performance",
-            [ServerTool("get_performance_data", "Gets KS2 results for a school.")])));
+            [ServerTool("get_performance_data", "Gets KS2 results for a school.")])).Tool);
 
         Assert.Equal("get_performance_data", tool.FunctionName);
         Assert.Equal("Gets KS2 results for a school.", tool.FunctionDescription);

@@ -36,6 +36,7 @@ internal static class ErrorMessages
     public const string ApprovalToolNotAllowed = "agent {0}'s ToolsRequiringApproval (not in its AllowedTools: {1})";
     public const string ApprovalWithoutApprover = "agent {0}'s ToolsRequiringApproval (call agents.AddToolApprover<T>() so they can run)";
     public const string AgentAnswerInvalid = "Agent '{0}' gave an invalid answer twice: {1}";
+    public const string StreamedAnswerInvalid = "Agent '{0}' gave an invalid answer: {1}";
     public const string TestCaseWithoutPrompt = "Test case {0} has no \"prompt\".";
     public const string NoRunSlot = "No agent run slot came free within {0}. Raise MaxConcurrency or GlobalConcurrency:MaxConcurrentRuns, or MaxWaitForRunSlot.";
     public const string GuardrailBlocked = "A Foundry guardrail blocked the {1} for agent '{0}'. Check the prompt and evidence, or the guardrail's settings.";

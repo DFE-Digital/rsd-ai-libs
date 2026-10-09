@@ -5,12 +5,12 @@ token telemetry. Optional add-ons provide MCP tools, Azure AI Search evidence, a
 
 ## Packages
 
-| Package | What it does | Docs |
-| --- | --- | --- |
-| `GovUK.Dfe.AI.Agents` | Core: define, version and run agents | [readme](src/GovUK.Dfe.AI.Agents/readme.md) |
-| `GovUK.Dfe.AI.Agents.Mcp` | Tools from your own MCP servers | [readme](src/GovUK.Dfe.AI.Agents.Mcp/readme.md) |
-| `GovUK.Dfe.AI.Agents.AISearch` | Evidence from Azure AI Search | [readme](src/GovUK.Dfe.AI.Agents.AISearch/readme.md) |
-| `GovUK.Dfe.AI.Agents.Evaluation` | A judge model that scores answers | [readme](src/GovUK.Dfe.AI.Agents.Evaluation/readme.md) |
+| Package                          | What it does                                 | Docs                                                   |
+| -------------------------------- | -------------------------------------------- | ------------------------------------------------------ |
+| `GovUK.Dfe.AI.Agents`            | Core: define, version and run agents         | [readme](src/GovUK.Dfe.AI.Agents/readme.md)            |
+| `GovUK.Dfe.AI.Agents.Mcp`        | Tools from your own MCP servers              | [readme](src/GovUK.Dfe.AI.Agents.Mcp/readme.md)        |
+| `GovUK.Dfe.AI.Agents.AISearch`   | Evidence from Azure AI Search                | [readme](src/GovUK.Dfe.AI.Agents.AISearch/readme.md)   |
+| `GovUK.Dfe.AI.Agents.Evaluation` | A judge model that scores answers            | [readme](src/GovUK.Dfe.AI.Agents.Evaluation/readme.md) |
 | `GovUK.Dfe.AI.Agents.Guardrails` | Foundry guardrails on your model deployments | [readme](src/GovUK.Dfe.AI.Agents.Guardrails/readme.md) |
 
 Install core plus only the add-ons you need. Each package is versioned and released on its own, so you can upgrade core
@@ -40,16 +40,16 @@ The libraries help services meet the
 [AI Playbook for the UK Government](https://www.gov.uk/government/publications/ai-playbook-for-the-uk-government).
 Some principles are the service team's responsibility, whatever library it uses.
 
-| Principle | The libraries provide | Your service must still |
-| --- | --- | --- |
-| 1. Know AI's limits | Answer checks, required citations, a release gate | Tell users what the tool can't do |
-| 2. Lawful and ethical | Personal data redaction; nothing sensitive in telemetry; conversations deleted after runs | Complete a DPIA and equality impact assessment |
-| 3. Secure | Guardrails checked at startup; evidence and tool output fenced against prompt injection; MCP tools denied by default; safe search filters; Entra ID | Threat model and Secure by Design review |
-| 4. Meaningful human control | Approval before tools that change things; every answer traceable by run ID | Decide which decisions a person reviews, label AI answers, and collect users' feedback |
-| 5. Full life cycle | Agent versions and pins, drift warnings, release gate against a baseline, live quality scores | Plan ownership, model upgrades and retirement |
-| 6. Right tool | Token and cost metrics per app and agent; cost caps per run | Show AI beats a simpler option |
-| 7. Open and collaborative | Open source; OpenTelemetry standard names | Publish an ATRS record |
-| 8–10. Commercial, skills, policy | Quota and concurrency limits; readmes and a production checklist | Contracts, training, DfE AI governance |
+| Principle                        | The libraries provide                                                                                                                               | Your service must still                                                                |
+| -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| 1. Know AI's limits              | Answer checks, required citations, a release gate                                                                                                   | Tell users what the tool can't do                                                      |
+| 2. Lawful and ethical            | Personal data redaction; nothing sensitive in telemetry; nothing stored in Foundry                                                                  | Complete a DPIA and equality impact assessment                                         |
+| 3. Secure                        | Guardrails checked at startup; evidence and tool output fenced against prompt injection; MCP tools denied by default; safe search filters; Entra ID | Threat model and Secure by Design review                                               |
+| 4. Meaningful human control      | Approval before tools that change things; every answer traceable by run ID                                                                          | Decide which decisions a person reviews, label AI answers, and collect users' feedback |
+| 5. Full life cycle               | Agent versions and pins, drift warnings, release gate against a baseline, live quality scores                                                       | Plan ownership, model upgrades and retirement                                          |
+| 6. Right tool                    | Token and cost metrics per app and agent; cost caps per run                                                                                         | Show AI beats a simpler option                                                         |
+| 7. Open and collaborative        | Open source; OpenTelemetry standard names                                                                                                           | Publish an ATRS record                                                                 |
+| 8–10. Commercial, skills, policy | Quota and concurrency limits; readmes and a production checklist                                                                                    | Contracts, training, DfE AI governance                                                 |
 
 Bias: give release-gate test cases a `group`, and fail the gate when one group is served worse
 (`report.GroupGaps(...)`). See [Responsible AI](src/GovUK.Dfe.AI.Agents/readme.md#responsible-ai) in the core readme.

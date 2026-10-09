@@ -12,14 +12,14 @@ using Xunit;
 
 namespace GovUK.Dfe.AI.Agents.Tests.Agents;
 
-/// <summary>One run: tool rounds, the token cap, guardrail blocks, timeouts, cancellation and conversation clean-up.</summary>
+/// <summary>One run: tool rounds, the token cap, guardrail blocks, timeouts, and cancellation.</summary>
 public sealed class FoundryAgentRunnerTests
 {
     private readonly CancellationToken cancellationToken = TestContext.Current.CancellationToken;
     private readonly IAgentFactory _agentFactory = Substitute.For<IAgentFactory>();
-    private readonly IFoundryConversationClient _conversationClient = Substitute.For<IFoundryConversationClient>();
+    private readonly IFoundryResponsesClient _responsesClient = Substitute.For<IFoundryResponsesClient>();
 
-    private FoundryAgentRunnerService CreateSut() => new(_agentFactory, _conversationClient);
+    private FoundryAgentRunnerService CreateSut() => new(_agentFactory, _responsesClient);
      
     private static ResponseResult ResponseWithOutputItems(string id, IEnumerable<ResponseItem> items, int? totalTokens = null, string status = "completed",
         string? incompleteReason = null)
@@ -45,8 +45,7 @@ public sealed class FoundryAgentRunnerTests
     {
         var spec = new AgentSpec { Name = "my-agent", Instructions = "Do the thing." };
         _agentFactory.GetOrCreateAsync(spec, cancellationToken).Returns(new AgentReference("agent-id", "my-agent"));
-        _conversationClient.CreateConversationAsync(cancellationToken).Returns("conversation-1");
-        _conversationClient.CreateResponseAsync("my-agent", "conversation-1", Arg.Any<IReadOnlyList<ResponseItem>>(), Arg.Any<string?>(), Arg.Any<int?>(), cancellationToken)
+        _responsesClient.CreateResponseAsync("my-agent", Arg.Any<IReadOnlyList<ResponseItem>>(), Arg.Any<string?>(), Arg.Any<int?>(), cancellationToken)
             .Returns(ResponseWithFunctionCall("resp-1", "call-1", "lookup"));
 
         var sut = CreateSut();
@@ -63,8 +62,7 @@ public sealed class FoundryAgentRunnerTests
     {
         var spec = new AgentSpec { Name = "my-agent", Instructions = "Do the thing." };
         _agentFactory.GetOrCreateAsync(spec, cancellationToken).Returns(new AgentReference("agent-id", "my-agent"));
-        _conversationClient.CreateConversationAsync(cancellationToken).Returns("conversation-1");
-        _conversationClient.CreateResponseAsync("my-agent", "conversation-1", Arg.Any<IReadOnlyList<ResponseItem>>(), Arg.Any<string?>(), Arg.Any<int?>(), cancellationToken)
+        _responsesClient.CreateResponseAsync("my-agent", Arg.Any<IReadOnlyList<ResponseItem>>(), Arg.Any<string?>(), Arg.Any<int?>(), cancellationToken)
             .Returns(ResponseWithOutputItems("resp-1", [], status: status, incompleteReason: reason));
 
         var sut = CreateSut();
@@ -79,8 +77,7 @@ public sealed class FoundryAgentRunnerTests
         var response = Substitute.For<System.ClientModel.Primitives.PipelineResponse>();
         response.Status.Returns(429);
         var rateLimited = new System.ClientModel.ClientResultException("Too many requests.", response);
-        _conversationClient.CreateConversationAsync(Arg.Any<CancellationToken>()).Returns("conversation-1");
-        _conversationClient.CreateResponseAsync("my-agent", "conversation-1", Arg.Any<IReadOnlyList<ResponseItem>>(), "1", Arg.Any<int?>(), Arg.Any<CancellationToken>())
+        _responsesClient.CreateResponseAsync("my-agent", Arg.Any<IReadOnlyList<ResponseItem>>(), "1", Arg.Any<int?>(), Arg.Any<CancellationToken>())
             .Returns(Task.FromException<ResponseResult>(rateLimited));
 
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
@@ -114,8 +111,7 @@ public sealed class FoundryAgentRunnerTests
         rejected.Status.Returns(400);
         rejected.Content.Returns(BinaryData.FromString("{\"error\":{\"code\":\"content_filter\"}}"));
         var blockedPrompt = new System.ClientModel.ClientResultException("Bad request.", rejected);
-        _conversationClient.CreateConversationAsync(Arg.Any<CancellationToken>()).Returns("conversation-1");
-        _conversationClient.CreateResponseAsync("my-agent", "conversation-1", Arg.Any<IReadOnlyList<ResponseItem>>(), "1", Arg.Any<int?>(), Arg.Any<CancellationToken>())
+        _responsesClient.CreateResponseAsync("my-agent", Arg.Any<IReadOnlyList<ResponseItem>>(), "1", Arg.Any<int?>(), Arg.Any<CancellationToken>())
             .Returns(Task.FromException<ResponseResult>(blockedPrompt));
         var blocks = new List<string?>();
         using var listener = new System.Diagnostics.Metrics.MeterListener();
@@ -145,12 +141,11 @@ public sealed class FoundryAgentRunnerTests
     {
         var spec = new AgentSpec { Name = "my-agent", Instructions = "Do the thing." };
         _agentFactory.GetOrCreateAsync(spec, cancellationToken).Returns(new AgentReference("agent-id", "my-agent"));
-        _conversationClient.CreateConversationAsync(cancellationToken).Returns("conversation-1");
-        _conversationClient.CreateResponseAsync("my-agent", "conversation-1", Arg.Any<IReadOnlyList<ResponseItem>>(), Arg.Any<string?>(), Arg.Any<int?>(), cancellationToken)
+        _responsesClient.CreateResponseAsync("my-agent", Arg.Any<IReadOnlyList<ResponseItem>>(), Arg.Any<string?>(), Arg.Any<int?>(), cancellationToken)
             .Returns(_ => ResponseWithOutputItems("resp-loop", [ResponseItem.CreateFunctionCallItem("call-1", "lookup", BinaryData.FromString("{}"))],
                 totalTokens: 100));
 
-        var sut = new FoundryAgentRunnerService(_agentFactory, _conversationClient,
+        var sut = new FoundryAgentRunnerService(_agentFactory, _responsesClient,
             runOptions: new AgentRunOptions { MaxOutputTokensPerRun = maxOutputTokensPerRun });
 
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => sut.RunFromSpecAsync(spec, "prompt", cancellationToken: cancellationToken,
@@ -158,16 +153,15 @@ public sealed class FoundryAgentRunnerTests
                 calls.Select(c => new ToolCallOutput(c.CallId, "42")))));
 
         Assert.Contains(expected, ex.InnerException!.Message, StringComparison.Ordinal);
-        await _conversationClient.Received(expectedCalls).CreateResponseAsync("my-agent", "conversation-1", Arg.Any<IReadOnlyList<ResponseItem>>(), Arg.Any<string?>(), Arg.Any<int?>(), cancellationToken);
+        await _responsesClient.Received(expectedCalls).CreateResponseAsync("my-agent", Arg.Any<IReadOnlyList<ResponseItem>>(), Arg.Any<string?>(), Arg.Any<int?>(), cancellationToken);
     }
 
     [Fact]
-    public async Task RunAsync_LogsAndRethrows_WhenConversationClientThrows()
+    public async Task RunAsync_LogsAndRethrows_WhenFoundryThrows()
     {
         var spec = new AgentSpec { Name = "my-agent", Instructions = "Do the thing." };
         _agentFactory.GetOrCreateAsync(spec, cancellationToken).Returns(new AgentReference("agent-id", "my-agent"));
-        _conversationClient.CreateConversationAsync(cancellationToken).Returns("conversation-1");
-        _conversationClient.CreateResponseAsync("my-agent", "conversation-1", Arg.Any<IReadOnlyList<ResponseItem>>(), Arg.Any<string?>(), Arg.Any<int?>(), cancellationToken)
+        _responsesClient.CreateResponseAsync("my-agent", Arg.Any<IReadOnlyList<ResponseItem>>(), Arg.Any<string?>(), Arg.Any<int?>(), cancellationToken)
             .Returns(Task.FromException<ResponseResult>(new InvalidOperationException("boom")));
 
         var sut = CreateSut();
@@ -185,29 +179,14 @@ public sealed class FoundryAgentRunnerTests
     }
 
     [Fact]
-    public async Task RunAsync_ByReference_ReusesGivenConversation_WithoutCreatingANewOne()
-    {
-        var agent = new AgentReference("agent-id", "my-agent", "1");
-        _conversationClient.CreateResponseAsync("my-agent", "existing-conversation", Arg.Any<IReadOnlyList<ResponseItem>>(), "1", Arg.Any<int?>(), cancellationToken)
-            .Returns(CompletedResponse("resp-1", "Reply."));
-
-        var sut = CreateSut();
-
-        await sut.RunAsync(agent, "prompt", conversationId: "existing-conversation", cancellationToken: cancellationToken);
-
-        await _conversationClient.DidNotReceiveWithAnyArgs().CreateConversationAsync(cancellationToken);
-    }
-
-    [Fact]
     public async Task RunAsync_CutsEvidenceToMaxEvidenceCharacters_KeepingTheStart_InsideTheFence()
     {
         var agent = new AgentReference("agent-id", "my-agent", "2");
-        _conversationClient.CreateConversationAsync(cancellationToken).Returns("conversation-1");
         var capturedInput = new List<ResponseItem>();
-        _conversationClient.CreateResponseAsync("my-agent", "conversation-1",
+        _responsesClient.CreateResponseAsync("my-agent",
                 Arg.Do<IReadOnlyList<ResponseItem>>(items => capturedInput.AddRange(items)), "2", Arg.Any<int?>(), cancellationToken)
             .Returns(CompletedResponse("resp-1", "Answer."));
-        var sut = new FoundryAgentRunnerService(_agentFactory, _conversationClient, runOptions: new AgentRunOptions { MaxEvidenceCharacters = 10 });
+        var sut = new FoundryAgentRunnerService(_agentFactory, _responsesClient, runOptions: new AgentRunOptions { MaxEvidenceCharacters = 10 });
 
         await sut.RunAsync(agent, "Summarise.", additionalContext: "MOST-RELEVANT" + new string('x', 500), cancellationToken: cancellationToken);
 
@@ -223,8 +202,7 @@ public sealed class FoundryAgentRunnerTests
     {
         var agent = new AgentReference("agent-id", "my-agent", "1");
         var caps = new List<int?>();
-        _conversationClient.CreateConversationAsync(Arg.Any<CancellationToken>()).Returns("conversation-1");
-        _conversationClient.CreateResponseAsync("my-agent", "conversation-1", Arg.Any<IReadOnlyList<ResponseItem>>(), "1", Arg.Do<int?>(caps.Add), Arg.Any<CancellationToken>())
+        _responsesClient.CreateResponseAsync("my-agent", Arg.Any<IReadOnlyList<ResponseItem>>(), "1", Arg.Do<int?>(caps.Add), Arg.Any<CancellationToken>())
             .Returns(
                 ResponseWithOutputItems("resp-1", [ResponseItem.CreateFunctionCallItem("call-1", "lookup", BinaryData.FromString("{}"))], totalTokens: 100),
                 CompletedResponse("resp-2", "Answer.", totalTokens: 30));
@@ -243,8 +221,7 @@ public sealed class FoundryAgentRunnerTests
     public async Task RunAsync_AttachesTheTokensUsedBeforeAFailure_ToTheException()
     {
         var agent = new AgentReference("agent-id", "my-agent", "1");
-        _conversationClient.CreateConversationAsync(Arg.Any<CancellationToken>()).Returns("conversation-1");
-        _conversationClient.CreateResponseAsync("my-agent", "conversation-1", Arg.Any<IReadOnlyList<ResponseItem>>(), "1", Arg.Any<int?>(), Arg.Any<CancellationToken>())
+        _responsesClient.CreateResponseAsync("my-agent", Arg.Any<IReadOnlyList<ResponseItem>>(), "1", Arg.Any<int?>(), Arg.Any<CancellationToken>())
             .Returns(ResponseWithOutputItems("resp-1", [ResponseItem.CreateFunctionCallItem("call-1", "lookup", BinaryData.FromString("{}"))], totalTokens: 100));
 
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => CreateSut().RunAsync(agent, "prompt",
@@ -259,10 +236,9 @@ public sealed class FoundryAgentRunnerTests
     {
         var agent = new AgentReference("agent-id", "my-agent", "1");
         var captured = new List<IReadOnlyList<ResponseItem>>();
-        _conversationClient.CreateConversationAsync(Arg.Any<CancellationToken>()).Returns("conversation-1");
-        _conversationClient.CreateResponseAsync("my-agent", "conversation-1", Arg.Do<IReadOnlyList<ResponseItem>>(captured.Add), "1", Arg.Any<int?>(), Arg.Any<CancellationToken>())
+        _responsesClient.CreateResponseAsync("my-agent", Arg.Do<IReadOnlyList<ResponseItem>>(captured.Add), "1", Arg.Any<int?>(), Arg.Any<CancellationToken>())
             .Returns(ResponseWithFunctionCall("resp-1", "call-1", "lookup"), CompletedResponse("resp-2", "Answer."));
-        var sut = new FoundryAgentRunnerService(_agentFactory, _conversationClient, runOptions: new AgentRunOptions { MaxToolOutputCharacters = 50 });
+        var sut = new FoundryAgentRunnerService(_agentFactory, _responsesClient, runOptions: new AgentRunOptions { MaxToolOutputCharacters = 50 });
 
         await sut.RunAsync(agent, "prompt",
             resolveToolCalls: (_, _) => Task.FromResult<IEnumerable<ToolCallOutput>>([new ToolCallOutput("call-1", new string('x', 500))]),
@@ -275,23 +251,10 @@ public sealed class FoundryAgentRunnerTests
     }
 
     [Fact]
-    public async Task RunAsync_NeverDeletesAConversationTheCallerPassedIn()
-    {
-        var agent = new AgentReference("agent-id", "my-agent", "1");
-        _conversationClient.CreateResponseAsync("my-agent", "callers-conversation", Arg.Any<IReadOnlyList<ResponseItem>>(), "1", Arg.Any<int?>(), Arg.Any<CancellationToken>())
-            .Returns(CompletedResponse("resp-1", "Answer."));
-
-        await CreateSut().RunAsync(agent, "prompt", conversationId: "callers-conversation", cancellationToken: cancellationToken);
-
-        await _conversationClient.DidNotReceiveWithAnyArgs().DeleteConversationAsync(default!, cancellationToken);
-    }
-
-    [Fact]
     public async Task RunAsync_Throws_WhenTheCallbackReturnsTwoOutputsForOneCall()
     {
         var agent = new AgentReference("agent-id", "my-agent", "1");
-        _conversationClient.CreateConversationAsync(Arg.Any<CancellationToken>()).Returns("conversation-1");
-        _conversationClient.CreateResponseAsync("my-agent", "conversation-1", Arg.Any<IReadOnlyList<ResponseItem>>(), "1", Arg.Any<int?>(), Arg.Any<CancellationToken>())
+        _responsesClient.CreateResponseAsync("my-agent", Arg.Any<IReadOnlyList<ResponseItem>>(), "1", Arg.Any<int?>(), Arg.Any<CancellationToken>())
             .Returns(ResponseWithFunctionCall("resp-1", "call-1", "lookup"));
 
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => CreateSut().RunAsync(agent, "prompt",
@@ -305,19 +268,17 @@ public sealed class FoundryAgentRunnerTests
     public async Task RunAsync_ThrowsTimeoutException_WhenTheRunTimeoutElapses()
     {
         var agent = new AgentReference("agent-id", "my-agent", "1");
-        _conversationClient.CreateConversationAsync(Arg.Any<CancellationToken>()).Returns("conversation-1");
-        _conversationClient.CreateResponseAsync("my-agent", "conversation-1", Arg.Any<IReadOnlyList<ResponseItem>>(), "1", Arg.Any<int?>(), Arg.Any<CancellationToken>())
+        _responsesClient.CreateResponseAsync("my-agent", Arg.Any<IReadOnlyList<ResponseItem>>(), "1", Arg.Any<int?>(), Arg.Any<CancellationToken>())
             .Returns(async callInfo =>
             {
                 await Task.Delay(Timeout.Infinite, callInfo.Arg<CancellationToken>());
                 return CompletedResponse("resp-1", "never");
             });
-        var sut = new FoundryAgentRunnerService(_agentFactory, _conversationClient, runOptions: new AgentRunOptions { RunTimeout = TimeSpan.FromMilliseconds(100) });
+        var sut = new FoundryAgentRunnerService(_agentFactory, _responsesClient, runOptions: new AgentRunOptions { RunTimeout = TimeSpan.FromMilliseconds(100) });
 
         var ex = await Assert.ThrowsAsync<TimeoutException>(() => sut.RunAsync(agent, "prompt", cancellationToken: cancellationToken));
 
         Assert.Contains("my-agent", ex.Message, StringComparison.Ordinal);
-        await _conversationClient.Received(1).DeleteConversationAsync("conversation-1", Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -325,18 +286,16 @@ public sealed class FoundryAgentRunnerTests
     {
         var agent = new AgentReference("agent-id", "my-agent", "1");
         using var caller = new CancellationTokenSource();
-        _conversationClient.CreateConversationAsync(Arg.Any<CancellationToken>()).Returns("conversation-1");
-        _conversationClient.CreateResponseAsync("my-agent", "conversation-1", Arg.Any<IReadOnlyList<ResponseItem>>(), "1", Arg.Any<int?>(), Arg.Any<CancellationToken>())
+        _responsesClient.CreateResponseAsync("my-agent", Arg.Any<IReadOnlyList<ResponseItem>>(), "1", Arg.Any<int?>(), Arg.Any<CancellationToken>())
             .Returns(async callInfo =>
             {
                 await caller.CancelAsync();
                 await Task.Delay(Timeout.Infinite, callInfo.Arg<CancellationToken>());
                 return CompletedResponse("resp-1", "never");
             });
-        var sut = new FoundryAgentRunnerService(_agentFactory, _conversationClient, runOptions: new AgentRunOptions { RunTimeout = TimeSpan.FromMinutes(5) });
+        var sut = new FoundryAgentRunnerService(_agentFactory, _responsesClient, runOptions: new AgentRunOptions { RunTimeout = TimeSpan.FromMinutes(5) });
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => sut.RunAsync(agent, "prompt", cancellationToken: caller.Token));
 
-        await _conversationClient.Received(1).DeleteConversationAsync("conversation-1", Arg.Any<CancellationToken>());
     }
 }

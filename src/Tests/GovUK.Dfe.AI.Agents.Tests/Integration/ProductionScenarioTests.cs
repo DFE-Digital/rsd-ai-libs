@@ -26,7 +26,7 @@ namespace GovUK.Dfe.AI.Agents.Tests.Integration;
 /// Production scenarios through the recommended entry point, <c>AddAgents</c>: several app instances (and
 /// apps) share one Foundry project, as they do when an app scales out or is redeployed. Each instance is its own
 /// service provider built from its own configuration; only the Foundry admin API (<see cref="InMemoryFoundry"/>)
-/// and the Responses API (<see cref="ScriptedConversationClient"/>) are fakes, and both are shared.
+/// and the Responses API (<see cref="ScriptedResponsesClient"/>) are fakes, and both are shared.
 /// </summary>
 public sealed class ProductionScenarioTests : IDisposable
 {
@@ -36,7 +36,7 @@ public sealed class ProductionScenarioTests : IDisposable
     private readonly CancellationToken cancellationToken = TestContext.Current.CancellationToken;
     private readonly string _promptDirectory = Directory.CreateTempSubdirectory("aiagents-prod-").FullName;
     private readonly InMemoryFoundry _foundry = new();
-    private readonly ScriptedConversationClient _conversations = new();
+    private readonly ScriptedResponsesClient _responses = new();
     private readonly CollectingLoggerProvider _logs = new();
     private readonly List<ServiceProvider> _instances = [];
     private int _promptFiles;
@@ -94,7 +94,7 @@ public sealed class ProductionScenarioTests : IDisposable
         });
 
         services.AddSingleton(_foundry.Admin);
-        services.AddSingleton<IFoundryConversationClient>(_conversations);
+        services.AddSingleton<IFoundryResponsesClient>(_responses);
 
         if (sharedSlots is not null)
         {
@@ -123,7 +123,7 @@ public sealed class ProductionScenarioTests : IDisposable
     [Fact]
     public async Task ScaledOut_EveryInstanceWithTheSamePrompt_SharesOneVersion()
     {
-        _conversations.Reply("ofsted-agent", FoundryResponses.Completed("r1", "Rated Good."));
+        _responses.Reply("ofsted-agent", FoundryResponses.Completed("r1", "Rated Good."));
         var instances = Enumerable.Range(0, 3).Select(_ => StartInstance(Settings())).ToList();
 
         foreach (var instance in instances)
@@ -132,13 +132,13 @@ public sealed class ProductionScenarioTests : IDisposable
         }
 
         Assert.Equal(["1"], VersionNumbers("ofsted-agent"));
-        Assert.All(_conversations.Calls, call => Assert.Equal("1", call.AgentVersion));
+        Assert.All(_responses.Calls, call => Assert.Equal("1", call.AgentVersion));
     }
 
     [Fact]
     public async Task RollingDeploy_OldAndNewInstancesEachRunTheirOwnVersion_WithoutCreatingVersionsBackAndForth()
     {
-        _conversations.Reply("ofsted-agent", FoundryResponses.Completed("r1", "Rated Good."));
+        _responses.Reply("ofsted-agent", FoundryResponses.Completed("r1", "Rated Good."));
         var oldInstance = StartInstance(Settings(ofstedPrompt: "You analyse Ofsted reports."));
         var newInstance = StartInstance(Settings(ofstedPrompt: "You analyse Ofsted reports. Cite the inspection date."));
 
@@ -149,7 +149,7 @@ public sealed class ProductionScenarioTests : IDisposable
         await Agents(newInstance).RunAsync(Ofsted, "Summarise.", cancellationToken: cancellationToken);
 
         Assert.Equal(["1", "2"], VersionNumbers("ofsted-agent"));
-        Assert.Equal(["1", "2", "1", "2"], _conversations.Calls.Select(call => call.AgentVersion));
+        Assert.Equal(["1", "2", "1", "2"], _responses.Calls.Select(call => call.AgentVersion));
     }
 
     // ===================== Version pruning =====================
@@ -157,7 +157,7 @@ public sealed class ProductionScenarioTests : IDisposable
     [Fact]
     public async Task KeepLatestVersions_AfterFivePromptChanges_KeepsFiveFourAndThree_PlusTheVersionProductionIsPinnedTo()
     {
-        _conversations.Reply("ofsted-agent", FoundryResponses.Completed("r1", "Rated Good."));
+        _responses.Reply("ofsted-agent", FoundryResponses.Completed("r1", "Rated Good."));
 
         for (var change = 1; change <= 5; change++)
         {
@@ -198,7 +198,7 @@ public sealed class ProductionScenarioTests : IDisposable
             _foundry.Seed("ofsted-agent", DefaultModel, $"Revision {version}.");
         }
 
-        _conversations.Reply("ofsted-agent", FoundryResponses.Completed("r1", "Rated Good."));
+        _responses.Reply("ofsted-agent", FoundryResponses.Completed("r1", "Rated Good."));
         var settings = Settings(ofstedPrompt: "A prompt no deployed version has.");
         settings["AiAgents:VersionPins:ofsted-agent"] = "2";
         settings["AiAgents:KeepLatestVersions"] = "2";
@@ -207,7 +207,7 @@ public sealed class ProductionScenarioTests : IDisposable
         await Agents(production).RunAsync(Ofsted, "Summarise.", cancellationToken: cancellationToken);
         await production.GetRequiredService<IAgentFactory>().PruneVersionsAsync("ofsted-agent", 1, cancellationToken);
 
-        Assert.Equal("2", Assert.Single(_conversations.Calls).AgentVersion);
+        Assert.Equal("2", Assert.Single(_responses.Calls).AgentVersion);
         Assert.Equal(["1", "2", "3", "4", "5"], VersionNumbers("ofsted-agent"));
         Assert.Empty(_foundry.CreatedNames);
     }
@@ -219,10 +219,10 @@ public sealed class ProductionScenarioTests : IDisposable
     {
         var definition = Ofsted with { AllowedTools = ["get_performance_data"] };
 
-        // 1. A release job provisions the agent - no runs, no conversations.
+        // 1. A release job provisions the agent - no runs.
         var job = StartInstance(Settings(application: "agent-provisioning"), [definition], PerformanceTools("unused"));
         var provisioned = Assert.Single(await Agents(job).ProvisionAsync([definition], cancellationToken));
-        Assert.Empty(_conversations.Calls);
+        Assert.Empty(_responses.Calls);
 
         // 2. A consuming app with no prompt file pins that version and runs its tools with its own token.
         var settings = Settings(ofstedPrompt: null);
@@ -230,14 +230,14 @@ public sealed class ProductionScenarioTests : IDisposable
         var consumer = StartInstance(settings, [definition], PerformanceTools("KS2: 72% met the expected standard."));
         await StartToolCheckAsync(consumer);
 
-        _conversations.Reply("ofsted-agent",
+        _responses.Reply("ofsted-agent",
             FoundryResponses.FunctionCall("r1", "call-1", "get_performance_data"),
             FoundryResponses.Completed("r2", "72% met the expected standard."));
         var result = await Agents(consumer).RunAsync(definition, "Brief me on URN 100000.", cancellationToken: cancellationToken);
 
         Assert.Equal("72% met the expected standard.", result.Output);
-        Assert.All(_conversations.Calls, call => Assert.Equal(provisioned.Version, call.AgentVersion));
-        Assert.Contains("KS2: 72% met the expected standard.", _conversations.Calls[^1].SerializedInput, StringComparison.Ordinal);
+        Assert.All(_responses.Calls, call => Assert.Equal(provisioned.Version, call.AgentVersion));
+        Assert.Contains("KS2: 72% met the expected standard.", _responses.Calls[^1].SerializedInput, StringComparison.Ordinal);
         Assert.Equal(["ofsted-agent"], _foundry.CreatedNames);   // only the job ever created anything
     }
 
@@ -256,12 +256,12 @@ public sealed class ProductionScenarioTests : IDisposable
         var synthesis = new AgentDefinition("synthesis-agent", "Synthesis");
         var app = StartInstance(settings, [ofsted, trust, news, synthesis], PerformanceTools("KS2: 72%."));
 
-        _conversations.Reply("ofsted-agent",
+        _responses.Reply("ofsted-agent",
             FoundryResponses.FunctionCall("o1", "call-1", "get_performance_data"),
             FoundryResponses.Completed("o2", "Rated Good; KS2 72%.", totalTokens: 100));
-        _conversations.Reply("trust-agent", FoundryResponses.Completed("t1", "Part of a 12-academy trust.", totalTokens: 50));
-        _conversations.Fail("news-agent", new InvalidOperationException("News search is down."));
-        _conversations.Reply("synthesis-agent", FoundryResponses.Completed("s1", "Briefing: a Good school in a 12-academy trust.", totalTokens: 200));
+        _responses.Reply("trust-agent", FoundryResponses.Completed("t1", "Part of a 12-academy trust.", totalTokens: 50));
+        _responses.Fail("news-agent", new InvalidOperationException("News search is down."));
+        _responses.Reply("synthesis-agent", FoundryResponses.Completed("s1", "Briefing: a Good school in a 12-academy trust.", totalTokens: 200));
 
         var specialists = await Agents(app).RunParallelAsync([ofsted, trust, news],
             (definition, _) => Task.FromResult($"Brief me on URN 100000 ({definition.Name})."), new AgentContext(),
@@ -272,9 +272,9 @@ public sealed class ProductionScenarioTests : IDisposable
             string.Join("\n\n", succeeded.Select(result => $"{result.AgentName}: {result.Output}")), cancellationToken);
 
         Assert.Equal(FallbackText, specialists.Single(result => result.AgentName == "news-agent").Output);
-        Assert.Contains("Trust record: 12 academies.", _conversations.CallsFor("trust-agent")[0].SerializedInput, StringComparison.Ordinal);
-        Assert.DoesNotContain("Trust record", _conversations.CallsFor("ofsted-agent")[0].SerializedInput, StringComparison.Ordinal);
-        var synthesisInput = Assert.Single(_conversations.CallsFor("synthesis-agent")).SerializedInput;
+        Assert.Contains("Trust record: 12 academies.", _responses.CallsFor("trust-agent")[0].SerializedInput, StringComparison.Ordinal);
+        Assert.DoesNotContain("Trust record", _responses.CallsFor("ofsted-agent")[0].SerializedInput, StringComparison.Ordinal);
+        var synthesisInput = Assert.Single(_responses.CallsFor("synthesis-agent")).SerializedInput;
         Assert.Contains("Rated Good; KS2 72%.", synthesisInput, StringComparison.Ordinal);
         Assert.Contains("Part of a 12-academy trust.", synthesisInput, StringComparison.Ordinal);
         Assert.Equal("Briefing: a Good school in a 12-academy trust.", briefing.Output);
@@ -294,7 +294,7 @@ public sealed class ProductionScenarioTests : IDisposable
         AgentDefinition[] specialists = [Ofsted, new("trust-agent", "Trust"), new("news-agent", "News", IsManagedAgent: false)];
         foreach (var specialist in specialists)
         {
-            _conversations.ReplyAfter(specialist.Name, TimeSpan.FromMilliseconds(150), FoundryResponses.Completed("r", "Done."));
+            _responses.ReplyAfter(specialist.Name, TimeSpan.FromMilliseconds(150), FoundryResponses.Completed("r", "Done."));
         }
 
         return (settings, specialists);
@@ -315,7 +315,7 @@ public sealed class ProductionScenarioTests : IDisposable
         var briefings = await Task.WhenAll(instances.Select(instance => BriefAsync(instance, specialists)));
 
         Assert.All(briefings.SelectMany(results => results), result => Assert.Equal("Done.", result.Output));
-        Assert.Equal(2, _conversations.PeakConcurrentResponses);
+        Assert.Equal(2, _responses.PeakConcurrentResponses);
     }
 
     [Fact]
@@ -327,7 +327,7 @@ public sealed class ProductionScenarioTests : IDisposable
 
         await Task.WhenAll(BriefAsync(instance, specialists), BriefAsync(instance, specialists));
 
-        Assert.Equal(2, _conversations.PeakConcurrentResponses);
+        Assert.Equal(2, _responses.PeakConcurrentResponses);
     }
 
     [Fact]
@@ -339,21 +339,21 @@ public sealed class ProductionScenarioTests : IDisposable
         var definitions = new[] { Ofsted, new AgentDefinition("trust-agent", "Trust"), new AgentDefinition("news-agent", "News", IsManagedAgent: false) };
         foreach (var definition in definitions)
         {
-            _conversations.ReplyAfter(definition.Name, TimeSpan.FromMilliseconds(300), FoundryResponses.Completed("r", "Done."));
+            _responses.ReplyAfter(definition.Name, TimeSpan.FromMilliseconds(300), FoundryResponses.Completed("r", "Done."));
         }
 
         var results = await Agents(StartInstance(settings, definitions)).RunParallelAsync(definitions,
             (_, _) => Task.FromResult("Brief me."), new AgentContext(), cancellationToken: cancellationToken);
 
         Assert.All(results, result => Assert.Equal("Done.", result.Output));
-        Assert.Equal(3, _conversations.PeakConcurrentResponses);
+        Assert.Equal(3, _responses.PeakConcurrentResponses);
     }
 
     [Fact]
     public async Task StructuredOutput_TheDefinitionsSchemaIsDeployedWithTheAgent_AndTheAnswerReadsBackTyped()
     {
         var definition = Ofsted with { OutputSchema = AgentOutputSchema.For<OfstedFindings>("ofsted_findings") };
-        _conversations.Reply("ofsted-agent", FoundryResponses.Completed("r1", """{"rating":"Good","strengths":["Leadership","Reading"]}"""));
+        _responses.Reply("ofsted-agent", FoundryResponses.Completed("r1", """{"rating":"Good","strengths":["Leadership","Reading"]}"""));
 
         var result = await Agents(StartInstance(Settings(), [definition])).RunAsync(definition, "Summarise.", cancellationToken: cancellationToken);
 
@@ -367,7 +367,7 @@ public sealed class ProductionScenarioTests : IDisposable
     public async Task Citations_AreRequiredByDefault_AndAnAnswerCitingEvidenceThatDoesntExist_IsCorrected()
     {
         var definition = Ofsted;   // RequiredCitations is on unless the definition turns it off
-        _conversations.Reply("ofsted-agent",
+        _responses.Reply("ofsted-agent",
             FoundryResponses.Completed("r1", "Rated Outstanding [Evidence 5]."),
             FoundryResponses.Completed("r2", "Rated Good [Evidence 1]."));
         const string SearchEvidence = "--- ofsted_index Evidence 1 ---\nRated Good.\n\n--- ofsted_index Evidence 2 ---\nInspected 2024.";
@@ -375,14 +375,14 @@ public sealed class ProductionScenarioTests : IDisposable
         var result = await Agents(StartInstance(Settings(), [definition])).RunAsync(definition, "Summarise.", SearchEvidence, cancellationToken);
 
         Assert.Equal("Rated Good [Evidence 1].", result.Output);
-        Assert.Contains("Cite the evidence each point relies on", _conversations.Calls[0].SerializedInput, StringComparison.Ordinal);
-        Assert.Contains("[Evidence 5] doesn't exist", _conversations.Calls[1].SerializedInput, StringComparison.Ordinal);
+        Assert.Contains("Cite the evidence each point relies on", _responses.Calls[0].SerializedInput, StringComparison.Ordinal);
+        Assert.Contains("[Evidence 5] doesn't exist", _responses.Calls[1].SerializedInput, StringComparison.Ordinal);
     }
 
     [Fact]
     public async Task ReleaseGate_TestsTheCandidate_WithoutPublishingAVersion()
     {
-        _conversations.Reply("ofsted-agent", FoundryResponses.Completed("r1", "Rated Good."));
+        _responses.Reply("ofsted-agent", FoundryResponses.Completed("r1", "Rated Good."));
         var app = StartInstance(Settings());
 
         var report = await app.GetRequiredService<IAgentTestRunner>().RunAsync(Ofsted,
@@ -409,7 +409,7 @@ public sealed class ProductionScenarioTests : IDisposable
 
         var briefingTool = StartInstance(SettingsFor("briefing-tool"), [webSearch]);
         var casework = StartInstance(SettingsFor("casework-tool"), [webSearch]);
-        _conversations.Reply("web-search-agent", FoundryResponses.Completed("r1", "News."));
+        _responses.Reply("web-search-agent", FoundryResponses.Completed("r1", "News."));
         _foundry.FailDeletes = true;   // both apps' clean-ups fail, leaving an orphan each
         await Agents(briefingTool).RunAsync(webSearch, "Search.", cancellationToken: cancellationToken);
         await Agents(casework).RunAsync(webSearch, "Search.", cancellationToken: cancellationToken);

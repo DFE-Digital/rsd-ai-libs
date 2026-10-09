@@ -304,7 +304,7 @@ internal sealed class FoundryAgentFactory(AgentAdministrationClient administrati
             };
             foreach (var tool in spec.Tools)
             {
-                definition.Tools.Add(tool);
+                definition.Tools.Add(tool.Tool);
             }
 
             version = (await administrationClient.CreateAgentVersionAsync(spec.Name,
@@ -356,7 +356,7 @@ internal sealed class FoundryAgentFactory(AgentAdministrationClient administrati
         => deployed is DeclarativeAgentDefinition definition
             && definition.Model == (spec.Model ?? options.DefaultModel)
             && definition.Instructions == spec.Instructions
-            && definition.Tools.Select(ToolSignature).SequenceEqual(spec.Tools.Select(ToolSignature))
+            && definition.Tools.Select(ToolSignature).SequenceEqual(spec.Tools.Select(static tool => ToolSignature(tool.Tool)))
             && OutputFormatMatches(definition.TextOptions, spec.OutputSchema);
 
     /// <summary>
@@ -384,7 +384,7 @@ internal sealed class FoundryAgentFactory(AgentAdministrationClient administrati
     private string SpecSignature(AgentSpec spec)
     {
         var content = string.Join('\u001f', [spec.Model ?? options.DefaultModel, spec.Instructions,
-            .. spec.Tools.Select(ToolSignature), spec.OutputSchema?.Name ?? string.Empty, spec.OutputSchema?.JsonSchema ?? string.Empty]);
+            .. spec.Tools.Select(static tool => ToolSignature(tool.Tool)), spec.OutputSchema?.Name ?? string.Empty, spec.OutputSchema?.JsonSchema ?? string.Empty]);
         return "spec:" + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(content)));
     }
 }

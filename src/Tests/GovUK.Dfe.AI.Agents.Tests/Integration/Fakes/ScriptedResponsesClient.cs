@@ -6,34 +6,27 @@ using GovUK.Dfe.AI.Agents.Clients.Interfaces;
 namespace GovUK.Dfe.AI.Agents.Tests.Integration.Fakes;
 
 /// <summary>A response call as Foundry would have received it.</summary>
-internal sealed record RecordedResponseCall(string AgentName, string? AgentVersion, string ConversationId, string SerializedInput,
-    int? MaxOutputTokens = null);
+internal sealed record RecordedResponseCall(string AgentName, string? AgentVersion, string SerializedInput, int? MaxOutputTokens = null);
 
 /// <summary>
 /// Plays back scripted Responses per agent name and records every call. Ephemeral agents are
 /// matched by prefix, since the runtime suffixes their names with a GUID.
 /// </summary>
-internal sealed class ScriptedConversationClient : IFoundryConversationClient
+internal sealed class ScriptedResponsesClient : IFoundryResponsesClient
 {
     private readonly ConcurrentDictionary<string, ConcurrentQueue<Func<CancellationToken, Task<ResponseResult>>>> _scripts = new(StringComparer.Ordinal);
     private readonly ConcurrentQueue<RecordedResponseCall> _calls = new();
-    private readonly ConcurrentDictionary<string, bool> _openConversations = new(StringComparer.Ordinal);
-    private int _conversationCount;
     private int _inFlight;
     private int _peakInFlight;
 
     public IReadOnlyList<RecordedResponseCall> Calls => [.. _calls];
 
-    public int ConversationsCreated => _conversationCount;
 
-    /// <summary>Conversations created and not yet deleted - i.e. what Foundry would still be retaining.</summary>
-    public IReadOnlyCollection<string> OpenConversations => [.. _openConversations.Keys];
 
     /// <summary>The most responses that were ever being generated at the same time.</summary>
     public int PeakConcurrentResponses => Volatile.Read(ref _peakInFlight);
 
     /// <summary>When set, deletes fail - to exercise clean-up failure handling.</summary>
-    public bool FailDeletes { get; set; }
 
     public IReadOnlyList<RecordedResponseCall> CallsFor(string agentName)
         => [.. _calls.Where(call => Matches(agentName, call.AgentName))];
@@ -64,32 +57,13 @@ internal sealed class ScriptedConversationClient : IFoundryConversationClient
     public void Fail(string agentName, Exception exception)
         => Script(agentName).Enqueue(_ => Task.FromException<ResponseResult>(exception));
 
-    public Task<string> CreateConversationAsync(CancellationToken cancellationToken = default)
-    {
-        cancellationToken.ThrowIfCancellationRequested();
-        var id = $"conversation-{Interlocked.Increment(ref _conversationCount)}";
-        _openConversations[id] = true;
-        return Task.FromResult(id);
-    }
-
-    public Task DeleteConversationAsync(string conversationId, CancellationToken cancellationToken = default)
-    {
-        if (FailDeletes)
-        {
-            return Task.FromException(new InvalidOperationException("Conversation delete failed."));
-        }
-
-        _openConversations.TryRemove(conversationId, out _);
-        return Task.CompletedTask;
-    }
-
-    public async Task<ResponseResult> CreateResponseAsync(string agentName, string conversationId, IReadOnlyList<ResponseItem> inputItems,
-        string? agentVersion = null, int? maxOutputTokens = null, CancellationToken cancellationToken = default)
+    public async Task<ResponseResult> CreateResponseAsync(string agentName, IReadOnlyList<ResponseItem> inputItems, string? agentVersion = null,
+        int? maxOutputTokens = null, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
         var input = string.Join(' ', inputItems.Select(item => ModelReaderWriter.Write(item).ToString()));
-        _calls.Enqueue(new RecordedResponseCall(agentName, agentVersion, conversationId, input, maxOutputTokens));
+        _calls.Enqueue(new RecordedResponseCall(agentName, agentVersion, input, maxOutputTokens));
 
         var script = _scripts.FirstOrDefault(pair => Matches(pair.Key, agentName)).Value
             ?? throw new InvalidOperationException($"No scripted response for agent '{agentName}'.");
@@ -107,6 +81,27 @@ internal sealed class ScriptedConversationClient : IFoundryConversationClient
             Interlocked.Decrement(ref _inFlight);
         }
     }
+
+    /// <summary>Plays the scripted response back in pieces of <see cref="StreamPieceLength"/> characters, as Foundry streams.</summary>
+    public async Task<ResponseResult> StreamResponseAsync(string agentName, IReadOnlyList<ResponseItem> inputItems, Action<string> onText,
+        string? agentVersion = null, int? maxOutputTokens = null, CancellationToken cancellationToken = default)
+    {
+        var response = await CreateResponseAsync(agentName, inputItems, agentVersion, maxOutputTokens, cancellationToken);
+        var text = response.GetOutputText() ?? string.Empty;
+        for (var start = 0; start < text.Length; start += StreamPieceLength)
+        {
+            onText(text.Substring(start, Math.Min(StreamPieceLength, text.Length - start)));
+        }
+
+        StreamedCalls++;
+        return response;
+    }
+
+    /// <summary>How many characters each streamed piece has.</summary>
+    public int StreamPieceLength { get; set; } = 3;
+
+    /// <summary>Responses that were streamed.</summary>
+    public int StreamedCalls { get; private set; }
 
     private ConcurrentQueue<Func<CancellationToken, Task<ResponseResult>>> Script(string agentName)
         => _scripts.GetOrAdd(agentName, _ => new ConcurrentQueue<Func<CancellationToken, Task<ResponseResult>>>());

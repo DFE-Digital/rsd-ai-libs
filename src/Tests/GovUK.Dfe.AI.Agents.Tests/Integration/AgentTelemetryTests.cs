@@ -30,7 +30,7 @@ public sealed class AgentTelemetryTests : IDisposable
     private readonly string _application = $"telemetry-test-{Guid.NewGuid():N}";
     private readonly string _promptDirectory = Directory.CreateTempSubdirectory("aiagents-telemetry-").FullName;
     private readonly InMemoryFoundry _foundry = new();
-    private readonly ScriptedConversationClient _conversations = new();
+    private readonly ScriptedResponsesClient _responses = new();
     private readonly Dictionary<string, string?> _configuration = [];
     private readonly ConcurrentQueue<Measurement> _measurements = new();
     private readonly ConcurrentQueue<Activity> _activities = new();
@@ -113,7 +113,7 @@ public sealed class AgentTelemetryTests : IDisposable
         services.AddAgents(new ConfigurationBuilder().AddInMemoryCollection(_configuration).Build(),
             agents => agents.UseCredential(Substitute.For<TokenCredential>()));
         services.AddSingleton<AgentAdministrationClient>(_foundry.Admin);
-        services.AddSingleton<IFoundryConversationClient>(_conversations);
+        services.AddSingleton<IFoundryResponsesClient>(_responses);
         configure?.Invoke(services);
         return services.BuildServiceProvider();
     }
@@ -121,10 +121,28 @@ public sealed class AgentTelemetryTests : IDisposable
     private static Task<string> PromptFor(AgentDefinition definition, CancellationToken _) => Task.FromResult($"Brief on {definition.Name}.");
 
     [Fact]
+    public async Task AStreamedRun_RecordsHowLongTheFirstTextTook()
+    {
+        WriteSystemPrompt("Ofsted", "You analyse Ofsted reports.");
+        _responses.Reply("ofsted-agent", FoundryResponses.Completed("r1", "Rated Good.", totalTokens: 250));
+        using var provider = Build();
+
+        await foreach (var _ in provider.GetRequiredService<IAgentService>().RunStreamingAsync(new AgentDefinition("ofsted-agent", "Ofsted"),
+            "Summarise.", cancellationToken: TestContext.Current.CancellationToken))
+        {
+            // read to the end
+        }
+
+        var first = Assert.Single(MeasurementsOf("dfe.ai_agents.time_to_first_token"));
+        Assert.Equal("ofsted-agent", first.Tags[AgentTelemetry.AgentNameTag]);
+        Assert.True(first.Value >= 0);
+    }
+
+    [Fact]
     public async Task ARun_IsAnInvokeAgentClientSpan_WithTheGenAiAttributes_AndRecordsTokensDurationAndCalls()
     {
         WriteSystemPrompt("Ofsted", "You analyse Ofsted reports.");
-        _conversations.Reply("ofsted-agent", FoundryResponses.Completed("r1", "Good.", totalTokens: 250));
+        _responses.Reply("ofsted-agent", FoundryResponses.Completed("r1", "Good.", totalTokens: 250));
         using var provider = Build();
 
         await provider.GetRequiredService<IAgentService>()
@@ -137,7 +155,6 @@ public sealed class AgentTelemetryTests : IDisposable
         Assert.Equal("ofsted-agent", span.GetTagItem(AgentTelemetry.AgentNameTag));
         Assert.Equal("1", span.GetTagItem(AgentTelemetry.AgentVersionTag));
         Assert.NotNull(span.GetTagItem(AgentTelemetry.AgentIdTag));
-        Assert.NotNull(span.GetTagItem(AgentTelemetry.ConversationIdTag));
         Assert.Equal((10L, 240L), ((long)span.GetTagItem(AgentTelemetry.InputTokensTag)!, (long)span.GetTagItem(AgentTelemetry.OutputTokensTag)!));
         Assert.Null(span.GetTagItem(AgentTelemetry.ErrorTypeTag));
 
@@ -152,6 +169,9 @@ public sealed class AgentTelemetryTests : IDisposable
             Assert.Equal("ofsted-agent", tokens.Tags[AgentTelemetry.AgentNameTag]);
         });
 
+        var call = Assert.Single(MeasurementsOf("gen_ai.client.operation.duration"));   // one call to Foundry
+        Assert.Equal("ofsted-agent", call.Tags[AgentTelemetry.AgentNameTag]);
+        Assert.False(call.Tags.ContainsKey(AgentTelemetry.ErrorTypeTag));
         var duration = Assert.Single(MeasurementsOf("gen_ai.invoke_agent.duration"));
         Assert.False(duration.Tags.ContainsKey(AgentTelemetry.ErrorTypeTag));   // set only when the run fails
         Assert.Equal(1, Assert.Single(MeasurementsOf("gen_ai.invoke_agent.inference_calls")).Value);
@@ -163,7 +183,7 @@ public sealed class AgentTelemetryTests : IDisposable
     {
         WriteSystemPrompt("Ofsted", "You analyse Ofsted reports.");
         var tools = new FakeToolServer("get_performance_data") { Output = "Pupil Jane Doe: 72%" };
-        _conversations.Reply("ofsted-agent",
+        _responses.Reply("ofsted-agent",
             FoundryResponses.FunctionCall("r1", "call-1", "get_performance_data"),
             FoundryResponses.Completed("r2", "Good."));
         using var provider = Build(services => services.AddSingleton(new AgentToolBinding("ofsted-agent", tools)));
@@ -191,7 +211,7 @@ public sealed class AgentTelemetryTests : IDisposable
     {
         const string Sensitive = "Pupil Jane Doe, born 2014-01-01";
         WriteSystemPrompt("Ofsted", "You analyse Ofsted reports.");
-        _conversations.Fail("ofsted-agent", new InvalidOperationException(Sensitive));
+        _responses.Fail("ofsted-agent", new InvalidOperationException(Sensitive));
         using var provider = Build();
 
         await provider.GetRequiredService<IAgentService>()
@@ -210,7 +230,7 @@ public sealed class AgentTelemetryTests : IDisposable
     public async Task EphemeralRuns_AreTaggedWithTheBaseAgentName_NotThePerRunName()
     {
         WriteSystemPrompt("WebSearch", "You search the web.");
-        _conversations.Reply("web-search-agent", FoundryResponses.Completed("r1", "News."));
+        _responses.Reply("web-search-agent", FoundryResponses.Completed("r1", "News."));
         using var provider = Build();
         var runner = provider.GetRequiredService<IAgentService>();
         var definition = new AgentDefinition("web-search-agent", "WebSearch", IsManagedAgent: false);
@@ -227,8 +247,8 @@ public sealed class AgentTelemetryTests : IDisposable
     {
         WriteSystemPrompt("Ofsted", "You analyse Ofsted reports.");
         WriteSystemPrompt("Trust", "You analyse trusts.");
-        _conversations.Reply("ofsted-agent", FoundryResponses.Completed("r1", "Good.", totalTokens: 100));
-        _conversations.Reply("trust-agent", FoundryResponses.Completed("r2", "Stable.", totalTokens: 60));
+        _responses.Reply("ofsted-agent", FoundryResponses.Completed("r1", "Good.", totalTokens: 100));
+        _responses.Reply("trust-agent", FoundryResponses.Completed("r2", "Stable.", totalTokens: 60));
 
         using var provider = Build();
         await provider.GetRequiredService<IAgentService>().RunParallelAsync(
@@ -251,7 +271,7 @@ public sealed class AgentTelemetryTests : IDisposable
     public async Task ARunOfSeveralAgents_ThatThrows_IsRecordedAsFailed()
     {
         WriteSystemPrompt("Ofsted", "You analyse Ofsted reports.");
-        _conversations.Fail("ofsted-agent", new InvalidOperationException("Foundry unavailable."));
+        _responses.Fail("ofsted-agent", new InvalidOperationException("Foundry unavailable."));
         using var provider = Build();
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => provider.GetRequiredService<IAgentService>().RunParallelAsync(
@@ -265,8 +285,8 @@ public sealed class AgentTelemetryTests : IDisposable
     [Fact]
     public async Task TheLowerLevelOrchestrator_AlsoRecordsItsTotalTokens_IncludingFailedSteps()
     {
-        _conversations.Reply("ofsted-agent", FoundryResponses.Completed("r1", "Good.", totalTokens: 100));
-        _conversations.Reply("trust-agent", FoundryResponses.FunctionCall("r2", "call-1", "lookup")); // no callback: fails after one round
+        _responses.Reply("ofsted-agent", FoundryResponses.Completed("r1", "Good.", totalTokens: 100));
+        _responses.Reply("trust-agent", FoundryResponses.FunctionCall("r2", "call-1", "lookup")); // no callback: fails after one round
         using var provider = Build();
         var factory = provider.GetRequiredService<GovUK.Dfe.AI.Agents.Factories.Interfaces.IAgentFactory>();
         var ofsted = await factory.GetOrCreateAsync(new AgentSpec { Name = "ofsted-agent", Instructions = "x" }, cancellationToken: TestContext.Current.CancellationToken);
@@ -303,8 +323,8 @@ public sealed class AgentTelemetryTests : IDisposable
         PriceGpt4o();
         WriteSystemPrompt("Ofsted", "You analyse Ofsted reports.");
         WriteSystemPrompt("Trust", "You analyse trusts.");
-        _conversations.Reply("ofsted-agent", FoundryResponses.Completed("r1", "Good.", totalTokens: 250));
-        _conversations.Reply("trust-agent", FoundryResponses.Completed("r2", "Stable.", totalTokens: 250));
+        _responses.Reply("ofsted-agent", FoundryResponses.Completed("r1", "Good.", totalTokens: 250));
+        _responses.Reply("trust-agent", FoundryResponses.Completed("r2", "Stable.", totalTokens: 250));
         using var provider = Build();
 
         var results = await provider.GetRequiredService<IAgentService>().RunParallelAsync(
@@ -329,7 +349,7 @@ public sealed class AgentTelemetryTests : IDisposable
     {
         PriceGpt4o();
         WriteSystemPrompt("Ofsted", "You analyse Ofsted reports.");
-        _conversations.Reply("ofsted-agent", FoundryResponses.WithOutputItems("r1", [], totalTokens: 250, status: "failed"));
+        _responses.Reply("ofsted-agent", FoundryResponses.WithOutputItems("r1", [], totalTokens: 250, status: "failed"));
         using var provider = Build();
 
         var result = Assert.Single(await provider.GetRequiredService<IAgentService>().RunParallelAsync(
@@ -343,7 +363,7 @@ public sealed class AgentTelemetryTests : IDisposable
     public async Task WithoutPrices_RunsReportTokensOnly()
     {
         WriteSystemPrompt("Ofsted", "You analyse Ofsted reports.");
-        _conversations.Reply("ofsted-agent", FoundryResponses.Completed("r1", "Good.", totalTokens: 250));
+        _responses.Reply("ofsted-agent", FoundryResponses.Completed("r1", "Good.", totalTokens: 250));
         using var provider = Build();
 
         var result = Assert.Single(await provider.GetRequiredService<IAgentService>().RunParallelAsync(
@@ -367,6 +387,8 @@ public sealed class AgentTelemetryTests : IDisposable
         var usage = new TokenUsage(1_000, 1_000, 2_000);
 
         Assert.Equal(10m, pricing.CostOf("GPT-5.1-2025-11-13", usage));
+        Assert.Equal(10m, pricing.CostOf("my-connection/gpt-5.1", usage));   // as Foundry reports a model behind a connection
+        Assert.Equal(10m, pricing.CostOf("my-connection/gpt-5.1-2025-11-13", usage));
         Assert.Equal(2m, pricing.CostOf("gpt-5-mini", usage));
         Assert.Null(pricing.CostOf("gpt-4o", usage));
         Assert.Null(pricing.CostOf(null, usage));
@@ -399,7 +421,7 @@ public sealed class AgentTelemetryTests : IDisposable
     public async Task CachedInputTokens_ReportedByFoundry_AreKeptOnTheResult()
     {
         WriteSystemPrompt("Ofsted", "You analyse Ofsted reports.");
-        _conversations.Reply("ofsted-agent", FoundryResponses.Completed("r1", "Good.", totalTokens: 250, cachedTokens: 8));
+        _responses.Reply("ofsted-agent", FoundryResponses.Completed("r1", "Good.", totalTokens: 250, cachedTokens: 8));
         using var provider = Build();
 
         var result = await provider.GetRequiredService<IAgentService>().RunAsync(new AgentDefinition("ofsted-agent", "Ofsted"), "Summarise.",

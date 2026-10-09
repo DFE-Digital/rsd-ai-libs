@@ -27,9 +27,9 @@ public sealed class ExternalProjectTests
     private static readonly AgentDefinition Ofsted = new("ofsted-agent", "Ofsted");
 
     private readonly InMemoryFoundry _appFoundry = new();
-    private readonly ScriptedConversationClient _appConversations = new();
+    private readonly ScriptedResponsesClient _appResponses = new();
     private readonly InMemoryFoundry _central = new();
-    private readonly ScriptedConversationClient _centralConversations = new();
+    private readonly ScriptedResponsesClient _centralResponses = new();
     private readonly TokenCredential _appCredential = Substitute.For<TokenCredential>();
 
     private static Dictionary<string, string?> Settings(params (string Key, string Value)[] external)
@@ -56,10 +56,10 @@ public sealed class ExternalProjectTests
             configure?.Invoke(agents);
         });
         services.AddSingleton(_appFoundry.Admin);
-        services.AddSingleton<IFoundryConversationClient>(_appConversations);
+        services.AddSingleton<IFoundryResponsesClient>(_appResponses);
         if (fakeCentralProject)
         {
-            services.AddSingleton(new ExternalFoundryProjectService(_appCredential, _central.Admin, _centralConversations,
+            services.AddSingleton(new ExternalFoundryProjectService(_appCredential, _central.Admin, _centralResponses,
                 new FoundryAgentFactoryOptions("myconnection/gpt-5.1"), new AgentRunOptions(), new AgentRunLimiter(new AgentRunOptions()),
                 NullLoggerFactory.Instance));
         }
@@ -72,14 +72,14 @@ public sealed class ExternalProjectTests
     {
         _central.Seed("ofsted-agent", "myconnection/gpt-5.1", "Provisioned centrally.");
         _central.Seed("ofsted-agent", "myconnection/gpt-5.1", "A newer version.");
-        _centralConversations.Reply("ofsted-agent", FoundryResponses.Completed("r1", "Rated Good."));
+        _centralResponses.Reply("ofsted-agent", FoundryResponses.Completed("r1", "Rated Good."));
         using var app = Build(Settings(("Endpoint", CentralEndpoint), ("ofsted-agent", "1")));
 
         var result = await app.GetRequiredService<IAgentService>().RunAsync(Ofsted, "Summarise.", cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal("Rated Good.", result.Output);
-        Assert.Equal("1", Assert.Single(_centralConversations.Calls).AgentVersion);
-        Assert.Empty(_appConversations.Calls);
+        Assert.Equal("1", Assert.Single(_centralResponses.Calls).AgentVersion);
+        Assert.Empty(_appResponses.Calls);
         Assert.Empty(_appFoundry.AgentNames);
     }
 

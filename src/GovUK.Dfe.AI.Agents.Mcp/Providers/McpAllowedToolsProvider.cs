@@ -1,8 +1,8 @@
 using GovUK.Dfe.AI.Agents.Mcp.Clients;
 using GovUK.Dfe.AI.Agents.Mcp.Clients.Interfaces;
+using GovUK.Dfe.AI.Agents.Tools;
 using GovUK.Dfe.AI.Agents.Tools.Interfaces;
 using GovUK.Dfe.AI.Agents.ValueObjects;
-using OpenAI.Responses;
 
 namespace GovUK.Dfe.AI.Agents.Mcp.Providers;
 
@@ -13,7 +13,7 @@ public sealed class McpAllowedToolsProvider(IMcpToolClient client, IReadOnlyList
 {
     private readonly HashSet<string> _allowedFunctionNames = [.. allowedToolNames.Select(McpToolClient.ToFunctionName)];
 
-    public Task<IReadOnlyList<ResponseTool>> GetToolsAsync(CancellationToken cancellationToken = default)
+    public Task<IReadOnlyList<AgentTool>> GetToolsAsync(CancellationToken cancellationToken = default)
         => client.GetToolsAsync(allowedToolNames, cancellationToken);
 
     public async Task<string?> TryExecuteAsync(ToolCallRequest call, CancellationToken cancellationToken = default)

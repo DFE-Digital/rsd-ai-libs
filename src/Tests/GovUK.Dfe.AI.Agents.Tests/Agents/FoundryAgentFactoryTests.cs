@@ -3,6 +3,7 @@ using System.ClientModel;
 using Azure.AI.Projects.Agents;
 using GovUK.Dfe.AI.Agents.Factories;
 using GovUK.Dfe.AI.Agents.Options;
+using GovUK.Dfe.AI.Agents.Tools;
 using GovUK.Dfe.AI.Agents.ValueObjects;
 using NSubstitute;
 using OpenAI.Responses;
@@ -196,7 +197,7 @@ public sealed class FoundryAgentFactoryTests
         SetUpDeployedVersion("my-agent", "3", "id-3", _options.DefaultModel, "Do the thing.", [deployedTool]);
         var sut = CreateSut();
         var newTool = ResponseTool.CreateFunctionTool("new_tool", BinaryData.FromString("{}"), strictModeEnabled: null);
-        var spec = new AgentSpec { Name = "my-agent", Instructions = "Do the thing.", Tools = [newTool] };
+        var spec = new AgentSpec { Name = "my-agent", Instructions = "Do the thing.", Tools = [AgentTool.FromResponseTool(newTool)] };
 
         var matches = await sut.MatchesDeployedVersionAsync(spec, "3", cancellationToken);
 

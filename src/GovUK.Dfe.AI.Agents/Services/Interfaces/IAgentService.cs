@@ -5,7 +5,7 @@ namespace GovUK.Dfe.AI.Agents.Services.Interfaces;
 
 /// <summary>
 /// Runs your agents. Creates or resolves each one (respecting pins), attaches its allowed tools, runs tool calls,
-/// fences evidence, deletes the conversation and records token usage.
+/// fences evidence and records token usage. Nothing is stored in Foundry.
 /// </summary>
 public interface IAgentService
 {
@@ -15,6 +15,16 @@ public interface IAgentService
     /// <exception cref="InvalidOperationException">The run failed; the cause is the inner exception.</exception>
     /// <exception cref="TimeoutException">The run exceeded <c>RunTimeout</c>, or no run slot came free in time.</exception>
     Task<AgentResult> RunAsync(AgentDefinition definition, string prompt, string? evidence = null,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Runs one agent, passing on its answer as it's written, e.g. for a chat screen. The last update carries the finished
+    /// result. The answer is checked once it's complete, so a failed check throws at the end, with no retry: tell the user
+    /// the answer can't be used. Stop reading to cancel the run.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">The run failed or its answer failed a check; the cause is the inner exception.</exception>
+    /// <exception cref="TimeoutException">The run exceeded <c>RunTimeout</c>, or no run slot came free in time.</exception>
+    IAsyncEnumerable<AgentStreamUpdate> RunStreamingAsync(AgentDefinition definition, string prompt, string? evidence = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>

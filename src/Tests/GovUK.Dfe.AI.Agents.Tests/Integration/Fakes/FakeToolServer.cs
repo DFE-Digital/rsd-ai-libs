@@ -1,3 +1,4 @@
+using GovUK.Dfe.AI.Agents.Tools;
 using GovUK.Dfe.AI.Agents.Tools.Interfaces;
 using GovUK.Dfe.AI.Agents.ValueObjects;
 using OpenAI.Responses;
@@ -21,17 +22,17 @@ internal sealed class FakeToolServer(params string[] toolNames) : IAgentToolProv
 
     public int ListCalls => _listCalls;
 
-    /// <summary>A function tool as the app describes it to Foundry.</summary>
+    /// <summary>A function tool as Foundry holds it, e.g. to seed an agent version that's already deployed.</summary>
     public static ResponseTool FunctionTool(string name)
         => ResponseTool.CreateFunctionTool(name, BinaryData.FromString("""{"type":"object","properties":{"urn":{"type":"string"}}}"""),
             strictModeEnabled: false, functionDescription: $"Runs {name} for a school by URN.");
 
-    public Task<IReadOnlyList<ResponseTool>> GetToolsAsync(CancellationToken cancellationToken = default)
+    public Task<IReadOnlyList<AgentTool>> GetToolsAsync(CancellationToken cancellationToken = default)
     {
         Interlocked.Increment(ref _listCalls);
         return ListFailure is { } failure
-            ? Task.FromException<IReadOnlyList<ResponseTool>>(failure)
-            : Task.FromResult<IReadOnlyList<ResponseTool>>([.. toolNames.Select(FunctionTool)]);
+            ? Task.FromException<IReadOnlyList<AgentTool>>(failure)
+            : Task.FromResult<IReadOnlyList<AgentTool>>([.. toolNames.Select(name => AgentTool.FromResponseTool(FunctionTool(name)))]);
     }
 
     public Task<string?> TryExecuteAsync(ToolCallRequest call, CancellationToken cancellationToken = default)

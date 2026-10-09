@@ -7,7 +7,7 @@ internal sealed record AgentRunOptions
     internal const int MinOutputTokens = 16;
 
     // Sized for gpt-5.1, which takes up to 272,000 input tokens. At about 4 characters a token, the worst case of full
-    // evidence (~50,000 tokens) plus ten full tool outputs (~100,000) still leaves room for instructions and the conversation.
+    // evidence (~50,000 tokens) plus ten full tool outputs (~100,000) still leaves room for instructions and the run so far.
     internal const int DefaultMaxOutputTokensPerRun = 64_000;
     internal const int DefaultMaxEvidenceCharacters = 200_000;
     internal const int DefaultMaxToolOutputCharacters = 40_000;
@@ -18,8 +18,6 @@ internal sealed record AgentRunOptions
     /// <summary>Longest one run may take, tool rounds included; then it fails with <see cref="TimeoutException"/>. Null: no limit.</summary>
     public TimeSpan? RunTimeout { get; init; }
 
-    /// <summary>Deletes each conversation the runner created, so prompts and evidence aren't kept in Foundry.</summary>
-    public bool DeleteConversationsAfterRun { get; init; } = true;
 
     /// <summary>Runs at once on this instance, across every caller. Null: no limit.</summary>
     public int? MaxConcurrency { get; init; }
@@ -46,7 +44,15 @@ internal sealed record AgentRunOptions
     public IReadOnlyList<Privacy.Interfaces.IAgentInputRedactor> Redactors { get; init; } = [];
 
     /// <summary><paramref name="text"/> after every redactor.</summary>
-    public string Redact(string text) => Redactors.Aggregate(text, static (current, redactor) => redactor.Redact(current));
+    public async ValueTask<string> RedactAsync(string text, CancellationToken cancellationToken)
+    {
+        foreach (var redactor in Redactors)
+        {
+            text = await redactor.RedactAsync(text, cancellationToken).ConfigureAwait(false);
+        }
+
+        return text;
+    }
 
     /// <summary>What each model costs; with no prices, runs report tokens only.</summary>
     public AgentsOptions.PricingSettings Pricing { get; init; } = new();

@@ -8,15 +8,13 @@
 	  <Title>GovUK.Dfe.AI.Agents</Title>
 	  <Description>Run Azure AI Foundry agents from .NET: versions, parallel and sequential runs, fenced evidence, checked answers, cost and concurrency limits, and token telemetry. Add-ons: .Mcp, .AISearch, .Evaluation, .Guardrails.</Description>
 	  <Authors>DFE-Digital</Authors>
-	  <!-- OpenAI's Responses API (used for the Conversations/Responses agent run loop) is marked
-         experimental (OPENAI001) by the OpenAI .NET SDK pending its own stabilization. -->
+	  <!-- The OpenAI SDK marks its Responses API experimental (OPENAI001). The library uses it internally to run agents;
+	       its public API exposes AgentTool instead, so apps that use the package never see the warning. -->
 	  <NoWarn>$(NoWarn);OPENAI001</NoWarn>
   </PropertyGroup>
 
 	  <ItemGroup>
 		<None Include="readme.md" Pack="true" PackagePath="\" />
-		<!-- Suppresses OPENAI001 in apps that use the package; see the file for why. -->
-		<None Include="buildTransitive\GovUK.Dfe.AI.Agents.targets" Pack="true" PackagePath="buildTransitive" />
 		<InternalsVisibleTo Include="GovUK.Dfe.AI.Agents.Tests" />
 		<InternalsVisibleTo Include="GovUK.Dfe.AI.Agents.Mcp.Tests" />
 		<InternalsVisibleTo Include="GovUK.Dfe.AI.Agents.AISearch.Tests" />

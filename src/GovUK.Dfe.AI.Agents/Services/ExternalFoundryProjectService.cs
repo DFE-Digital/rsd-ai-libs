@@ -17,12 +17,12 @@ namespace GovUK.Dfe.AI.Agents.Services;
 internal sealed class ExternalFoundryProjectService
 {
     public ExternalFoundryProjectService(TokenCredential credential, AgentAdministrationClient admin,
-        IFoundryConversationClient conversations, FoundryAgentFactoryOptions factoryOptions, AgentRunOptions runOptions,
+        IFoundryResponsesClient responses, FoundryAgentFactoryOptions factoryOptions, AgentRunOptions runOptions,
         IAgentRunLimiter runLimiter, ILoggerFactory loggers)
     {
         Credential = credential;
         Factory = new FoundryAgentFactory(admin, factoryOptions, loggers.CreateLogger<FoundryAgentFactory>());
-        Runner = new FoundryAgentRunnerService(Factory, conversations, loggers.CreateLogger<FoundryAgentRunnerService>(), runOptions, runLimiter);
+        Runner = new FoundryAgentRunnerService(Factory, responses, loggers.CreateLogger<FoundryAgentRunnerService>(), runOptions, runLimiter);
     }
 
     /// <summary>Its own <c>Authentication</c>, or this app's Foundry credential.</summary>

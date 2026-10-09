@@ -1,3 +1,5 @@
+using System.Runtime.CompilerServices;
+using System.Threading.Channels;
 using GovUK.Dfe.AI.Agents.Context;
 using GovUK.Dfe.AI.Agents.Diagnostics;
 using GovUK.Dfe.AI.Agents.Extensions;
@@ -32,6 +34,79 @@ internal sealed class AgentService(IAgentRunnerService agentRunner, IAgentRuntim
         ArgumentException.ThrowIfNullOrWhiteSpace(prompt);
 
         return RunAgentAsync(definition, prompt, evidence, cancellationToken);
+    }
+
+    public IAsyncEnumerable<AgentStreamUpdate> RunStreamingAsync(AgentDefinition definition, string prompt, string? evidence = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(definition);
+        ArgumentException.ThrowIfNullOrWhiteSpace(prompt);
+
+        return StreamAgentAsync(definition, prompt, evidence, cancellationToken);
+    }
+
+    /// <summary>
+    /// Runs the agent as <see cref="RunAsync"/> does, with the runner passing each piece of the answer to a channel that's
+    /// read here, cleaned and passed on. Stopping early cancels the run, which still cleans up after itself.
+    /// </summary>
+    private async IAsyncEnumerable<AgentStreamUpdate> StreamAgentAsync(AgentDefinition definition, string prompt, string? evidence,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        var pieces = Channel.CreateUnbounded<string>(new UnboundedChannelOptions { SingleReader = true, SingleWriter = true });
+        using var runCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var run = RunWithStreamAsync();
+        var cleaner = new StreamedAnswerCleaner();
+        var started = System.Diagnostics.Stopwatch.GetTimestamp();
+        var firstText = true;
+        AgentResult result;
+        try
+        {
+            await foreach (var piece in pieces.Reader.ReadAllAsync(cancellationToken).ConfigureAwait(false))
+            {
+                if (cleaner.Add(piece) is { Length: > 0 } text)
+                {
+                    if (firstText)
+                    {
+                        firstText = false;
+                        AgentTelemetry.RecordTimeToFirstToken(_applicationName, definition.Name,
+                            System.Diagnostics.Stopwatch.GetElapsedTime(started).TotalSeconds);
+                    }
+
+                    yield return new AgentStreamUpdate { Text = text };
+                }
+            }
+
+            result = await run.ConfigureAwait(false);
+        }
+        finally
+        {
+            if (!run.IsCompleted)
+            {
+                await runCancellation.CancelAsync().ConfigureAwait(false);
+                await ((Task)run).ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);   // the caller stopped reading; its error is moot
+            }
+        }
+
+        if (cleaner.Flush() is { Length: > 0 } rest)
+        {
+            yield return new AgentStreamUpdate { Text = rest };
+        }
+
+        yield return new AgentStreamUpdate { Result = result };
+
+        async Task<AgentResult> RunWithStreamAsync()
+        {
+            // Set inside this method, so only this run streams: the value doesn't flow back to the caller.
+            AnswerStream.Current = piece => pieces.Writer.TryWrite(piece);
+            try
+            {
+                return await RunAgentAsync(definition, prompt, evidence, runCancellation.Token).ConfigureAwait(false);
+            }
+            finally
+            {
+                pieces.Writer.Complete();
+            }
+        }
     }
 
     public async Task<IReadOnlyList<AgentResult>> RunParallelAsync(IReadOnlyCollection<AgentDefinition> definitions,
@@ -197,7 +272,8 @@ internal sealed class AgentService(IAgentRunnerService agentRunner, IAgentRuntim
             Notify(new CompletedAgentRun
             {
                 AgentName = definition.Name, RunId = result.RunId, CompletedAt = result.CompletedAt, AgentVersion = result.AgentVersion,
-                Model = result.Model, Prompt = _runOptions.Redact(prompt), Evidence = evidence is null ? null : _runOptions.Redact(evidence),
+                Model = result.Model, Prompt = await _runOptions.RedactAsync(prompt, cancellationToken).ConfigureAwait(false),
+                Evidence = evidence is null ? null : await _runOptions.RedactAsync(evidence, cancellationToken).ConfigureAwait(false),
                 Output = result.Output ?? string.Empty,
             });
         }

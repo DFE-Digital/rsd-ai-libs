@@ -27,6 +27,10 @@ public sealed record McpServerConnectionOptions
     public required string Scope { get; init; }
 
     /// <summary>Throws, naming every missing setting, so a misconfigured server fails at startup.</summary>
+    /// <summary>https, or http to this machine only (local development): the server's bearer token travels with every request.</summary>
+    internal static bool IsSecure(Uri uri)
+        => uri.Scheme == Uri.UriSchemeHttps || (uri.Scheme == Uri.UriSchemeHttp && uri.IsLoopback);
+
     public void Validate(string serverKey)
     {
         var missing = new List<string>();
@@ -35,7 +39,7 @@ public sealed record McpServerConnectionOptions
             missing.Add(nameof(ServerLabel));
         }
 
-        if (ServerUri is null || !ServerUri.IsAbsoluteUri)
+        if (ServerUri is null || !ServerUri.IsAbsoluteUri || !IsSecure(ServerUri))
         {
             missing.Add(nameof(ServerUri));
         }

@@ -21,6 +21,9 @@ public sealed class PatternRedactor : IAgentInputRedactor
             $"[{pattern.Key} removed]"))];
     }
 
+    public ValueTask<string> RedactAsync(string text, CancellationToken cancellationToken) => ValueTask.FromResult(Redact(text));
+
+    /// <summary>The text with each pattern replaced.</summary>
     public string Redact(string text)
     {
         ArgumentNullException.ThrowIfNull(text);

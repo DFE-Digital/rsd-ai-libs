@@ -58,8 +58,6 @@ public sealed partial class AgentsOptions
     /// <summary>Fences tool output as data the model mustn't take instructions from.</summary>
     public bool FenceToolOutput { get; set; } = true;
 
-    /// <summary>Deletes each conversation after its run, so prompts and evidence aren't kept in Foundry.</summary>
-    public bool DeleteConversationsAfterRun { get; set; } = true;
 
     /// <summary>A system prompt (by key) appended to every agent's instructions, e.g. a shared answer format.</summary>
     public string? ResponseFormatKey { get; set; }
@@ -133,7 +131,6 @@ public sealed partial class AgentsOptions
         MaxEvidenceCharacters = MaxEvidenceCharacters,
         MaxOutputTokensPerRun = MaxOutputTokensPerRun,
         MaxWaitForRunSlot = MaxWaitForRunSlot,
-        DeleteConversationsAfterRun = DeleteConversationsAfterRun,
         RequireTokenUsageTelemetry = RequireTokenUsageTelemetry,
         Pricing = Pricing,
         ValidateAgentToolsAtStartup = ValidateAgentToolsAtStartup,

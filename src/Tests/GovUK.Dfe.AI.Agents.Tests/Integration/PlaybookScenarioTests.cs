@@ -1,5 +1,6 @@
 using GovUK.Dfe.AI.Agents.Extensibility.Interfaces;
 using GovUK.Dfe.AI.Agents.Privacy;
+using GovUK.Dfe.AI.Agents.Privacy.Interfaces;
 using GovUK.Dfe.AI.Agents.Services.Interfaces;
 using GovUK.Dfe.AI.Agents.Tests.Integration.Fakes;
 using GovUK.Dfe.AI.Agents.Tools;
@@ -33,7 +34,7 @@ public sealed partial class AgentPlatformEndToEndTests
     public async Task AToolNeedingApproval_RunsOnlyOnceApproved_AndADenialIsToldToTheAgent(bool approved)
     {
         WriteSystemPrompt("Case", "You manage cases.");
-        _conversations.Reply("case-agent",
+        _responses.Reply("case-agent",
             FoundryResponses.FunctionCall("r1", "call-1", "update_case"),
             FoundryResponses.Completed("r2", "Done."));
         var tools = new FakeToolServer("get_performance_data", "update_case") { Output = "Case updated." };
@@ -44,7 +45,7 @@ public sealed partial class AgentPlatformEndToEndTests
 
         Assert.Equal([("case-agent", "update_case")], ((TestApprover)provider.GetRequiredService<IToolCallApprover>()).Asked);
         Assert.Equal(approved ? 1 : 0, tools.Calls.Count);
-        var followUp = _conversations.CallsFor("case-agent")[1].SerializedInput;
+        var followUp = _responses.CallsFor("case-agent")[1].SerializedInput;
         Assert.Equal(!approved, followUp.Contains("was not approved, so it didn't run: a manager must agree first", StringComparison.Ordinal));
     }
 
@@ -52,7 +53,7 @@ public sealed partial class AgentPlatformEndToEndTests
     public async Task AToolNotNeedingApproval_RunsWithoutAsking()
     {
         WriteSystemPrompt("Case", "You manage cases.");
-        _conversations.Reply("case-agent",
+        _responses.Reply("case-agent",
             FoundryResponses.FunctionCall("r1", "call-1", "get_performance_data"),
             FoundryResponses.Completed("r2", "Done."));
         var tools = new FakeToolServer("get_performance_data", "update_case");
@@ -105,7 +106,7 @@ public sealed partial class AgentPlatformEndToEndTests
     public async Task PersonalData_IsRemovedFromThePromptEvidenceAndToolOutput_BeforeTheModel_AndFromObservedRuns()
     {
         WriteSystemPrompt("Performance", "You summarise school performance.");
-        _conversations.Reply("performance-agent",
+        _responses.Reply("performance-agent",
             FoundryResponses.FunctionCall("r1", "call-1", "get_performance_data"),
             FoundryResponses.Completed("r2", "Summarised."));
         var tools = PerformanceTools($"Pupil {Upn} met the standard.");
@@ -118,11 +119,28 @@ public sealed partial class AgentPlatformEndToEndTests
             new AgentDefinition("performance-agent", "Performance") { AllowedTools = ["get_performance_data"] },
             $"Summarise pupil {Upn}.", $"Record for {Upn}: attendance 92%.", cancellationToken);
 
-        var sent = string.Concat(_conversations.CallsFor("performance-agent").Select(call => call.SerializedInput));
+        var sent = string.Concat(_responses.CallsFor("performance-agent").Select(call => call.SerializedInput));
         Assert.DoesNotContain(Upn, sent, StringComparison.Ordinal);
-        Assert.Equal(3, sent.Split("[UPN removed]").Length - 1);   // prompt, evidence and tool output
+        var lastCall = _responses.CallsFor("performance-agent")[^1].SerializedInput;   // the whole run, sent again
+        Assert.Equal(3, lastCall.Split("[UPN removed]").Length - 1);   // prompt, evidence and tool output
         observer.Received(1).OnRunCompleted(Arg.Is<CompletedAgentRun>(run =>
             !run.Prompt.Contains(Upn) && !run.Evidence!.Contains(Upn)));
+    }
+
+    [Fact]
+    public async Task WhenARedactorFails_TheRunFails_AndNothingIsSentToTheModel()
+    {
+        WriteSystemPrompt("Performance", "You summarise school performance.");
+        _responses.Reply("performance-agent", FoundryResponses.Completed("r1", "Summarised."));
+        var redactor = Substitute.For<IAgentInputRedactor>();
+        redactor.RedactAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns<ValueTask<string>>(_ => throw new InvalidOperationException("PII service unavailable"));
+
+        using var provider = Build(agents: agents => agents.AddRedactor(redactor));
+        await Assert.ThrowsAnyAsync<Exception>(async () => await provider.GetRequiredService<IAgentService>().RunAsync(
+            new AgentDefinition("performance-agent", "Performance"), $"Summarise pupil {Upn}.", cancellationToken: cancellationToken));
+
+        Assert.Empty(_responses.CallsFor("performance-agent"));
     }
 
     // ===================== Traceability =====================
@@ -131,7 +149,7 @@ public sealed partial class AgentPlatformEndToEndTests
     public async Task EveryAnswer_HasARunIdAndTime_SharedWithObservers_SoItCanBeTracedAndAudited()
     {
         WriteSystemPrompt("Ofsted", "You analyse Ofsted reports.");
-        _conversations.Reply("ofsted-agent", FoundryResponses.Completed("r1", "Rated Good."));
+        _responses.Reply("ofsted-agent", FoundryResponses.Completed("r1", "Rated Good."));
         CompletedAgentRun? observed = null;
         var observer = Substitute.For<IAgentRunObserver>();
         observer.OnRunCompleted(Arg.Do<CompletedAgentRun>(run => observed = run));
@@ -152,14 +170,14 @@ public sealed partial class AgentPlatformEndToEndTests
     public async Task ACitationWrittenAsALink_IsReturnedAsPlainText_AndStillPassesTheCitationCheck()
     {
         WriteSystemPrompt("Ofsted", "You analyse Ofsted reports.");
-        _conversations.Reply("ofsted-agent", FoundryResponses.Completed("r1", "Rated Good [Evidence 1](evidence/1)."));
+        _responses.Reply("ofsted-agent", FoundryResponses.Completed("r1", "Rated Good [Evidence 1](evidence/1)."));
         using var provider = Build();
 
         var result = await provider.GetRequiredService<IAgentService>().RunAsync(new AgentDefinition("ofsted-agent", "Ofsted"), "Summarise.",
             "--- ofsted_index Evidence 1 ---" + Environment.NewLine + "Rated Good in 2024.", cancellationToken);
 
         Assert.Equal("Rated Good [Evidence 1].", result.Output);   // no link to the app's own address, so no 404
-        Assert.Single(_conversations.CallsFor("ofsted-agent"));      // the citation counted: no retry
-        Assert.Contains("never as a link", _conversations.CallsFor("ofsted-agent")[0].SerializedInput, StringComparison.Ordinal);
+        Assert.Single(_responses.CallsFor("ofsted-agent"));      // the citation counted: no retry
+        Assert.Contains("never as a link", _responses.CallsFor("ofsted-agent")[0].SerializedInput, StringComparison.Ordinal);
     }
 }

@@ -176,19 +176,19 @@ public sealed class McpServersTests : IDisposable
         var settings = Settings();
         settings["AiAgents:PromptFiles:SystemPrompts:Performance"] = _prompt;
         var definition = new AgentDefinition("performance-agent", "Performance") { AllowedTools = ["get_performance_data"] };
-        IReadOnlyList<OpenAI.Responses.ResponseTool> tools = [FakeToolServer.FunctionTool("get_performance_data")];
+        IReadOnlyList<AgentTool> tools = [AgentTool.FromResponseTool(FakeToolServer.FunctionTool("get_performance_data"))];
         var server = Substitute.For<IMcpToolClient>();
         server.GetToolsAsync(Arg.Any<IReadOnlyList<string>?>(), Arg.Any<CancellationToken>()).Returns(_ => Task.FromResult(tools));
         server.CallToolAsync("get_performance_data", Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns("KS2: 72% met the expected standard.");
         var foundry = new InMemoryFoundry();
-        var conversations = new ScriptedConversationClient();
-        conversations.Reply("performance-agent",
+        var responses = new ScriptedResponsesClient();
+        responses.Reply("performance-agent",
             FoundryResponses.FunctionCall("r1", "call-1", "get_performance_data"),
             FoundryResponses.Completed("r2", "72% met the expected standard."));
 
         var services = Services(settings, agents => agents.UseCredential(Substitute.For<TokenCredential>()).AddAgents(definition));
         services.AddSingleton(foundry.Admin);
-        services.AddSingleton<IFoundryConversationClient>(conversations);
+        services.AddSingleton<IFoundryResponsesClient>(responses);
         services.AddKeyedSingleton("school-performance", server);   // the server's client; the real one would call it over HTTP
         await using var provider = services.BuildServiceProvider();
 
@@ -331,4 +331,35 @@ public sealed class McpServersTests : IDisposable
 
         Assert.Single(services, service => service.IsKeyedService && service.ServiceType == typeof(IMcpToolClient));
     }
+
+    // ===================== Transport security =====================
+
+    [Theory]
+    [InlineData("http://mcp.internal.example/mcp", false)]   // the token would travel unencrypted
+    [InlineData("https://mcp.internal.example/mcp", true)]
+    [InlineData("http://localhost:5001/mcp", true)]         // local development only
+    public void AServer_MustUseHttps_SoItsTokenIsNeverSentUnencrypted(string serverUri, bool starts)
+    {
+        var settings = Settings();
+        settings["AiAgents:McpServers:school-performance:ServerUri"] = serverUri;
+
+        var asAgentsTools = Record.Exception(() => Services(settings, agents => agents.UseCredential(Substitute.For<TokenCredential>())));
+        var onItsOwn = Record.Exception(() => BuildServersOnly(ServersOnlyFrom(settings), Substitute.For<TokenCredential>()));
+
+        Assert.All(new[] { asAgentsTools, onItsOwn }, ex =>
+        {
+            if (starts)
+            {
+                Assert.Null(ex);
+            }
+            else
+            {
+                Assert.Contains("ServerUri (must use https://", Assert.IsType<InvalidOperationException>(ex).Message, StringComparison.Ordinal);
+            }
+        });
+    }
+
+    private static Dictionary<string, string?> ServersOnlyFrom(Dictionary<string, string?> settings) => settings
+        .Where(setting => setting.Key.StartsWith("AiAgents:McpServers:", StringComparison.Ordinal))
+        .ToDictionary(setting => setting.Key, setting => setting.Value);
 }

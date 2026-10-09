@@ -28,7 +28,7 @@ namespace GovUK.Dfe.AI.Agents.Tests.Integration;
 /// End-to-end scenarios through the library's real registration (<c>AddAgents</c>),
 /// real prompt files on disk and real configuration binding. Only the two network edges are
 /// replaced: Foundry's admin API (by a stateful <see cref="InMemoryFoundry"/>) and the Responses API
-/// (by a <see cref="ScriptedConversationClient"/>).
+/// (by a <see cref="ScriptedResponsesClient"/>).
 /// </summary>
 public sealed partial class AgentPlatformEndToEndTests : IDisposable
 {
@@ -45,7 +45,7 @@ public sealed partial class AgentPlatformEndToEndTests : IDisposable
     private readonly CancellationToken cancellationToken = TestContext.Current.CancellationToken;
     private readonly string _promptDirectory = Directory.CreateTempSubdirectory("aiagents-e2e-").FullName;
     private readonly InMemoryFoundry _foundry = new();
-    private readonly ScriptedConversationClient _conversations = new();
+    private readonly ScriptedResponsesClient _responses = new();
     private readonly CollectingLoggerProvider _logs = new();
     private readonly List<AgentDefinition> _definitions = [];
     private readonly Dictionary<string, string?> _configuration = [];
@@ -86,7 +86,7 @@ public sealed partial class AgentPlatformEndToEndTests : IDisposable
 
         // Replace only the network edges; everything else is the library's own registration.
         services.AddSingleton(_foundry.Admin);
-        services.AddSingleton<IFoundryConversationClient>(_conversations);
+        services.AddSingleton<IFoundryResponsesClient>(_responses);
         services.AddSingleton<IAgentDefinitionProvider>(new StaticAgentDefinitions(_definitions));
 
         configure?.Invoke(services);
@@ -142,7 +142,7 @@ public sealed partial class AgentPlatformEndToEndTests : IDisposable
     public async Task ManagedAgent_FirstRun_CreatesAVersionFromThePromptFile_AndReturnsTheReply()
     {
         WriteSystemPrompt("Ofsted", "You analyse Ofsted inspection reports.");
-        _conversations.Reply("ofsted-agent", FoundryResponses.Completed("r1", "The school is rated Good.", totalTokens: 120));
+        _responses.Reply("ofsted-agent", FoundryResponses.Completed("r1", "The school is rated Good.", totalTokens: 120));
         using var provider = Build();
 
         var result = Assert.Single(await RunParallel(provider, new AgentDefinition("ofsted-agent", "Ofsted")));
@@ -156,16 +156,16 @@ public sealed partial class AgentPlatformEndToEndTests : IDisposable
         Assert.Equal("You analyse Ofsted inspection reports.", definition.Instructions);
         Assert.Empty(definition.Tools);
 
-        var call = Assert.Single(_conversations.CallsFor("ofsted-agent"));
+        var call = Assert.Single(_responses.CallsFor("ofsted-agent"));
         Assert.Equal("1", call.AgentVersion);
         Assert.Contains("Brief the user on ofsted-agent.", call.SerializedInput, StringComparison.Ordinal);
     }
 
     [Fact]
-    public async Task ManagedAgent_RepeatedRuns_ReuseTheSameVersion_InAFreshConversationEachTime()
+    public async Task ManagedAgent_RepeatedRuns_ReuseTheSameVersion()
     {
         WriteSystemPrompt("Ofsted", "You analyse Ofsted inspection reports.");
-        _conversations.Reply("ofsted-agent", FoundryResponses.Completed("r1", "Good."));
+        _responses.Reply("ofsted-agent", FoundryResponses.Completed("r1", "Good."));
         var definition = new AgentDefinition("ofsted-agent", "Ofsted");
 
         using var provider = Build();
@@ -173,29 +173,28 @@ public sealed partial class AgentPlatformEndToEndTests : IDisposable
         await RunParallel(provider, definition);
 
         Assert.Single(_foundry.Versions("ofsted-agent"));
-        Assert.All(_conversations.CallsFor("ofsted-agent"), call => Assert.Equal("1", call.AgentVersion));
-        Assert.Equal(2, _conversations.ConversationsCreated);
+        Assert.All(_responses.CallsFor("ofsted-agent"), call => Assert.Equal("1", call.AgentVersion));
     }
 
     [Fact]
     public async Task ManagedAgent_ConcurrentRunsOfANewAgent_CreateOnlyOneVersion()
     {
         WriteSystemPrompt("Ofsted", "You analyse Ofsted inspection reports.");
-        _conversations.Reply("ofsted-agent", FoundryResponses.Completed("r1", "Good."));
+        _responses.Reply("ofsted-agent", FoundryResponses.Completed("r1", "Good."));
         var definition = new AgentDefinition("ofsted-agent", "Ofsted");
 
         using var provider = Build();
         await Task.WhenAll(Enumerable.Range(0, 8).Select(_ => RunParallel(provider, definition)));
 
         Assert.Single(_foundry.Versions("ofsted-agent"));
-        Assert.Equal(8, _conversations.CallsFor("ofsted-agent").Count);
+        Assert.Equal(8, _responses.CallsFor("ofsted-agent").Count);
     }
 
     [Fact]
     public async Task ManagedAgent_EditedPromptFile_CreatesANewVersion_AndRunsIt()
     {
         WriteSystemPrompt("Ofsted", "You analyse Ofsted inspection reports.");
-        _conversations.Reply("ofsted-agent", FoundryResponses.Completed("r1", "Good."));
+        _responses.Reply("ofsted-agent", FoundryResponses.Completed("r1", "Good."));
         var definition = new AgentDefinition("ofsted-agent", "Ofsted");
 
         using var provider = Build();
@@ -205,7 +204,7 @@ public sealed partial class AgentPlatformEndToEndTests : IDisposable
 
         Assert.Equal(2, _foundry.Versions("ofsted-agent").Count);
         Assert.Equal("You analyse Ofsted inspection reports. Cite the inspection date.", _foundry.Definition("ofsted-agent", "2").Instructions);
-        Assert.Equal(["1", "2"], _conversations.CallsFor("ofsted-agent").Select(call => call.AgentVersion));
+        Assert.Equal(["1", "2"], _responses.CallsFor("ofsted-agent").Select(call => call.AgentVersion));
     }
 
     [Fact]
@@ -214,8 +213,8 @@ public sealed partial class AgentPlatformEndToEndTests : IDisposable
         WriteSystemPrompt("Ofsted", "You analyse Ofsted inspection reports.");
         WriteSystemPrompt("WebSearch", "You search the web.");
         WriteSystemPrompt("ResponseFormat", "Answer in Markdown with a heading per finding.");
-        _conversations.Reply("ofsted-agent", FoundryResponses.Completed("r1", "Good."));
-        _conversations.Reply("web-agent", FoundryResponses.Completed("r2", "News."));
+        _responses.Reply("ofsted-agent", FoundryResponses.Completed("r1", "Good."));
+        _responses.Reply("web-agent", FoundryResponses.Completed("r2", "News."));
         using var provider = Build(settings: new()
         {
             ["ResponseFormatKey"] = "ResponseFormat",
@@ -234,7 +233,7 @@ public sealed partial class AgentPlatformEndToEndTests : IDisposable
     {
         _configuration["AiAgents:PromptFiles:SystemPrompts:Ofsted"] = Path.Combine(_promptDirectory, "does-not-exist.md");
         WriteSystemPrompt("Trust", "You analyse academy trusts.");
-        _conversations.Reply("trust-agent", FoundryResponses.Completed("r1", "Trust findings."));
+        _responses.Reply("trust-agent", FoundryResponses.Completed("r1", "Trust findings."));
 
         using var provider = Build();
         var results = await RunParallel(provider, new AgentDefinition("ofsted-agent", "Ofsted"), new AgentDefinition("trust-agent", "Trust"));
@@ -248,7 +247,7 @@ public sealed partial class AgentPlatformEndToEndTests : IDisposable
     public async Task ManagedAgent_CustomProvider_CreatesTheVersionWithItsOwnModel()
     {
         WriteSystemPrompt("Ofsted", "You analyse Ofsted inspection reports.");
-        _conversations.Reply("ofsted-agent", FoundryResponses.Completed("r1", "Good."));
+        _responses.Reply("ofsted-agent", FoundryResponses.Completed("r1", "Good."));
         using var provider = Build(services => services.AddSingleton<IManagedAgentProvider, ModelOverrideOfstedProvider>());
 
         await RunParallel(provider, new AgentDefinition("ofsted-agent", "Ofsted"));
@@ -264,14 +263,14 @@ public sealed partial class AgentPlatformEndToEndTests : IDisposable
         _foundry.Seed("ofsted-agent", DefaultModel, "You analyse Ofsted inspection reports.");
         WriteSystemPrompt("Ofsted", "Changed instructions that have not been tested yet.");
         Pin("ofsted-agent", "1");
-        _conversations.Reply("ofsted-agent", FoundryResponses.Completed("r1", "Good."));
+        _responses.Reply("ofsted-agent", FoundryResponses.Completed("r1", "Good."));
         var definition = new AgentDefinition("ofsted-agent", "Ofsted");
 
         using var provider = Build();
         await RunParallel(provider, definition);
         await RunParallel(provider, definition);
 
-        Assert.Equal(["1", "1"], _conversations.CallsFor("ofsted-agent").Select(call => call.AgentVersion));
+        Assert.Equal(["1", "1"], _responses.CallsFor("ofsted-agent").Select(call => call.AgentVersion));
 
         // A pinned environment only reads from Foundry, so it can run with read-only access.
         Assert.Empty(_foundry.CreatedNames);
@@ -283,7 +282,7 @@ public sealed partial class AgentPlatformEndToEndTests : IDisposable
     {
         _foundry.Seed("ofsted-agent", DefaultModel, "Provisioned and tested.");
         Pin("ofsted-agent", "1");
-        _conversations.Reply("ofsted-agent", FoundryResponses.Completed("r1", "Good."));
+        _responses.Reply("ofsted-agent", FoundryResponses.Completed("r1", "Good."));
         var tools = PerformanceTools();
         using var provider = Build(services => services.AddSingleton(new AgentToolBinding("ofsted-agent", tools)));
 
@@ -304,7 +303,7 @@ public sealed partial class AgentPlatformEndToEndTests : IDisposable
         var result = Assert.Single(await RunParallel(provider, new AgentDefinition("ofsted-agent", "Ofsted")));
 
         Assert.Equal(FallbackText, result.Output);
-        Assert.Empty(_conversations.Calls);
+        Assert.Empty(_responses.Calls);
         Assert.Contains(_logs.AtLevel(LogLevel.Error), log => log.Exception?.Message.Contains("version '7' was not found", StringComparison.Ordinal) == true);
     }
 
@@ -312,7 +311,7 @@ public sealed partial class AgentPlatformEndToEndTests : IDisposable
     public async Task DriftDetection_AtStartup_WarnsWhenThePinnedVersionIsStale_WithoutFailingStartup()
     {
         WriteSystemPrompt("Ofsted", "You analyse Ofsted inspection reports.");
-        _conversations.Reply("ofsted-agent", FoundryResponses.Completed("r1", "Good."));
+        _responses.Reply("ofsted-agent", FoundryResponses.Completed("r1", "Good."));
         var definition = new AgentDefinition("ofsted-agent", "Ofsted");
         _definitions.Add(definition);
 
@@ -340,7 +339,7 @@ public sealed partial class AgentPlatformEndToEndTests : IDisposable
     public async Task DriftDetection_AtStartup_IsSilent_WhenThePinIsCurrent()
     {
         WriteSystemPrompt("Ofsted", "You analyse Ofsted inspection reports.");
-        _conversations.Reply("ofsted-agent", FoundryResponses.Completed("r1", "Good."));
+        _responses.Reply("ofsted-agent", FoundryResponses.Completed("r1", "Good."));
         var definition = new AgentDefinition("ofsted-agent", "Ofsted");
         _definitions.Add(definition);
 
@@ -365,7 +364,7 @@ public sealed partial class AgentPlatformEndToEndTests : IDisposable
     public async Task EphemeralAgent_IsCreatedUnderAUniqueName_RunOnce_AndDeleted()
     {
         WriteSystemPrompt("WebSearch", "You search the web for recent local news.");
-        _conversations.Reply("web-search-agent", FoundryResponses.Completed("r1", "Two news stories found."));
+        _responses.Reply("web-search-agent", FoundryResponses.Completed("r1", "Two news stories found."));
 
         using var provider = Build();
         var result = Assert.Single(await RunParallel(provider, new AgentDefinition("web-search-agent", "WebSearch", IsManagedAgent: false)));
@@ -383,7 +382,7 @@ public sealed partial class AgentPlatformEndToEndTests : IDisposable
     public async Task EphemeralAgent_ConcurrentRuns_NeverShareAnAgent()
     {
         WriteSystemPrompt("WebSearch", "You search the web.");
-        _conversations.Reply("web-search-agent", FoundryResponses.Completed("r1", "News."));
+        _responses.Reply("web-search-agent", FoundryResponses.Completed("r1", "News."));
         var definition = new AgentDefinition("web-search-agent", "WebSearch", IsManagedAgent: false);
 
         using var provider = Build();
@@ -397,7 +396,7 @@ public sealed partial class AgentPlatformEndToEndTests : IDisposable
     public async Task EphemeralAgent_WhenDeleteFails_StillReturnsTheResult_AndWarnsAboutTheOrphan()
     {
         WriteSystemPrompt("WebSearch", "You search the web.");
-        _conversations.Reply("web-search-agent", FoundryResponses.Completed("r1", "News."));
+        _responses.Reply("web-search-agent", FoundryResponses.Completed("r1", "News."));
         _foundry.FailDeletes = true;
 
         using var provider = Build();
@@ -415,14 +414,14 @@ public sealed partial class AgentPlatformEndToEndTests : IDisposable
     {
         _foundry.Seed("ofsted-agent", DefaultModel, "Provisioned by the platform pipeline, v1.");
         _foundry.Seed("ofsted-agent", DefaultModel, "Provisioned by the platform pipeline, v2.");
-        _conversations.Reply("ofsted-agent", FoundryResponses.Completed("r1", "Good."));
+        _responses.Reply("ofsted-agent", FoundryResponses.Completed("r1", "Good."));
         using var provider = Build(services => services.AddSingleton<IManagedAgentProvider>(sp => new ExternallyManagedAgentProvider(
             "ofsted-agent", sp.GetRequiredService<IAgentFactory>(), sp.GetRequiredService<IAgentRuntimeService>())));
 
         var result = Assert.Single(await RunParallel(provider, new AgentDefinition("ofsted-agent", "NoLocalPrompt")));
 
         Assert.Equal("Good.", result.Output);
-        Assert.Equal("2", Assert.Single(_conversations.CallsFor("ofsted-agent")).AgentVersion);
+        Assert.Equal("2", Assert.Single(_responses.CallsFor("ofsted-agent")).AgentVersion);
         Assert.Empty(_foundry.CreatedNames);
     }
 
@@ -444,7 +443,7 @@ public sealed partial class AgentPlatformEndToEndTests : IDisposable
     public async Task ToolBindings_ForTheSameAgent_AreCombined_InRegistrationOrder()
     {
         WriteSystemPrompt("Ofsted", "You analyse Ofsted inspection reports.");
-        _conversations.Reply("ofsted-agent", FoundryResponses.Completed("r1", "Good."));
+        _responses.Reply("ofsted-agent", FoundryResponses.Completed("r1", "Good."));
         using var provider = Build(services =>
         {
             services.AddSingleton(new AgentToolBinding("ofsted-agent", new WebSearchToolProvider()));
@@ -464,7 +463,7 @@ public sealed partial class AgentPlatformEndToEndTests : IDisposable
     public async Task ToolBindings_AddingAToolToADeployedAgent_CreatesANewVersion()
     {
         WriteSystemPrompt("Ofsted", "You analyse Ofsted inspection reports.");
-        _conversations.Reply("ofsted-agent", FoundryResponses.Completed("r1", "Good."));
+        _responses.Reply("ofsted-agent", FoundryResponses.Completed("r1", "Good."));
         var definition = new AgentDefinition("ofsted-agent", "Ofsted");
 
         using (var withoutTools = Build())
@@ -485,7 +484,7 @@ public sealed partial class AgentPlatformEndToEndTests : IDisposable
     {
         WriteSystemPrompt("Ofsted", "You analyse Ofsted inspection reports.");
         WriteSystemPrompt("Trust", "You analyse academy trusts.");
-        _conversations.Reply("trust-agent", FoundryResponses.Completed("r1", "Trust findings."));
+        _responses.Reply("trust-agent", FoundryResponses.Completed("r1", "Trust findings."));
         var tools = new FakeToolServer("get_performance_data") { ListFailure = new HttpRequestException("Tool server unreachable") };
 
 
@@ -500,7 +499,7 @@ public sealed partial class AgentPlatformEndToEndTests : IDisposable
     public async Task InAppTool_AcrossRepeatedRuns_KeepsOneVersion_AndGivesFoundryOnlyItsDefinition()
     {
         WriteSystemPrompt("Ofsted", "You analyse Ofsted inspection reports.");
-        _conversations.Reply("ofsted-agent", FoundryResponses.Completed("r1", "Good."));
+        _responses.Reply("ofsted-agent", FoundryResponses.Completed("r1", "Good."));
         using var provider = Build(services => services.AddSingleton(new AgentToolBinding("ofsted-agent", PerformanceTools())));
         var definition = new AgentDefinition("ofsted-agent", "Ofsted") { AllowedTools = ["get_performance_data"] };
 
@@ -518,7 +517,7 @@ public sealed partial class AgentPlatformEndToEndTests : IDisposable
     public async Task ToolCall_IsRunByTheApp_AndTheResultGoesBackToTheModel(bool isManagedAgent)
     {
         WriteSystemPrompt("Performance", "You summarise school performance.");
-        _conversations.Reply("performance-agent",
+        _responses.Reply("performance-agent",
             FoundryResponses.FunctionCall("r1", "call-1", "get_performance_data"),
             FoundryResponses.Completed("r2", "72% of pupils met the expected standard."));
         var tools = PerformanceTools("KS2: 72% met the expected standard.");
@@ -531,7 +530,7 @@ public sealed partial class AgentPlatformEndToEndTests : IDisposable
         var call = Assert.Single(tools.Calls);
         Assert.Equal(("call-1", "get_performance_data"), (call.CallId, call.FunctionName));
 
-        var followUp = _conversations.CallsFor("performance-agent")[1].SerializedInput;
+        var followUp = _responses.CallsFor("performance-agent")[1].SerializedInput;
         Assert.Contains("function_call_output", followUp, StringComparison.Ordinal);
         Assert.Contains("KS2: 72% met the expected standard.", followUp, StringComparison.Ordinal);
     }
@@ -541,7 +540,7 @@ public sealed partial class AgentPlatformEndToEndTests : IDisposable
     {
         _foundry.Seed("performance-agent", DefaultModel, "Tested instructions.", PerformanceTool());
         Pin("performance-agent", "1");
-        _conversations.Reply("performance-agent",
+        _responses.Reply("performance-agent",
             FoundryResponses.FunctionCall("r1", "call-1", "get_performance_data"),
             FoundryResponses.Completed("r2", "Summarised."));
         var tools = PerformanceTools();
@@ -558,7 +557,7 @@ public sealed partial class AgentPlatformEndToEndTests : IDisposable
     public async Task AllowedTools_OnlyTheListedToolsAreAttached_EvenWhenTheBindingOffersMore()
     {
         WriteSystemPrompt("Ofsted", "You analyse Ofsted inspection reports.");
-        _conversations.Reply("ofsted-agent", FoundryResponses.Completed("r1", "Good."));
+        _responses.Reply("ofsted-agent", FoundryResponses.Completed("r1", "Good."));
         using var provider = Build(services =>
         {
             services.AddSingleton(new AgentToolBinding("ofsted-agent", new FakeToolServer("get_performance_data", "update_school_record")));
@@ -576,7 +575,7 @@ public sealed partial class AgentPlatformEndToEndTests : IDisposable
     public async Task AllowedTools_WhenEmpty_TheAgentGetsNoInAppTools()
     {
         WriteSystemPrompt("Ofsted", "You analyse Ofsted inspection reports.");
-        _conversations.Reply("ofsted-agent", FoundryResponses.Completed("r1", "Good."));
+        _responses.Reply("ofsted-agent", FoundryResponses.Completed("r1", "Good."));
 
         using var provider = Build(services => services.AddSingleton(new AgentToolBinding("ofsted-agent", PerformanceTools())));
         await RunParallel(provider, new AgentDefinition("ofsted-agent", "Ofsted"));
@@ -590,7 +589,7 @@ public sealed partial class AgentPlatformEndToEndTests : IDisposable
         // The pinned version was created when the agent was allowed a tool it no longer is.
         _foundry.Seed("performance-agent", DefaultModel, "Tested instructions.", PerformanceTool());
         Pin("performance-agent", "1");
-        _conversations.Reply("performance-agent", FoundryResponses.FunctionCall("r1", "call-1", "get_performance_data"));
+        _responses.Reply("performance-agent", FoundryResponses.FunctionCall("r1", "call-1", "get_performance_data"));
         var tools = PerformanceTools();
 
         using var provider = Build(services => services.AddSingleton(new AgentToolBinding("performance-agent", tools)));
@@ -620,8 +619,8 @@ public sealed partial class AgentPlatformEndToEndTests : IDisposable
     {
         WriteSystemPrompt("Performance", "You summarise school performance.");
         WriteSystemPrompt("Trust", "You analyse academy trusts.");
-        _conversations.Reply("performance-agent", FoundryResponses.FunctionCall("r1", "call-1", "delete_school"));
-        _conversations.Reply("trust-agent", FoundryResponses.Completed("r2", "Trust findings."));
+        _responses.Reply("performance-agent", FoundryResponses.FunctionCall("r1", "call-1", "delete_school"));
+        _responses.Reply("trust-agent", FoundryResponses.Completed("r2", "Trust findings."));
         using var provider = Build(services => services.AddSingleton(new AgentToolBinding("performance-agent", PerformanceTools())));
 
         var results = await RunParallel(provider,
@@ -641,9 +640,9 @@ public sealed partial class AgentPlatformEndToEndTests : IDisposable
         WriteSystemPrompt("Ofsted", "You analyse Ofsted inspection reports.");
         WriteSystemPrompt("Trust", "You analyse academy trusts.");
         WriteSystemPrompt("WebSearch", "You search the web.");
-        _conversations.Reply("ofsted-agent", FoundryResponses.Completed("r1", "Ofsted findings.", totalTokens: 100));
-        _conversations.Fail("trust-agent", new InvalidOperationException("Rate limit exceeded."));
-        _conversations.Reply("web-search-agent", FoundryResponses.Completed("r3", "News findings.", totalTokens: 50));
+        _responses.Reply("ofsted-agent", FoundryResponses.Completed("r1", "Ofsted findings.", totalTokens: 100));
+        _responses.Fail("trust-agent", new InvalidOperationException("Rate limit exceeded."));
+        _responses.Reply("web-search-agent", FoundryResponses.Completed("r3", "News findings.", totalTokens: 50));
 
         using var provider = Build();
         var results = await RunParallel(provider,
@@ -666,7 +665,7 @@ public sealed partial class AgentPlatformEndToEndTests : IDisposable
     {
         WriteSystemPrompt("Establishment", "You summarise establishment details.");
         var failure = new InvalidOperationException("Establishment lookup failed.");
-        _conversations.Fail("establishment-agent", failure);
+        _responses.Fail("establishment-agent", failure);
         using var provider = Build();
 
         var thrown = await Assert.ThrowsAsync<InvalidOperationException>(() =>
@@ -680,7 +679,7 @@ public sealed partial class AgentPlatformEndToEndTests : IDisposable
     public async Task Parallel_SelectiveSuppression_SuppressesOnlyTheChosenFailures()
     {
         WriteSystemPrompt("Ofsted", "You analyse Ofsted inspection reports.");
-        _conversations.Fail("ofsted-agent", new TimeoutException("Model timed out."));
+        _responses.Fail("ofsted-agent", new TimeoutException("Model timed out."));
 
         // Suppress timeouts (wrapped by the runner), propagate anything else.
         using var provider = Build();
@@ -695,8 +694,8 @@ public sealed partial class AgentPlatformEndToEndTests : IDisposable
     {
         WriteSystemPrompt("Draft", "You draft school briefings.");
         WriteSystemPrompt("Review", "You review briefings for accuracy.");
-        _conversations.Reply("draft-agent", FoundryResponses.Completed("r1", "Draft: rated Good in 2024."));
-        _conversations.Reply("review-agent", FoundryResponses.Completed("r2", "Reviewed: rated Good in March 2024."));
+        _responses.Reply("draft-agent", FoundryResponses.Completed("r1", "Draft: rated Good in 2024."));
+        _responses.Reply("review-agent", FoundryResponses.Completed("r2", "Reviewed: rated Good in March 2024."));
         var context = new AgentContext();
 
         using var provider = Build();
@@ -708,8 +707,8 @@ public sealed partial class AgentPlatformEndToEndTests : IDisposable
         Assert.Equal(["draft-agent", "review-agent"], results.Select(r => r.AgentName));
         Assert.Equal(["draft-agent", "review-agent"], context.History.Select(entry => entry.AgentName));
         Assert.Equal("Reviewed: rated Good in March 2024.", results[^1].Output);
-        Assert.Contains("Brief on URN 100000.", Assert.Single(_conversations.CallsFor("draft-agent")).SerializedInput, StringComparison.Ordinal);
-        Assert.Contains("Draft: rated Good in 2024.", Assert.Single(_conversations.CallsFor("review-agent")).SerializedInput, StringComparison.Ordinal);
+        Assert.Contains("Brief on URN 100000.", Assert.Single(_responses.CallsFor("draft-agent")).SerializedInput, StringComparison.Ordinal);
+        Assert.Contains("Draft: rated Good in 2024.", Assert.Single(_responses.CallsFor("review-agent")).SerializedInput, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -718,9 +717,9 @@ public sealed partial class AgentPlatformEndToEndTests : IDisposable
         WriteSystemPrompt("Draft", "You draft school briefings.");
         WriteSystemPrompt("FactCheck", "You check facts on the web.");
         WriteSystemPrompt("Review", "You review briefings for accuracy.");
-        _conversations.Reply("draft-agent", FoundryResponses.Completed("r1", "Draft: rated Good in 2024.", totalTokens: 100));
-        _conversations.Fail("fact-check-agent", new InvalidOperationException("Rate limit exceeded."));
-        _conversations.Reply("review-agent", FoundryResponses.Completed("r3", "Reviewed.", totalTokens: 50));
+        _responses.Reply("draft-agent", FoundryResponses.Completed("r1", "Draft: rated Good in 2024.", totalTokens: 100));
+        _responses.Fail("fact-check-agent", new InvalidOperationException("Rate limit exceeded."));
+        _responses.Reply("review-agent", FoundryResponses.Completed("r3", "Reviewed.", totalTokens: 50));
 
         using var provider = Build();
         var results = await RunSequential(provider,
@@ -731,7 +730,7 @@ public sealed partial class AgentPlatformEndToEndTests : IDisposable
         Assert.Equal(["draft-agent", "fact-check-agent", "review-agent"], results.Select(r => r.AgentName));
         Assert.Equal(FallbackText, results[1].Output);
         Assert.Equal("Reviewed.", results[2].Output);
-        Assert.Contains("Draft: rated Good in 2024.", Assert.Single(_conversations.CallsFor("review-agent")).SerializedInput, StringComparison.Ordinal);
+        Assert.Contains("Draft: rated Good in 2024.", Assert.Single(_responses.CallsFor("review-agent")).SerializedInput, StringComparison.Ordinal);
         Assert.Equal(150, results.Sum(r => r.TotalTokens));
         Assert.DoesNotContain(_foundry.AgentNames, name => name.StartsWith("fact-check-agent", StringComparison.Ordinal));
     }
@@ -742,7 +741,7 @@ public sealed partial class AgentPlatformEndToEndTests : IDisposable
         WriteSystemPrompt("Draft", "You draft school briefings.");
         WriteSystemPrompt("Review", "You review briefings for accuracy.");
         var failure = new InvalidOperationException("Draft failed.");
-        _conversations.Fail("draft-agent", failure);
+        _responses.Fail("draft-agent", failure);
 
         using var provider = Build();
         var thrown = await Assert.ThrowsAsync<InvalidOperationException>(() => RunSequential(provider, _ => false,
@@ -750,7 +749,7 @@ public sealed partial class AgentPlatformEndToEndTests : IDisposable
 
         Assert.Contains("draft-agent", thrown.Message, StringComparison.Ordinal);
         Assert.Same(failure, thrown.InnerException);
-        Assert.Empty(_conversations.CallsFor("review-agent"));
+        Assert.Empty(_responses.CallsFor("review-agent"));
     }
 
     [Fact]
@@ -758,15 +757,15 @@ public sealed partial class AgentPlatformEndToEndTests : IDisposable
     {
         WriteSystemPrompt("Draft", "You draft school briefings.");
         WriteSystemPrompt("Review", "You review briefings for accuracy.");
-        _conversations.Hang("draft-agent");
-        _conversations.Reply("review-agent", FoundryResponses.Completed("r1", "Reviewed."));
+        _responses.Hang("draft-agent");
+        _responses.Reply("review-agent", FoundryResponses.Completed("r1", "Reviewed."));
         using var provider = Build(settings: new() { ["RunTimeout"] = "00:00:00.200" });
 
         var results = await RunSequential(provider, new AgentDefinition("draft-agent", "Draft"), new AgentDefinition("review-agent", "Review"));
 
         Assert.Equal(FallbackText, results[0].Output);
         Assert.Equal("Reviewed.", results[1].Output);
-        Assert.Contains("Brief on URN 100000.", Assert.Single(_conversations.CallsFor("review-agent")).SerializedInput, StringComparison.Ordinal);
+        Assert.Contains("Brief on URN 100000.", Assert.Single(_responses.CallsFor("review-agent")).SerializedInput, StringComparison.Ordinal);
         Assert.Contains(_logs.AtLevel(LogLevel.Error), log => log.Exception is TimeoutException);
     }
 
@@ -782,7 +781,7 @@ public sealed partial class AgentPlatformEndToEndTests : IDisposable
             RunParallel(provider, shouldSuppress: null, cancelled.Token, new AgentDefinition("ofsted-agent", "Ofsted")));
 
         Assert.Empty(_foundry.CreatedNames);
-        Assert.Empty(_conversations.Calls);
+        Assert.Empty(_responses.Calls);
     }
 
     // ===================== Central provisioning =====================
@@ -808,7 +807,7 @@ public sealed partial class AgentPlatformEndToEndTests : IDisposable
         Assert.Equal("1", Assert.Single(second).Version);
         Assert.Equal(["get_performance_data"], _foundry.Definition("ofsted-agent", "1").Tools.OfType<FunctionTool>().Select(t => t.FunctionName));
         Assert.Equal(["ofsted-agent"], _foundry.CreatedNames);   // ephemeral skipped, nothing run
-        Assert.Empty(_conversations.Calls);
+        Assert.Empty(_responses.Calls);
     }
 
     private ServiceProvider BuildConsumingApp(string[] allowedTools, bool bindTools = true)
@@ -833,7 +832,7 @@ public sealed partial class AgentPlatformEndToEndTests : IDisposable
     public async Task ACentralAgent_UsedByAppsWithDifferentTools_RunsItsOneVersion_AndNoAppCreatesAnother()
     {
         _foundry.Seed("ofsted-agent", DefaultModel, "Provisioned centrally.", PerformanceTool());
-        _conversations.Reply("ofsted-agent", FoundryResponses.Completed("r1", "Good."), FoundryResponses.Completed("r2", "Good."));
+        _responses.Reply("ofsted-agent", FoundryResponses.Completed("r1", "Good."), FoundryResponses.Completed("r2", "Good."));
         var central = new Dictionary<string, string> { ["ExternallyManagedAgents:ofsted-agent"] = "1" };
 
         // Two apps share the central agent; the second has an extra tool of its own.
@@ -897,7 +896,7 @@ public sealed partial class AgentPlatformEndToEndTests : IDisposable
     public async Task Evidence_WithInjectedInstructions_AndAForgedEndMarker_StaysInsideTheReferenceFence()
     {
         WriteSystemPrompt("Ofsted", "You analyse Ofsted inspection reports.");
-        _conversations.Reply("ofsted-agent", FoundryResponses.Completed("r1", "Rated Good."));
+        _responses.Reply("ofsted-agent", FoundryResponses.Completed("r1", "Rated Good."));
         using var provider = Build();
         var agent = await provider.GetRequiredService<IAgentFactory>().GetOrCreateAsync(
             new AgentSpec { Name = "ofsted-agent", Instructions = "You analyse Ofsted inspection reports." }, cancellationToken);
@@ -908,7 +907,7 @@ public sealed partial class AgentPlatformEndToEndTests : IDisposable
         await provider.GetRequiredService<IAgentRunnerService>().RunAsync(agent, "Summarise the evidence.",
             additionalContext: poisoned, cancellationToken: cancellationToken);
 
-        var input = Assert.Single(_conversations.CallsFor("ofsted-agent")).SerializedInput;
+        var input = Assert.Single(_responses.CallsFor("ofsted-agent")).SerializedInput;
         var fence = FenceStart().Match(input);
         Assert.True(fence.Success, "The fence should carry a random marker.");
         var nonce = fence.Groups[1].Value;
@@ -926,7 +925,7 @@ public sealed partial class AgentPlatformEndToEndTests : IDisposable
     public async Task Evidence_IsFencedWithADifferentMarkerOnEveryRequest()
     {
         WriteSystemPrompt("Ofsted", "You analyse Ofsted inspection reports.");
-        _conversations.Reply("ofsted-agent", FoundryResponses.Completed("r1", "Rated Good."));
+        _responses.Reply("ofsted-agent", FoundryResponses.Completed("r1", "Rated Good."));
         using var provider = Build();
         var agent = await provider.GetRequiredService<IAgentFactory>().GetOrCreateAsync(
             new AgentSpec { Name = "ofsted-agent", Instructions = "You analyse Ofsted inspection reports." }, cancellationToken);
@@ -935,62 +934,21 @@ public sealed partial class AgentPlatformEndToEndTests : IDisposable
         await runner.RunAsync(agent, "Q1", additionalContext: "Evidence.", cancellationToken: cancellationToken);
         await runner.RunAsync(agent, "Q2", additionalContext: "Evidence.", cancellationToken: cancellationToken);
 
-        var markers = _conversations.CallsFor("ofsted-agent")
+        var markers = _responses.CallsFor("ofsted-agent")
             .Select(call => FenceMarker().Match(call.SerializedInput).Groups[1].Value)
             .ToList();
         Assert.Equal(2, markers.Distinct().Count());
     }
 
-    // ===================== Retention, limits and clean-up =====================
-
-    [Fact]
-    public async Task Conversations_CreatedForRuns_AreDeletedAfterwards_EvenWhenTheRunFails()
-    {
-        WriteSystemPrompt("Ofsted", "You analyse Ofsted inspection reports.");
-        WriteSystemPrompt("Trust", "You analyse academy trusts.");
-        _conversations.Reply("ofsted-agent", FoundryResponses.Completed("r1", "Good."));
-        _conversations.Fail("trust-agent", new InvalidOperationException("Model error."));
-
-        using var provider = Build();
-        await RunParallel(provider, new AgentDefinition("ofsted-agent", "Ofsted"), new AgentDefinition("trust-agent", "Trust"));
-
-        Assert.Equal(2, _conversations.ConversationsCreated);
-        Assert.Empty(_conversations.OpenConversations);
-    }
-
-    [Fact]
-    public async Task Conversations_AreRetained_WhenDeletionIsTurnedOff()
-    {
-        WriteSystemPrompt("Ofsted", "You analyse Ofsted inspection reports.");
-        _conversations.Reply("ofsted-agent", FoundryResponses.Completed("r1", "Good."));
-        using var provider = Build(settings: new() { ["DeleteConversationsAfterRun"] = "false" });
-
-        await RunParallel(provider, new AgentDefinition("ofsted-agent", "Ofsted"));
-
-        Assert.Single(_conversations.OpenConversations);
-    }
-
-    [Fact]
-    public async Task Conversations_WhenDeletionFails_TheResultIsKept_AndAWarningLogged()
-    {
-        WriteSystemPrompt("Ofsted", "You analyse Ofsted inspection reports.");
-        _conversations.Reply("ofsted-agent", FoundryResponses.Completed("r1", "Good."));
-        _conversations.FailDeletes = true;
-
-        using var provider = Build();
-        var result = Assert.Single(await RunParallel(provider, new AgentDefinition("ofsted-agent", "Ofsted")));
-
-        Assert.Equal("Good.", result.Output);
-        Assert.Contains(_logs.AtLevel(LogLevel.Warning), log => log.Message.Contains("retained in Foundry", StringComparison.Ordinal));
-    }
+    // ===================== Limits =====================
 
     [Fact]
     public async Task Parallel_RunTimeout_FailsOnlyTheSlowAgent_WithTheFallback()
     {
         WriteSystemPrompt("Ofsted", "You analyse Ofsted inspection reports.");
         WriteSystemPrompt("Trust", "You analyse academy trusts.");
-        _conversations.Hang("ofsted-agent");
-        _conversations.Reply("trust-agent", FoundryResponses.Completed("r1", "Trust findings."));
+        _responses.Hang("ofsted-agent");
+        _responses.Reply("trust-agent", FoundryResponses.Completed("r1", "Trust findings."));
 
         using var provider = Build(settings: new() { ["RunTimeout"] = "00:00:00.200" });
         var results = await RunParallel(provider, new AgentDefinition("ofsted-agent", "Ofsted"), new AgentDefinition("trust-agent", "Trust"));
@@ -998,14 +956,13 @@ public sealed partial class AgentPlatformEndToEndTests : IDisposable
         Assert.Equal(FallbackText, results.Single(r => r.AgentName == "ofsted-agent").Output);
         Assert.Equal("Trust findings.", results.Single(r => r.AgentName == "trust-agent").Output);
         Assert.Contains(_logs.AtLevel(LogLevel.Error), log => log.Exception is TimeoutException);
-        Assert.Empty(_conversations.OpenConversations);
     }
 
     [Fact]
     public async Task Results_ReportInputAndOutputTokensSeparately()
     {
         WriteSystemPrompt("Ofsted", "You analyse Ofsted inspection reports.");
-        _conversations.Reply("ofsted-agent", FoundryResponses.Completed("r1", "Good.", totalTokens: 250));
+        _responses.Reply("ofsted-agent", FoundryResponses.Completed("r1", "Good.", totalTokens: 250));
 
         using var provider = Build();
         var agent = await provider.GetRequiredService<IAgentFactory>().GetOrCreateAsync(

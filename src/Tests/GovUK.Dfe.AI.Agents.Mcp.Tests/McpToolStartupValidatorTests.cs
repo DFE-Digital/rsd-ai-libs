@@ -2,6 +2,7 @@ using GovUK.Dfe.AI.Agents.Mcp.Clients.Interfaces;
 using GovUK.Dfe.AI.Agents.Mcp.Exceptions;
 using GovUK.Dfe.AI.Agents.Mcp.Options;
 using GovUK.Dfe.AI.Agents.Mcp.Validators;
+using GovUK.Dfe.AI.Agents.Tools;
 using Microsoft.Extensions.Logging;
 using NSubstitute.ExceptionExtensions;
 using NSubstitute;
@@ -46,7 +47,7 @@ public sealed class McpToolStartupValidatorTests
     [Fact]
     public async Task StartAsync_Passes_WhenTheServerHasEveryAllowedTool()
     {
-        _client.GetToolsAsync(cancellationToken).Returns([FunctionTool.CreateFunctionTool("get_performance_data", BinaryData.FromString("{}"), false)]);
+        _client.GetToolsAsync(cancellationToken).Returns([AgentTool.Function("get_performance_data", null, BinaryData.FromString("{}"))]);
         var sut = CreateSut();
 
         await sut.StartAsync(cancellationToken);

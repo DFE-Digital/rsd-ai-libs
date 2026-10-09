@@ -59,7 +59,7 @@ public sealed class ToolsTests
     public async Task WebSearch_ForACity_BiasesTheToolTowardsIt()
     {
         var tool = Assert.IsType<WebSearchTool>(Assert.Single(
-            await new WebSearchToolProvider(WebSearchLocation.ForCity("Leeds")).GetToolsAsync(cancellationToken)));
+            await new WebSearchToolProvider(WebSearchLocation.ForCity("Leeds")).GetToolsAsync(cancellationToken)).Tool);
 
         var sent = System.ClientModel.Primitives.ModelReaderWriter.Write(tool).ToString();   // what Foundry receives
         Assert.Contains("\"city\":\"Leeds\"", sent, StringComparison.Ordinal);
@@ -73,7 +73,7 @@ public sealed class ToolsTests
     {
         var sut = country is null ? new WebSearchToolProvider() : new WebSearchToolProvider(new WebSearchLocation(Country: country));
 
-        var tool = Assert.IsType<WebSearchTool>(Assert.Single(await sut.GetToolsAsync(cancellationToken)));
+        var tool = Assert.IsType<WebSearchTool>(Assert.Single(await sut.GetToolsAsync(cancellationToken)).Tool);
 
         Assert.NotNull(tool.UserLocation);
     }

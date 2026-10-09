@@ -9,7 +9,7 @@ namespace GovUK.Dfe.AI.Agents.Evaluation.Quality;
 /// <remarks>Sends only the model and messages, so reasoning models (e.g. gpt-5.1) work.</remarks>
 /// <param name="client">This app's Foundry project client.</param>
 /// <param name="model">The judge model, e.g. "myconnection/gpt-5.1".</param>
-public sealed class FoundryJudgeChatClient(ProjectOpenAIClient client, string model) : IChatClient
+internal sealed class FoundryJudgeChatClient(ProjectOpenAIClient client, string model) : IChatClient
 {
     public async Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
     {

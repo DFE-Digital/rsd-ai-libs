@@ -52,7 +52,7 @@ public sealed class AgentServiceTests
     // ===================== Run observers =====================
 
     private void Answers(string output)
-        => _agentRunner.RunAsync(Arg.Any<AgentReference>(), Arg.Any<string>(), conversationId: Arg.Any<string?>(), additionalContext: Arg.Any<string?>(),
+        => _agentRunner.RunAsync(Arg.Any<AgentReference>(), Arg.Any<string>(), additionalContext: Arg.Any<string?>(),
             resolveToolCalls: AnyResolver(), cancellationToken: Arg.Any<CancellationToken>())
             .Returns(new AgentResult { AgentName = Managed.Name, Output = output, TotalTokens = 10, AgentVersion = "4", Model = "gpt-5.1" });
 
@@ -78,7 +78,7 @@ public sealed class AgentServiceTests
     [Fact]
     public async Task AFailedRun_IsNotObserved()
     {
-        _agentRunner.RunAsync(Arg.Any<AgentReference>(), Arg.Any<string>(), conversationId: Arg.Any<string?>(), additionalContext: Arg.Any<string?>(),
+        _agentRunner.RunAsync(Arg.Any<AgentReference>(), Arg.Any<string>(), additionalContext: Arg.Any<string?>(),
             resolveToolCalls: AnyResolver(), cancellationToken: Arg.Any<CancellationToken>()).ThrowsAsync(new InvalidOperationException("boom"));
         var observer = Substitute.For<IAgentRunObserver>();
         _ = CreateSut();
@@ -93,7 +93,7 @@ public sealed class AgentServiceTests
     [Fact]
     public async Task RunAsync_Throws_RatherThanReturningAFallback()
     {
-        _agentRunner.RunAsync(Arg.Any<AgentReference>(), Arg.Any<string>(), conversationId: Arg.Any<string?>(), additionalContext: Arg.Any<string?>(),
+        _agentRunner.RunAsync(Arg.Any<AgentReference>(), Arg.Any<string>(), additionalContext: Arg.Any<string?>(),
             resolveToolCalls: AnyResolver(), cancellationToken: Arg.Any<CancellationToken>()).ThrowsAsync(new InvalidOperationException("boom"));
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => CreateSut().RunAsync(Managed, "Summarise.", cancellationToken: cancellationToken));
@@ -110,9 +110,9 @@ public sealed class AgentServiceTests
         managedTwoProvider.AgentName.Returns(ManagedTwo.Name);
         managedTwoProvider.CreatesAgent.Returns(false);
         managedTwoProvider.GetAgentAsync(Arg.Any<CancellationToken>()).Returns(new AgentReference($"{ManagedTwo.Name}-id", ManagedTwo.Name));
-        _agentRunner.RunAsync(Arg.Is<AgentReference>(a => a.Name == Managed.Name), "prompt-for-managed-agent", conversationId: Arg.Any<string?>(), additionalContext: Arg.Is<string?>("initial"),
+        _agentRunner.RunAsync(Arg.Is<AgentReference>(a => a.Name == Managed.Name), "prompt-for-managed-agent", additionalContext: Arg.Is<string?>("initial"),
             resolveToolCalls: AnyResolver(), cancellationToken: Arg.Any<CancellationToken>()).Returns(new AgentResult { AgentName = Managed.Name, Output = "first output", TotalTokens = 10 });
-        _agentRunner.RunAsync(Arg.Is<AgentReference>(a => a.Name == ManagedTwo.Name), "prompt-for-managed-agent-two", conversationId: Arg.Any<string?>(), additionalContext: Arg.Is<string?>("first output"),
+        _agentRunner.RunAsync(Arg.Is<AgentReference>(a => a.Name == ManagedTwo.Name), "prompt-for-managed-agent-two", additionalContext: Arg.Is<string?>("first output"),
             resolveToolCalls: AnyResolver(), cancellationToken: Arg.Any<CancellationToken>()).Returns(new AgentResult { AgentName = ManagedTwo.Name, Output = "second output", TotalTokens = 10 });
 
         var context = new AgentContext();
@@ -128,7 +128,7 @@ public sealed class AgentServiceTests
     [Fact]
     public async Task RunParallelAsync_AttachesTheBoundToolProvidersTools_ToAnEphemeralAgentsSpec()
     {
-        var tool = ResponseTool.CreateWebSearchTool();
+        var tool = AgentTool.FromResponseTool(ResponseTool.CreateWebSearchTool());
         var toolProvider = Substitute.For<IAgentToolProvider>();
         toolProvider.GetToolsAsync(Arg.Any<CancellationToken>()).Returns([tool]);
         AgentSpec? capturedSpec = null;
@@ -144,8 +144,8 @@ public sealed class AgentServiceTests
     [Fact]
     public async Task RunParallelAsync_AppliesTheDefinitionsAllowedToolsAndSchema_ToACustomProvidersSpec()
     {
-        var allowed = ResponseTool.CreateFunctionTool("get_performance_data", BinaryData.FromString("""{"type":"object"}"""), false);
-        var notAllowed = ResponseTool.CreateFunctionTool("update_school_record", BinaryData.FromString("""{"type":"object"}"""), false);
+        var allowed = AgentTool.Function("get_performance_data", null, BinaryData.FromString("""{"type":"object"}"""));
+        var notAllowed = AgentTool.Function("update_school_record", null, BinaryData.FromString("""{"type":"object"}"""));
         var custom = Substitute.For<IManagedAgentProvider>();
         custom.AgentName.Returns("custom-agent");
         custom.CreatesAgent.Returns(true);
@@ -163,14 +163,14 @@ public sealed class AgentServiceTests
                 built = await callInfo.Arg<Func<CancellationToken, Task<AgentSpec>>>()(cancellationToken);
                 return new AgentReference("id", "custom-agent", "1");
             });
-        _agentRunner.RunAsync(Arg.Any<AgentReference>(), Arg.Any<string>(), conversationId: Arg.Any<string?>(), additionalContext: Arg.Any<string?>(),
+        _agentRunner.RunAsync(Arg.Any<AgentReference>(), Arg.Any<string>(), additionalContext: Arg.Any<string?>(),
             resolveToolCalls: AnyResolver(), cancellationToken: Arg.Any<CancellationToken>()).Returns(new AgentResult { AgentName = "custom-agent", Output = "{}", TotalTokens = 1 });
 
         var sut = new AgentService(_agentRunner, _agentRuntime, new AgentSpecBuilder(_promptProvider, customProviders: [custom]));
         await sut.RunParallelAsync([definition], ResolvePrompt, new AgentContext(), cancellationToken: cancellationToken);
 
         Assert.Equal("my-connection/gpt-4.1", built!.Model);
-        Assert.Equal(["get_performance_data"], built.Tools.OfType<FunctionTool>().Select(tool => tool.FunctionName));
+        Assert.Equal(["get_performance_data"], built.Tools.Select(tool => tool.FunctionName));
         Assert.Same(schema, built.OutputSchema);
     }
 

@@ -23,10 +23,10 @@ public sealed class AgentOrchestratorTests
         var researcher = new AgentReference("researcher-id", "researcher");
         var writer = new AgentReference("writer-id", "writer");
 
-        _agentRunner.RunAsync(researcher, Arg.Any<string>(), Arg.Any<string?>(), Arg.Any<string?>(),
+        _agentRunner.RunAsync(researcher, Arg.Any<string>(), Arg.Any<string?>(),
                 Arg.Any<ToolCallResolver?>(), Arg.Any<Func<AgentResult, string?>?>(), Arg.Any<CancellationToken>())
             .Returns(new AgentResult { AgentName = "researcher", Output = "research notes", TotalTokens = 10 });
-        _agentRunner.RunAsync(writer, "Explain MCP.", Arg.Any<string?>(), Arg.Is<string?>(evidence => evidence != null && evidence.Contains("research notes")),
+        _agentRunner.RunAsync(writer, "Explain MCP.", Arg.Is<string?>(evidence => evidence != null && evidence.Contains("research notes")),
                 Arg.Any<ToolCallResolver?>(), Arg.Any<Func<AgentResult, string?>?>(), Arg.Any<CancellationToken>())
             .Returns(new AgentResult { AgentName = "writer", Output = "final draft", TotalTokens = 20 });
 
@@ -203,7 +203,7 @@ public sealed class AgentOrchestratorTests
         var agent = new AgentReference("tool-agent-id", "tool-agent");
         ToolCallResolver resolver =
             (_, _) => Task.FromResult<IEnumerable<ToolCallOutput>>([]);
-        _agentRunner.RunAsync(agent, "prompt", Arg.Any<string?>(), Arg.Is<string?>("evidence"), resolver, Arg.Any<Func<AgentResult, string?>?>(), Arg.Any<CancellationToken>())
+        _agentRunner.RunAsync(agent, "prompt", Arg.Is<string?>("evidence"), resolver, Arg.Any<Func<AgentResult, string?>?>(), Arg.Any<CancellationToken>())
             .Returns(new AgentResult { AgentName = "tool-agent", Output = "done", TotalTokens = 1 });
 
         var step = new AgentOrchestrationStep("tool-agent", _ => Task.FromResult(agent), _ => Task.FromResult("prompt"))
@@ -223,7 +223,7 @@ public sealed class AgentOrchestratorTests
         var agent = new AgentReference("tool-agent-id", "tool-agent");
         ToolCallResolver resolver =
             (_, _) => Task.FromResult<IEnumerable<ToolCallOutput>>([]);
-        _agentRunner.RunAsync(agent, "task", Arg.Any<string?>(), Arg.Any<string?>(), resolver, Arg.Any<Func<AgentResult, string?>?>(), Arg.Any<CancellationToken>())
+        _agentRunner.RunAsync(agent, "task", Arg.Any<string?>(), resolver, Arg.Any<Func<AgentResult, string?>?>(), Arg.Any<CancellationToken>())
             .Returns(new AgentResult { AgentName = "tool-agent", Output = "done", TotalTokens = 1 });
 
         var result = await CreateSut().RunSequentialAsync([agent], "task", new AgentContext(),

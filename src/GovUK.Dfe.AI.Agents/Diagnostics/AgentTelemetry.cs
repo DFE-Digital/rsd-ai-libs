@@ -30,7 +30,6 @@ public static class AgentTelemetry
     internal const string AgentNameTag = "gen_ai.agent.name";
     internal const string AgentIdTag = "gen_ai.agent.id";
     internal const string AgentVersionTag = "gen_ai.agent.version";
-    internal const string ConversationIdTag = "gen_ai.conversation.id";
     internal const string ResponseModelTag = "gen_ai.response.model";
     internal const string TokenModalityTag = "gen_ai.token.modality";
     internal const string InputTokensTag = "gen_ai.usage.input_tokens";
@@ -153,6 +152,45 @@ public static class AgentTelemetry
             new KeyValuePair<string, object?>(AgentNameTag, agentName is null ? null : AgentNameForTelemetry(agentName)),
             new KeyValuePair<string, object?>(ToolNameTag, toolName),
             new KeyValuePair<string, object?>(ToolApprovedTag, approved));
+
+    internal const string ChatOperation = "chat";
+
+    internal static readonly Histogram<double> OperationDuration = Meter.CreateHistogram<double>("gen_ai.client.operation.duration", "s",
+        "Seconds per call to the model, tool rounds and retries counted separately.");
+
+    internal static readonly Histogram<double> TimeToFirstToken = Meter.CreateHistogram<double>("dfe.ai_agents.time_to_first_token", "s",
+        "Seconds from the start of a streamed run until the first text is passed on.");
+
+    /// <summary>One call to Foundry: how long it took, by agent and model, with the error type if it failed.</summary>
+    internal static void RecordOperation(string applicationName, string agentName, string? model, double seconds, string? errorType)
+    {
+        var tags = new TagList
+        {
+            { OperationNameTag, ChatOperation },
+            { ProviderNameTag, ProviderName },
+            { AgentNameTag, AgentNameForTelemetry(agentName) },
+            { ApplicationTag, applicationName },
+        };
+        if (model is not null)
+        {
+            tags.Add(ResponseModelTag, model);
+        }
+
+        if (errorType is not null)
+        {
+            tags.Add(ErrorTypeTag, errorType);
+        }
+
+        OperationDuration.Record(seconds, tags);
+    }
+
+    /// <summary>How long a streamed run took to show its first text.</summary>
+    internal static void RecordTimeToFirstToken(string applicationName, string agentName, double seconds)
+        => TimeToFirstToken.Record(seconds, new TagList
+        {
+            { AgentNameTag, AgentNameForTelemetry(agentName) },
+            { ApplicationTag, applicationName },
+        });
 
     internal static void RecordGuardrailBlock(string applicationName, string agentName, string stage)
         => GuardrailBlocks.Add(1,

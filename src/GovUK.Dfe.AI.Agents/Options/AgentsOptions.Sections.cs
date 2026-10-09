@@ -108,7 +108,8 @@ public sealed partial class AgentsOptions
 
     /// <summary>
     /// The <c>Pricing</c> section: what each model costs, so runs report their cost. Keyed by model name, as shown in a
-    /// result's <c>Model</c>; a key matches any model that starts with it, so "gpt-5.1" covers "gpt-5.1-2025-11-13".
+    /// result's <c>Model</c>; a key matches any model that starts with it, so "gpt-5.1" covers "gpt-5.1-2025-11-13", and
+    /// a connection prefix is ignored, so it also covers "my-connection/gpt-5.1".
     /// </summary>
     public sealed class PricingSettings
     {
@@ -129,7 +130,9 @@ public sealed partial class AgentsOptions
                 return null;
             }
 
-            var price = Models.Where(entry => model.StartsWith(entry.Key, StringComparison.OrdinalIgnoreCase))
+            var modelOnly = model[(model.LastIndexOf('/') + 1)..];
+            var price = Models.Where(entry => model.StartsWith(entry.Key, StringComparison.OrdinalIgnoreCase)
+                                              || modelOnly.StartsWith(entry.Key, StringComparison.OrdinalIgnoreCase))
                 .OrderByDescending(static entry => entry.Key.Length).Select(static entry => entry.Value).FirstOrDefault();
             if (price is null)
             {

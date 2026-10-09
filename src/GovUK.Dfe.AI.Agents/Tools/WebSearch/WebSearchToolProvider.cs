@@ -1,6 +1,5 @@
 using GovUK.Dfe.AI.Agents.Tools.Interfaces;
 using GovUK.Dfe.AI.Agents.ValueObjects;
-using OpenAI.Responses;
 
 namespace GovUK.Dfe.AI.Agents.Tools.WebSearch;
 
@@ -12,11 +11,6 @@ public sealed class WebSearchToolProvider(WebSearchLocation? location = null) : 
 {
     private readonly WebSearchLocation _location = location ?? WebSearchLocation.UnitedKingdom;
 
-    public Task<IReadOnlyList<ResponseTool>> GetToolsAsync(CancellationToken cancellationToken = default)
-    {
-        var tool = ResponseTool.CreateWebSearchTool(userLocation: WebSearchToolLocation.CreateApproximateLocation(
-            country: _location.Country, region: _location.Region, city: _location.City));
-
-        return Task.FromResult<IReadOnlyList<ResponseTool>>([tool]);
-    }
+    public Task<IReadOnlyList<AgentTool>> GetToolsAsync(CancellationToken cancellationToken = default)
+        => Task.FromResult<IReadOnlyList<AgentTool>>([AgentTool.WebSearch(_location)]);
 }

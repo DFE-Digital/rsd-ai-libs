@@ -127,6 +127,17 @@ public sealed class AISearchTests
         Assert.Single(services, service => service.ServiceType == typeof(IContextRetriever));
     }
 
+    [Fact]
+    public void Evidence_IsCappedJustUnderCoresLimitByDefault_SoARunNeverCutsAResultMidWay()
+    {
+        using var provider = Build(Settings());
+
+        var options = provider.GetRequiredService<IOptions<AzureSearchContextRetrieverOptions>>().Value;
+
+        Assert.Equal(190_000, options.MaxEvidenceCharacters);
+        Assert.True(options.MaxEvidenceCharacters < new GovUK.Dfe.AI.Agents.Options.AgentsOptions().MaxEvidenceCharacters);
+    }
+
     [Theory]
     [InlineData("0")]
     [InlineData("-5")]

@@ -58,9 +58,9 @@ var result = await agents.RunAsync(BriefingAgents.Ofsted, "Summarise the latest 
 - **Set `ContentFields`** on each index. Otherwise every string field, including ids and URLs, is sent to the model.
 - **Weak matches are dropped:** results scoring below half the top score are removed. Change this with
   `AISearch:MinimumRelevanceFilter` (default `0.5`).
-- **Large results:** every relevant result is returned by default. To cap the evidence, set
-  `AISearch:MaxEvidenceCharacters`: whole results are kept, most relevant first, and the rest are left out with a note, so
-  no result is cut mid-way and citations still match. To fetch less from the search service, lower `size`.
+- **Large results:** evidence is capped at `AISearch:MaxEvidenceCharacters` (default 190,000, just under core's
+  200,000). Whole results are kept, most relevant first, and the rest are left out with a note, so no result is cut
+  mid-way and citations still match. Raise both limits together for a larger model. To fetch less, lower `size`.
 
 ## Better matches: semantic and hybrid search
 

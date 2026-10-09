@@ -1,5 +1,5 @@
 using GovUK.Dfe.AI.Agents.Factories;
-using OpenAI.Responses;
+using GovUK.Dfe.AI.Agents.Tools;
 
 namespace GovUK.Dfe.AI.Agents.ValueObjects;
 
@@ -19,7 +19,7 @@ public sealed record AgentSpec
     public string? Description { get; init; }
 
     /// <summary>Its tools.</summary>
-    public IReadOnlyList<ResponseTool> Tools { get; init; } = [];
+    public IReadOnlyList<AgentTool> Tools { get; init; } = [];
 
     /// <summary>A JSON schema the agent's answer must follow, or <see langword="null"/> for free text.</summary>
     public AgentOutputSchema? OutputSchema { get; init; }

@@ -159,7 +159,7 @@ public static class AgentsServiceCollectionExtensions
         {
             var client = new AIProjectClient(new Uri(external.Endpoint!), credential,
                 FoundryClientOptions(options, sp.GetRequiredService<AgentRunOptions>().ApplicationName));
-            return new ExternalFoundryProjectService(credential, client.AgentAdministrationClient, new FoundryConversationClient(client.ProjectOpenAIClient),
+            return new ExternalFoundryProjectService(credential, client.AgentAdministrationClient, new FoundryResponsesClient(client.ProjectOpenAIClient),
                 new FoundryAgentFactoryOptions(options.Foundry.DefaultModel!) { AgentCacheDuration = options.AgentCacheDuration },
                 sp.GetRequiredService<AgentRunOptions>(), sp.GetRequiredService<IAgentRunLimiter>(), sp.GetRequiredService<ILoggerFactory>());
         });
@@ -190,7 +190,7 @@ public static class AgentsServiceCollectionExtensions
         services.AddSingleton(sp => sp.GetRequiredService<AIProjectClient>().AgentAdministrationClient);
         services.AddSingleton(sp => sp.GetRequiredService<AIProjectClient>().ProjectOpenAIClient);
         services.AddSingleton<IAgentFactory, FoundryAgentFactory>();
-        services.AddSingleton<IFoundryConversationClient, FoundryConversationClient>();
+        services.AddSingleton<IFoundryResponsesClient, FoundryResponsesClient>();
         services.AddSingleton<IAgentRunLimiter>(sp => new AgentRunLimiter(sp.GetRequiredService<AgentRunOptions>(), sp.GetService<IRunSlotStore>()));
         services.AddSingleton<IAgentRunnerService, FoundryAgentRunnerService>();
         services.AddSingleton<IAgentOrchestrator, AgentOrchestrator>();

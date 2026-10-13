@@ -34,29 +34,31 @@ builder.Services.AddAgents(builder.Configuration, agents => agents
 
 ## Apply once, check everywhere
 
-| Where | What to do | Role on the Foundry resource |
-| --- | --- | --- |
+| Where              | What to do                                                                                                                                    | Role on the Foundry resource   |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ |
 | A provisioning job | Call `await guardrails.ApplyAsync(ct)` (`IFoundryGuardrailsService`). This creates or updates the guardrail and assigns it to each deployment | Cognitive Services Contributor |
-| Every app | Nothing. At startup, the app checks each deployment has the guardrail and that it hasn't been weakened | Reader |
+| Every app          | Nothing. At startup, the app checks each deployment has the guardrail and that it hasn't been weakened                                        | Reader                         |
 
-If a guardrail is missing or weakened, startup fails and says what's wrong. Set `"RequireAtStartup": false` to log a
-warning instead. If Azure Resource Manager can't be reached, startup only logs a warning.
+- **Infrastructure as code instead:** create the guardrail in Bicep or Terraform and skip `ApplyAsync`; apps still check
+  it at startup, with only Reader.
+- If a guardrail is missing or weakened, startup fails and says what's wrong (`"RequireAtStartup": false` logs a warning
+  instead). If Azure Resource Manager can't be reached, startup only logs a warning.
 
 ## Settings
 
-| Setting | Default | Purpose |
-| --- | --- | --- |
-| `SubscriptionId`, `ResourceGroup` | Required | Where the Foundry resource is |
-| `AccountName` | The resource in `Foundry:Endpoint` | Set only if the deployments are on another Foundry resource |
-| `Name` | Required | The guardrail's name in Foundry |
-| `Deployments` | Required | Every model deployment your agents use |
-| `BlockFrom` | `Medium` | Lowest harm severity blocked in prompts and answers. `Low` blocks the most |
-| `PromptShields` | `true` | Blocks jailbreak attempts |
-| `IndirectAttacks` | `true` | Blocks instructions hidden in documents and tool output |
-| `ProtectedMaterial` | `true` | Blocks answers that reproduce protected text or code |
-| `Blocklists` | None | Your own blocked terms and patterns (see below) |
-| `RequireAtStartup` | `true` | Fails startup when a deployment lacks the guardrail |
-| `Authentication` | The default identity | A separate identity for Resource Manager (or `agents.UseGuardrailsCredential(...)` in code) |
+| Setting                           | Default                            | Purpose                                                                                     |
+| --------------------------------- | ---------------------------------- | ------------------------------------------------------------------------------------------- |
+| `SubscriptionId`, `ResourceGroup` | Required                           | Where the Foundry resource is                                                               |
+| `AccountName`                     | The resource in `Foundry:Endpoint` | Set only if the deployments are on another Foundry resource                                 |
+| `Name`                            | Required                           | The guardrail's name in Foundry                                                             |
+| `Deployments`                     | Required                           | Every model deployment your agents use                                                      |
+| `BlockFrom`                       | `Medium`                           | Lowest harm severity blocked in prompts and answers. `Low` blocks the most                  |
+| `PromptShields`                   | `true`                             | Blocks jailbreak attempts                                                                   |
+| `IndirectAttacks`                 | `true`                             | Blocks instructions hidden in documents and tool output                                     |
+| `ProtectedMaterial`               | `true`                             | Blocks answers that reproduce protected text or code                                        |
+| `Blocklists`                      | None                               | Your own blocked terms and patterns (see below)                                             |
+| `RequireAtStartup`                | `true`                             | Fails startup when a deployment lacks the guardrail                                         |
+| `Authentication`                  | The default identity               | A separate identity for Resource Manager (or `agents.UseGuardrailsCredential(...)` in code) |
 
 ## Blocklists
 

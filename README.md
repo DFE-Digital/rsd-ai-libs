@@ -1,20 +1,19 @@
 # DfE AI Agents Libraries
 
-.NET libraries for running Azure AI Foundry agents in DfE services, with answer checks, cost and concurrency limits and
-token telemetry. Optional add-ons provide MCP tools, Azure AI Search evidence, answer scoring and guardrails.
+.NET libraries for running Azure AI Foundry agents in DfE services: agents defined in code, checked answers with
+citations, cost and concurrency limits, and token and cost telemetry. Nothing is stored in Foundry.
 
 ## Packages
 
-| Package                          | What it does                                 | Docs                                                   |
-| -------------------------------- | -------------------------------------------- | ------------------------------------------------------ |
-| `GovUK.Dfe.AI.Agents`            | Core: define, version and run agents         | [readme](src/GovUK.Dfe.AI.Agents/readme.md)            |
-| `GovUK.Dfe.AI.Agents.Mcp`        | Tools from your own MCP servers              | [readme](src/GovUK.Dfe.AI.Agents.Mcp/readme.md)        |
-| `GovUK.Dfe.AI.Agents.AISearch`   | Evidence from Azure AI Search                | [readme](src/GovUK.Dfe.AI.Agents.AISearch/readme.md)   |
-| `GovUK.Dfe.AI.Agents.Evaluation` | A judge model that scores answers            | [readme](src/GovUK.Dfe.AI.Agents.Evaluation/readme.md) |
-| `GovUK.Dfe.AI.Agents.Guardrails` | Foundry guardrails on your model deployments | [readme](src/GovUK.Dfe.AI.Agents.Guardrails/readme.md) |
+| Package                          | What it does                                  | Docs                                                   |
+| -------------------------------- | --------------------------------------------- | ------------------------------------------------------ |
+| `GovUK.Dfe.AI.Agents`            | Core: define, version and run agents          | [readme](src/GovUK.Dfe.AI.Agents/readme.md)            |
+| `GovUK.Dfe.AI.Agents.Mcp`        | Tools from your own MCP servers               | [readme](src/GovUK.Dfe.AI.Agents.Mcp/readme.md)        |
+| `GovUK.Dfe.AI.Agents.AISearch`   | Evidence from Azure AI Search, with citations | [readme](src/GovUK.Dfe.AI.Agents.AISearch/readme.md)   |
+| `GovUK.Dfe.AI.Agents.Evaluation` | A judge model that scores answers             | [readme](src/GovUK.Dfe.AI.Agents.Evaluation/readme.md) |
+| `GovUK.Dfe.AI.Agents.Guardrails` | Foundry guardrails on your model deployments  | [readme](src/GovUK.Dfe.AI.Agents.Guardrails/readme.md) |
 
-Install core plus only the add-ons you need. Each package is versioned and released on its own, so you can upgrade core
-or any add-on separately.
+Install core plus only the add-ons you need. Each package is released on its own, so you can upgrade any one separately.
 
 ## Quick start
 
@@ -28,11 +27,13 @@ builder.Services.AddAgents(builder.Configuration, agents => agents
     .AddMcpServers()     // optional add-ons
     .AddAISearch());
 
-// In any service, inject IAgentService:
+// In any service, inject IAgentService (and IContextRetriever for search):
+var evidence = await search.GetContextAsync("ofsted_index", $"URN {urn}", filter: $"urn eq {urn}", cancellationToken: ct);
 var result = await agents.RunAsync(BriefingAgents.Ofsted, "Summarise the latest inspection.", evidence, ct);
 ```
 
-See the [core readme](src/GovUK.Dfe.AI.Agents/readme.md) for configuration, defining agents and running them.
+Start with the [core readme](src/GovUK.Dfe.AI.Agents/readme.md): configuration, defining agents, running them, and the
+Azure roles each identity needs.
 
 ## UK Government AI Playbook
 
@@ -40,16 +41,16 @@ The libraries help services meet the
 [AI Playbook for the UK Government](https://www.gov.uk/government/publications/ai-playbook-for-the-uk-government).
 Some principles are the service team's responsibility, whatever library it uses.
 
-| Principle                        | The libraries provide                                                                                                                               | Your service must still                                                                |
-| -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| 1. Know AI's limits              | Answer checks, required citations, a release gate                                                                                                   | Tell users what the tool can't do                                                      |
-| 2. Lawful and ethical            | Personal data redaction; nothing sensitive in telemetry; nothing stored in Foundry                                                                  | Complete a DPIA and equality impact assessment                                         |
-| 3. Secure                        | Guardrails checked at startup; evidence and tool output fenced against prompt injection; MCP tools denied by default; safe search filters; Entra ID | Threat model and Secure by Design review                                               |
-| 4. Meaningful human control      | Approval before tools that change things; every answer traceable by run ID                                                                          | Decide which decisions a person reviews, label AI answers, and collect users' feedback |
-| 5. Full life cycle               | Agent versions and pins, drift warnings, release gate against a baseline, live quality scores                                                       | Plan ownership, model upgrades and retirement                                          |
-| 6. Right tool                    | Token and cost metrics per app and agent; cost caps per run                                                                                         | Show AI beats a simpler option                                                         |
-| 7. Open and collaborative        | Open source; OpenTelemetry standard names                                                                                                           | Publish an ATRS record                                                                 |
-| 8–10. Commercial, skills, policy | Quota and concurrency limits; readmes and a production checklist                                                                                    | Contracts, training, DfE AI governance                                                 |
+| Principle                        | The libraries provide                                                                                                                     | Your service must still                                                                |
+| -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| 1. Know AI's limits              | Answer checks, required citations, a release gate                                                                                         | Tell users what the tool can't do                                                      |
+| 2. Lawful and ethical            | Personal data redaction; nothing sensitive in telemetry; nothing stored in Foundry                                                        | Complete a DPIA and equality impact assessment                                         |
+| 3. Secure                        | Entra ID only; tools denied by default; evidence fenced against prompt injection; model HTML shown as text; guardrails checked at startup | Threat model and Secure by Design review                                               |
+| 4. Meaningful human control      | Approval before tools that change things; every answer traceable by run ID                                                                | Decide which decisions a person reviews, label AI answers, and collect users' feedback |
+| 5. Full life cycle               | Agent versions and pins, drift warnings, release gate against a baseline, live quality scores                                             | Plan ownership, model upgrades and retirement                                          |
+| 6. Right tool                    | Token and cost metrics per app and agent; cost caps per run                                                                               | Show AI beats a simpler option                                                         |
+| 7. Open and collaborative        | Open source; OpenTelemetry standard names                                                                                                 | Publish an ATRS record                                                                 |
+| 8–10. Commercial, skills, policy | Quota and concurrency limits; readmes                                                                                                     | Contracts, training, DfE AI governance                                                 |
 
 Bias: give release-gate test cases a `group`, and fail the gate when one group is served worse
 (`report.GroupGaps(...)`). See [Responsible AI](src/GovUK.Dfe.AI.Agents/readme.md#responsible-ai) in the core readme.
@@ -77,7 +78,6 @@ analysis runs once for the whole solution, with coverage from every test project
   `git tag GovUK.Dfe.AI.Agents.Mcp-2.0.0 && git push origin <branch> --tags`.
 - **Release notes:** add `(%release-note: your notes %)` to the body of the commit being released.
 
-
 ### Releasing an add-on on its own
 
 Add-ons reference core as a project, so you can change both in one pull request and test them together. When an add-on
@@ -93,10 +93,6 @@ Its package then depends on `GovUK.Dfe.AI.Agents >= 1.2.0`, so:
 - **A core change** releases only core. Released add-ons keep working with it.
 - **An add-on that needs something new in core** needs core released first, then `CoreMinimumVersion` raised to that
   version. That's the only case with two releases.
-
-> [!IMPORTANT]
-> **Before core's first release,** add-ons can't be packed: `CoreMinimumVersion` is empty, and packing stops with an
-> error rather than publish a package nobody can restore. Release core, then set `CoreMinimumVersion` in each add-on.
 
 ## Compatibility rules
 
@@ -121,14 +117,14 @@ Apps can upgrade any package on its own because the packages follow Microsoft's
    `Microsoft.Extensions.DependencyInjection` namespace that calls `agents.AddPackage(...)`. Use only core's public API.
    In `Register`, use the `AgentsPackageContext`:
 
-   | To... | Call |
-   | --- | --- |
-   | Read your settings | `context.Section.GetSection("{Name}")` (your block under `AiAgents`) |
-   | Fail startup on a bad setting | `context.ReportProblem("{Name}:Setting")`: listed with every other problem |
-   | Sign in to an Azure service | `context.CredentialFor(...)`: code credential, your `Authentication` block, or the default |
-   | Give an agent tools | `context.AddTools(agentName, sp => ...)` |
-   | Tag your telemetry | `context.ApplicationName` |
-   | Register services | `context.Services` |
+   | To...                         | Call                                                                                       |
+   | ----------------------------- | ------------------------------------------------------------------------------------------ |
+   | Read your settings            | `context.Section.GetSection("{Name}")` (your block under `AiAgents`)                       |
+   | Fail startup on a bad setting | `context.ReportProblem("{Name}:Setting")`: listed with every other problem                 |
+   | Sign in to an Azure service   | `context.CredentialFor(...)`: code credential, your `Authentication` block, or the default |
+   | Give an agent tools           | `context.AddTools(agentName, sp => ...)`                                                   |
+   | Tag your telemetry            | `context.ApplicationName`                                                                  |
+   | Register services             | `context.Services`                                                                         |
 
    Set `CoreMinimumVersion` in the `.csproj` to the core version you build on.
 3. Copy an add-on workflow to `.github/workflows/build-deploy-ai-agents-{name}.yml` and change the package name and paths.

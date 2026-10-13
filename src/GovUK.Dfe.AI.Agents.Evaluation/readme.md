@@ -30,38 +30,36 @@ builder.Services.AddAgents(builder.Configuration, agents => agents
     .AddQualityEvaluation());
 ```
 
-| Setting | Default | Purpose |
-| --- | --- | --- |
+| Setting      | Default  | Purpose                                                                          |
+| ------------ | -------- | -------------------------------------------------------------------------------- |
 | `JudgeModel` | Required | Any model in your Foundry project. It's called with the app's Foundry credential |
-| `SampleRate` | `0.05` | Share of live runs scored, from 0 to 1. `0` scores only release-gate tests |
+| `SampleRate` | `0.05`   | Share of live runs scored, from 0 to 1. `0` scores only release-gate tests       |
 
 A missing `JudgeModel` or a `SampleRate` outside 0 to 1 fails startup, listed with any other missing settings.
 
 ## What gets scored
 
-- **Live runs:** a `SampleRate` share is scored in the background, so runs aren't slowed down. If the judge can't keep
-  up, extra samples are dropped rather than slowing runs.
-- **Release gate:** every `IAgentTestRunner` test case is scored, so `report.BelowMinimum(...)` and
-  `report.RegressionsFrom(baseline)` can fail the build. See
+- **Live runs:** a `SampleRate` share is scored in the background, so runs aren't slowed. If the judge falls behind,
+  extra samples are dropped.
+- **Release gate:** every test case is scored, so `report.FailuresAgainst(gate, baseline)` can fail the build. See
   [Release gate](https://github.com/DFE-Digital/rsd-ai-libs/blob/main/src/GovUK.Dfe.AI.Agents/readme.md#release-gate).
 
 ## Metrics
 
 Recorded under `AgentTelemetry.SourceName`, so the core package's OpenTelemetry setup already collects them.
 
-| Metric | Records |
-| --- | --- |
-| `dfe.ai_agents.evaluation.score` | Each score, by agent, version and `gen_ai.evaluation.name` |
+| Metric                                     | Records                                                                                  |
+| ------------------------------------------ | ---------------------------------------------------------------------------------------- |
+| `dfe.ai_agents.evaluation.score`           | Each score, by agent, version and `gen_ai.evaluation.name`                               |
 | `dfe.ai_agents.evaluation.samples_dropped` | Sampled runs not scored because the judge fell behind. If this rises, lower `SampleRate` |
 
 ## Good to know
 
 - **Cost:** each scored answer costs one judge call.
 - **Reasoning models** work as judges: the judge sends only the model name and messages.
-- **Missing scores:** if a metric can't be scored (for example, the model name is wrong), the reason is logged.
+- **Missing scores:** if a metric can't be scored (e.g. a wrong model name), the reason is logged.
 - **Custom metrics:** `agents.AddQualityEvaluation(evaluator: new MyEvaluator())` with any Microsoft.Extensions.AI
   `IEvaluator`.
-- **Your own scorer:** `agents.AddCustomQualityEvaluation(sp => new MyEvaluator())` uses any `IAgentRunEvaluator`, with
-  the same live sampling and metric. It needs no `JudgeModel`; `SampleRate` still applies (default 5%).
-- **Safety metrics aren't included,** because Microsoft's safety evaluators are preview-only. Use the Guardrails
-  package to block harmful content instead.
+- **Your own scorer:** `agents.AddCustomQualityEvaluation(sp => new MyEvaluator())` with any `IAgentRunEvaluator`; no
+  `JudgeModel` needed, and `SampleRate` still applies.
+- **No safety metrics** (Microsoft's are preview-only): use the Guardrails package to block harmful content.

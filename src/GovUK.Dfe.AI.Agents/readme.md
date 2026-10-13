@@ -416,19 +416,6 @@ All under `AiAgents`, or in code with `agents.Configure(o => ...)`.
 | `MaxRetries`                      | 6                   | Retries on a rate limit or transient failure; a retried 5xx may be billed twice      |
 | `LowRemainingTokensPercent`       | 10                  | Threshold for `dfe.ai_agents.tokens.low`; `0` turns it off                           |
 
-## Production checklist
-
-- [ ] `ApplicationName` is set, and matches the name passed to `AddService(...)`.
-- [ ] Secrets are in Key Vault (or managed identities are used), and each identity has only its own role.
-- [ ] Telemetry arrives in Application Insights, and log access and retention fit your data.
-- [ ] Shared project: staging and production pin their agents, and the pins are in `ProtectedVersions`.
-- [ ] `KeepLatestVersions` is set wherever versions are created.
-- [ ] `RunTimeout`, `MaxOutputTokensPerRun` and the concurrency limits fit your Foundry quota.
-- [ ] Production uses a fixed model version, and important agents have a release gate.
-- [ ] With add-ons: MCP allow-lists are set, every search is filtered, and every deployment has a guardrail.
-- [ ] Tools that change records need approval; personal data is redacted.
-- [ ] Answers are labelled as AI-generated, users can give feedback, and the DPIA and ATRS record are done.
-
 ## Testing your app
 
 Substitute `IAgentService` in unit tests (match evidence with `Arg.Any<AgentEvidence?>()`):

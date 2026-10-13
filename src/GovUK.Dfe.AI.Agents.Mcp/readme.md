@@ -28,7 +28,7 @@ builder.Services.AddAgents(builder.Configuration, agents => agents
     .AddMcpServers());
 ```
 
-Then list the tools each agent may call:
+Add an entry per server; each has its own address, scope and allowed tools. Then list the tools each agent may call:
 
 ```csharp
 public static readonly AgentDefinition Ofsted = new("ofsted-agent", "Ofsted")
@@ -72,10 +72,10 @@ credential you pass. Only tools in `AllowedToolNames` can be called. If you late
 
 Each entry under `McpServers` is keyed by a name you choose.
 
-| Setting | Default | Purpose |
-| --- | --- | --- |
-| `ServerUri` | Required | The server's MCP endpoint; `https://` (`http://` only for localhost), as each request carries a token |
-| `Scope` | Required | The token scope, e.g. `api://school-performance/.default` |
-| `AllowedToolNames` | Required | Every tool this app may use from the server |
-| `ToolListCacheDuration` | 5 minutes | How long the server's tool list is reused |
-| `Authentication` | The default identity | A separate identity for this server, possibly in another tenant |
+| Setting                 | Default              | Purpose                                                                                               |
+| ----------------------- | -------------------- | ----------------------------------------------------------------------------------------------------- |
+| `ServerUri`             | Required             | The server's MCP endpoint; `https://` (`http://` only for localhost), as each request carries a token |
+| `Scope`                 | Required             | The token scope, e.g. `api://school-performance/.default`                                             |
+| `AllowedToolNames`      | Required             | Every tool this app may use from the server                                                           |
+| `ToolListCacheDuration` | 5 minutes            | How long the server's tool list is reused                                                             |
+| `Authentication`        | The default identity | A separate identity for this server, possibly in another tenant                                       |

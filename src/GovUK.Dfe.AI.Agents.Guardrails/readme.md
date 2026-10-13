@@ -34,15 +34,17 @@ builder.Services.AddAgents(builder.Configuration, agents => agents
 
 ## Apply once, check everywhere
 
-| Where              | What to do                                                                                                                                    | Role on the Foundry resource   |
-| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ |
-| A provisioning job | Call `await guardrails.ApplyAsync(ct)` (`IFoundryGuardrailsService`). This creates or updates the guardrail and assigns it to each deployment | Cognitive Services Contributor |
-| Every app          | Nothing. At startup, the app checks each deployment has the guardrail and that it hasn't been weakened                                        | Reader                         |
+| Where              | What to do                                                                                                                                                               | Role on the Foundry resource                                 |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------ |
+| A provisioning job | Call `await guardrails.ApplyAsync(ct)` (`IFoundryGuardrailsService`). This creates or updates the guardrail and assigns it to each deployment, writing only what differs | Cognitive Services Contributor (Reader when nothing differs) |
+| Every app          | Nothing. At startup, the app checks each deployment has the guardrail and that it hasn't been weakened                                                                   | Reader                                                       |
 
 - **Infrastructure as code instead:** create the guardrail in Bicep or Terraform and skip `ApplyAsync`; apps still check
   it at startup, with only Reader.
 - If a guardrail is missing or weakened, startup fails and says what's wrong (`"RequireAtStartup": false` logs a warning
-  instead). If Azure Resource Manager can't be reached, startup only logs a warning.
+  instead).
+- If Azure Resource Manager can't be reached, startup logs a warning, so an outage doesn't stop new instances. Set
+  `"FailWhenUnreachable": true` to fail startup instead, for apps that must confirm the guardrail first.
 
 ## Settings
 
@@ -58,6 +60,7 @@ builder.Services.AddAgents(builder.Configuration, agents => agents
 | `ProtectedMaterial`               | `true`                             | Blocks answers that reproduce protected text or code                                        |
 | `Blocklists`                      | None                               | Your own blocked terms and patterns (see below)                                             |
 | `RequireAtStartup`                | `true`                             | Fails startup when a deployment lacks the guardrail                                         |
+| `FailWhenUnreachable`             | `false`                            | Fails startup when the guardrail can't be checked, e.g. Resource Manager is unreachable     |
 | `Authentication`                  | The default identity               | A separate identity for Resource Manager (or `agents.UseGuardrailsCredential(...)` in code) |
 
 ## Blocklists

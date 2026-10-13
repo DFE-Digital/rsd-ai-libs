@@ -58,6 +58,7 @@ public sealed class JudgeTests
         Assert.Equal("{\"score\": 4}", response.Text);
         Assert.Equal(50, response.Usage!.TotalTokenCount);
         Assert.Equal("myconnection/gpt-5.1", sent()!.Model);
+        Assert.False(sent()!.StoredOutputEnabled);   // the run's prompt, evidence and answer aren't kept in Foundry
         Assert.Equal(2, sent()!.InputItems.Count);
         Assert.Null(sent()!.Temperature);
         Assert.Null(sent()!.TopP);

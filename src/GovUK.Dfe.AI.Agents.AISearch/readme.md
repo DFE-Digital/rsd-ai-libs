@@ -55,7 +55,9 @@ Pass the result itself, not `evidence.Text`, so its [citation sources](#citation
 - **Filter every search** to the record you mean, e.g. one school; relevance alone also returns similar names.
 - **Filters are escaped for you:** in `$"urn eq {urn}"`, every `{value}` is escaped, so it can't change what the filter
   matches. A plain string won't compile; pass an already-escaped filter with `ODataFilter.Raw(filter)`.
-- **Set `ContentFields`** on each index, so only those fields reach the model.
+- **Set `ContentFields`** on each index, so only those fields reach the model, whatever their type (text, numbers,
+  dates, true/false). Each value is labelled with its field, one per line, e.g. `number_on_roll: 398`, so the model can
+  tell similar numbers apart.
 - **Weak matches are dropped:** results below half the top score (`MinimumRelevanceFilter`).
 - **Large results:** whole results are kept, most relevant first, up to `MaxEvidenceCharacters`; the rest are left out
   with a note, so citations still match. To fetch less, lower `size`.
@@ -104,14 +106,15 @@ Your `filter` is applied before the vector search, so hybrid results still match
 
 All under `AiAgents:AISearch`.
 
-| Setting                           | Default              | Purpose                                                               |
-| --------------------------------- | -------------------- | --------------------------------------------------------------------- |
-| `Endpoint`                        | Required             | The search service, e.g. `https://<search>.search.windows.net`        |
-| `Indexes`                         | Required             | Each index's `Name` (the `scope` you search), plus the settings below |
-| `Indexes:n:ContentFields`         | Every string field   | The fields sent to the model, in order                                |
-| `Indexes:n:SemanticConfiguration` | None                 | Re-rank by meaning (Basic tier or higher)                             |
-| `Indexes:n:VectorFields`          | None                 | Hybrid keyword and vector search                                      |
-| `MinimumRelevanceFilter`          | `0.5`                | Drops results below this share of the top score                       |
-| `MaxEvidenceCharacters`           | 190,000              | Evidence per search, whole results only; just under core's 200,000    |
-| `MaxRetryAttempts`                | 3                    | Retries of a failed search                                            |
-| `Authentication`                  | The default identity | A separate identity for search                                        |
+| Setting                           | Default              | Purpose                                                                        |
+| --------------------------------- | -------------------- | ------------------------------------------------------------------------------ |
+| `Endpoint`                        | Required             | The search service, e.g. `https://<search>.search.windows.net`                 |
+| `Indexes`                         | Required             | Each index's `Name` (the `scope` you search), plus the settings below          |
+| `Indexes:n:ContentFields`         | Every string field   | The fields sent to the model, in order                                         |
+| `Indexes:n:SemanticConfiguration` | None                 | Re-rank by meaning (Basic tier or higher)                                      |
+| `Indexes:n:VectorFields`          | None                 | Hybrid keyword and vector search                                               |
+| `Indexes:n:LabelFields`           | `true`               | Labels each value with its field, one per line; `false` sends the values alone |
+| `MinimumRelevanceFilter`          | `0.5`                | Drops results below this share of the top score                                |
+| `MaxEvidenceCharacters`           | 190,000              | Evidence per search, whole results only; just under core's 200,000             |
+| `MaxRetryAttempts`                | 3                    | Retries of a failed search                                                     |
+| `Authentication`                  | The default identity | A separate identity for search                                                 |

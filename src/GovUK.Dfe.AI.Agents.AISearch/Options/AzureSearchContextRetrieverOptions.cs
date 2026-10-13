@@ -52,4 +52,10 @@ public sealed class AzureSearchIndexOptions
     /// vector, so the app needs no embedding model; the index must have one. <c>filter</c> applies before the vector search.
     /// </summary>
     public IReadOnlyList<string> VectorFields { get; init; } = [];
+
+    /// <summary>
+    /// Labels each value in the evidence with its field, one per line, e.g. <c>number_on_roll: 398</c>, so the model can tell
+    /// similar values apart. Off: the values alone, separated by spaces.
+    /// </summary>
+    public bool LabelFields { get; init; } = true;
 }

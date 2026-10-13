@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace GovUK.Dfe.AI.Agents.Quality;
 
@@ -20,8 +21,18 @@ public sealed record AgentTestCase(string Name, string Prompt)
     public string? Group { get; init; }
 
     /// <summary>
+    /// A Foundry guardrail blocking the prompt or answer is a correct outcome, e.g. for a case with instructions injected
+    /// into its evidence. Such a case passes when it's blocked, and is checked as usual when it isn't.
+    /// </summary>
+    public bool GuardrailMayBlock { get; init; }
+
+    /// <summary>Any other fields in the case's file, by name, for your own checks; the runner ignores them.</summary>
+    public IReadOnlyDictionary<string, JsonElement> Extra { get; init; } = new Dictionary<string, JsonElement>();
+
+    /// <summary>
     /// Loads every <c>*.json</c> file in <paramref name="directory"/>, named after the file:
-    /// <c>{ "prompt": "...", "evidence": "...", "mustMention": [ ... ], "mustNotMention": [ ... ], "group": "..." }</c>.
+    /// <c>{ "prompt": "...", "evidence": "...", "mustMention": [ ... ], "mustNotMention": [ ... ], "group": "...",
+    /// "guardrailMayBlock": false }</c>. Other fields are kept in <see cref="Extra"/>.
     /// </summary>
     public static async Task<IReadOnlyList<AgentTestCase>> LoadAsync(string directory, CancellationToken cancellationToken = default)
     {
@@ -42,13 +53,21 @@ public sealed record AgentTestCase(string Name, string Prompt)
                 MustMention = file.MustMention ?? [],
                 MustNotMention = file.MustNotMention ?? [],
                 Group = file.Group,
+                GuardrailMayBlock = file.GuardrailMayBlock,
+                Extra = file.Extra,
             });
         }
 
         return cases;
     }
 
-    private sealed record CaseFile(string? Prompt, string? Evidence, List<string>? MustMention, List<string>? MustNotMention, string? Group);
+    private sealed record CaseFile(string? Prompt, string? Evidence, List<string>? MustMention, List<string>? MustNotMention,
+        string? Group, bool GuardrailMayBlock)
+    {
+        /// <summary>Every other field in the file.</summary>
+        [JsonExtensionData]
+        public Dictionary<string, JsonElement> Extra { get; init; } = [];
+    }
 }
 
 /// <summary>How one test case went.</summary>
@@ -60,6 +79,9 @@ public sealed record AgentTestResult(string CaseName, string? Output, IReadOnlyL
 
     /// <summary>The case's <see cref="AgentTestCase.Group"/>.</summary>
     public string? Group { get; init; }
+
+    /// <summary>A Foundry guardrail blocked the run, as the case allowed (<see cref="AgentTestCase.GuardrailMayBlock"/>).</summary>
+    public bool BlockedByGuardrail { get; init; }
 }
 
 /// <summary>

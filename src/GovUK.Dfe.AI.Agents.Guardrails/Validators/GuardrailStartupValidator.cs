@@ -9,7 +9,8 @@ namespace GovUK.Dfe.AI.Agents.Guardrails.Validators;
 
 /// <summary>
 /// At startup, checks every deployment in <c>Deployments</c> carries the guardrail. A missing or weaker guardrail fails
-/// startup (or warns, with <c>RequireAtStartup: false</c>); an unreachable Resource Manager only warns.
+/// startup (or warns, with <c>RequireAtStartup: false</c>); an unreachable Resource Manager warns, or fails startup with
+/// <c>FailWhenUnreachable: true</c>.
 /// </summary>
 internal sealed class GuardrailStartupValidator(IFoundryGuardrailsService guardrails, GuardrailSettings settings,
     ILogger<GuardrailStartupValidator> logger) : IHostedService
@@ -23,6 +24,11 @@ internal sealed class GuardrailStartupValidator(IFoundryGuardrailsService guardr
         }
         catch (Exception ex) when (ex is not InvalidOperationException and not OperationCanceledException)
         {
+            if (settings.FailWhenUnreachable)
+            {
+                throw new InvalidOperationException(string.Format(Constants.ErrorMessages.GuardrailUncheckable, settings.Name), ex);
+            }
+
             logger.LogWarning(ex, "Couldn't check the Foundry guardrail {Guardrail} at startup", settings.Name);
             return;
         }

@@ -128,6 +128,48 @@ public sealed class GuardrailTests
     }
 
     [Fact]
+    public async Task ApplyingAGuardrailThatsAlreadyInPlace_WritesNothing_SoAJobWithOnlyReaderSucceeds()
+    {
+        _store.Deployments["gpt-5.1"] = null;
+        _store.Deployments["gpt-4o"] = null;
+        await Guardrails().ApplyAsync(cancellationToken: TestContext.Current.CancellationToken);
+        _store.ReadOnly = true;
+
+        var again = await Guardrails().ApplyAsync(cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.True(again.Passed);
+        Assert.Equal(4, _store.Writes);   // the first apply only: blocklist, guardrail and two deployments
+    }
+
+    [Fact]
+    public async Task ApplyingAfterAChange_WritesOnlyWhatDiffers()
+    {
+        _store.Deployments["gpt-5.1"] = null;
+        _store.Deployments["gpt-4o"] = null;
+        await Guardrails().ApplyAsync(cancellationToken: TestContext.Current.CancellationToken);
+        _store.Blocklists["case-references"].Remove(new GuardrailBlocklistEntry("Project Falcon", IsRegex: false));
+        var before = _store.Writes;
+
+        await Guardrails().ApplyAsync(cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Equal(before + 1, _store.Writes);   // just the blocklist
+        Assert.Contains(new GuardrailBlocklistEntry("Project Falcon", IsRegex: false), _store.Blocklists["case-references"]);
+    }
+
+    [Fact]
+    public async Task WithFailWhenUnreachable_AnUncheckableGuardrailFailsStartup()
+    {
+        _store.Failure = new RequestFailedException("No such host is known.");
+        var settings = Settings();
+        settings.FailWhenUnreachable = true;
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => StartupCheck(settings).StartAsync(CancellationToken.None));
+
+        Assert.Contains("Couldn't check the Foundry guardrail 'briefing-guardrail'", ex.Message, StringComparison.Ordinal);
+        Assert.IsType<RequestFailedException>(ex.InnerException);
+    }
+
+    [Fact]
     public async Task AnIdentityWithoutTheRole_FailsWithTheRoleToGrant_ButAnUnreachableResourceManagerOnlyWarns()
     {
         _store.Failure = new RequestFailedException(403, "Forbidden");
@@ -294,24 +336,41 @@ public sealed class GuardrailTests
         /// <summary>When set, every call fails with it.</summary>
         public Exception? Failure { get; set; }
 
+        /// <summary>When set, reads work but writes are refused, as for an identity with only Reader.</summary>
+        public bool ReadOnly { get; set; }
+
+        /// <summary>How many writes were made.</summary>
+        public int Writes { get; private set; }
+
         public Task<IReadOnlySet<GuardrailBlocklistEntry>?> GetBlocklistAsync(string name, CancellationToken cancellationToken)
             => Run<IReadOnlySet<GuardrailBlocklistEntry>?>(() => Blocklists.TryGetValue(name, out var entries) ? entries.ToHashSet() : null);
 
         public Task SaveBlocklistAsync(string name, IReadOnlySet<GuardrailBlocklistEntry> entries, CancellationToken cancellationToken)
-            => Run(() => Blocklists[name] = [.. entries]);
+            => Write(() => Blocklists[name] = [.. entries]);
 
         public Task<GuardrailPolicy?> GetGuardrailAsync(string name, CancellationToken cancellationToken)
             => Run(() => Guardrails.GetValueOrDefault(name));
 
         public Task SaveGuardrailAsync(GuardrailPolicy guardrail, CancellationToken cancellationToken)
-            => Run(() => Guardrails[guardrail.Name] = guardrail);
+            => Write(() => Guardrails[guardrail.Name] = guardrail);
 
         public Task<(bool Exists, string? Guardrail)> GetDeploymentAsync(string deployment, CancellationToken cancellationToken)
             => Run(() => Deployments.TryGetValue(deployment, out var guardrail) ? (true, guardrail) : (false, null));
 
         public Task AssignAsync(string deployment, string guardrail, CancellationToken cancellationToken)
-            => Run(() => Deployments[deployment] = guardrail);
+            => Write(() => Deployments[deployment] = guardrail);
 
         private Task<T> Run<T>(Func<T> action) => Failure is { } failure ? Task.FromException<T>(failure) : Task.FromResult(action());
+
+        private Task<T> Write<T>(Func<T> action)
+        {
+            if (ReadOnly)
+            {
+                return Task.FromException<T>(new RequestFailedException(403, "Forbidden"));
+            }
+
+            Writes++;
+            return Run(action);
+        }
     }
 }

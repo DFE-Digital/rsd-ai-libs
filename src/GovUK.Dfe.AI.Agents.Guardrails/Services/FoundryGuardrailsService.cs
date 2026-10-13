@@ -14,6 +14,9 @@ namespace GovUK.Dfe.AI.Agents.Guardrails.Services;
 internal sealed class FoundryGuardrailsService(IGuardrailStore store, GuardrailSettings settings, ILogger<FoundryGuardrailsService> logger)
     : IFoundryGuardrailsService
 {
+    /// <remarks>
+    /// Reads first and writes only what differs, so when the guardrail is already in place a job needs only Reader.
+    /// </remarks>
     public async Task<GuardrailReport> ApplyAsync(CancellationToken cancellationToken = default)
     {
         try
@@ -21,11 +24,20 @@ internal sealed class FoundryGuardrailsService(IGuardrailStore store, GuardrailS
             // Blocklists first: the guardrail refers to them.
             foreach (var (name, blocklist) in settings.Blocklists)
             {
-                await store.SaveBlocklistAsync(name, GuardrailPolicy.EntriesOf(blocklist), cancellationToken).ConfigureAwait(false);
+                var wanted = GuardrailPolicy.EntriesOf(blocklist);
+                if (await store.GetBlocklistAsync(name, cancellationToken).ConfigureAwait(false) is not { } current || !current.SetEquals(wanted))
+                {
+                    await store.SaveBlocklistAsync(name, wanted, cancellationToken).ConfigureAwait(false);
+                    logger.SavedGuardrailPart("blocklist", name);
+                }
             }
 
             var required = GuardrailPolicy.From(settings);
-            await store.SaveGuardrailAsync(required, cancellationToken).ConfigureAwait(false);
+            if (await store.GetGuardrailAsync(required.Name, cancellationToken).ConfigureAwait(false) is not { } actual || !actual.Matches(required))
+            {
+                await store.SaveGuardrailAsync(required, cancellationToken).ConfigureAwait(false);
+                logger.SavedGuardrailPart("guardrail", required.Name);
+            }
 
             foreach (var deployment in settings.Deployments)
             {

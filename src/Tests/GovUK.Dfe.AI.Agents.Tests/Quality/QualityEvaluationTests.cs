@@ -124,7 +124,10 @@ public sealed class QualityEvaluationTests
         try
         {
             await File.WriteAllTextAsync(Path.Combine(directory, "urn-100000.json"),
-                """{ "prompt": "Summarise URN 100000.", "evidence": "Rated Good.", "mustMention": [ "Good" ], "group": "special-schools" }""", cancellationToken: TestContext.Current.CancellationToken);
+                """
+                { "prompt": "Summarise URN 100000.", "evidence": "Rated Good.", "mustMention": [ "Good" ], "group": "special-schools",
+                  "guardrailMayBlock": true, "ticket": "AIA-42", "expectedRating": { "value": "Good" } }
+                """, cancellationToken: TestContext.Current.CancellationToken);
 
             var testCase = Assert.Single(await AgentTestCase.LoadAsync(directory, cancellationToken: TestContext.Current.CancellationToken));
 
@@ -132,11 +135,42 @@ public sealed class QualityEvaluationTests
             Assert.Equal(["Good"], testCase.MustMention);
             Assert.Empty(testCase.MustNotMention);
             Assert.Equal("special-schools", testCase.Group);
+            Assert.True(testCase.GuardrailMayBlock);
+            Assert.Equal("AIA-42", testCase.Extra["ticket"].GetString());                               // other fields are kept
+            Assert.Equal("Good", testCase.Extra["expectedRating"].GetProperty("value").GetString());
         }
         finally
         {
             Directory.Delete(directory, recursive: true);
         }
+    }
+
+    [Theory]
+    [InlineData(true, true)]     // a block the case allows passes
+    [InlineData(false, false)]   // otherwise it's a failed run
+    public async Task AGuardrailBlock_PassesOnlyACaseThatAllowsIt(bool mayBlock, bool passes)
+    {
+        var agents = Substitute.For<IAgentService>();
+        agents.RunAsync(Arg.Any<AgentDefinition>(), Arg.Any<string>(), Arg.Any<AgentEvidence?>(), Arg.Any<CancellationToken>())
+            .Returns<Task<AgentResult>>(_ => throw new InvalidOperationException("Agent 'ofsted-agent' failed.",
+                new GovUK.Dfe.AI.Agents.Exceptions.AgentGuardrailException("ofsted-agent", "prompt")));
+        var injected = GoodSchool with { Name = "injected-instructions", GuardrailMayBlock = mayBlock };
+
+        var result = Assert.Single((await new AgentTestRunner(agents).RunAsync(Ofsted, [injected],
+            cancellationToken: TestContext.Current.CancellationToken)).Results);
+
+        Assert.Equal(passes, result.Passed);
+        Assert.Equal(mayBlock, result.BlockedByGuardrail);
+    }
+
+    [Fact]
+    public async Task ACaseThatMayBeBlocked_ButIsnt_IsCheckedAsUsual()
+    {
+        var result = Assert.Single((await new AgentTestRunner(Answers("Rated Outstanding."))
+            .RunAsync(Ofsted, [GoodSchool with { GuardrailMayBlock = true }], cancellationToken: TestContext.Current.CancellationToken)).Results);
+
+        Assert.False(result.Passed);
+        Assert.False(result.BlockedByGuardrail);
     }
 
     // ===================== Fairness across groups =====================

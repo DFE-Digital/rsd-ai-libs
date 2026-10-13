@@ -219,7 +219,7 @@ public sealed class AgentTelemetryTests : IDisposable
 
         var span = Assert.Single(SpansOf("invoke_agent"));
         Assert.Equal(ActivityStatusCode.Error, span.Status);
-        Assert.Equal("The agent run failed.", span.StatusDescription);
+        Assert.Equal("The agent run failed.", span.StatGBPescription);
         Assert.Equal(typeof(InvalidOperationException).FullName, span.GetTagItem(AgentTelemetry.ErrorTypeTag));
         Assert.DoesNotContain(span.TagObjects, tag => tag.Value?.ToString()?.Contains("Jane Doe", StringComparison.Ordinal) == true);
         Assert.Equal(typeof(InvalidOperationException).FullName,

@@ -231,7 +231,7 @@ Run fixed test cases in CI and fail the build if an agent got worse:
 
 ```csharp
 var tests = services.GetRequiredService<IAgentTestRunner>();
-var cases = await AgentTestCase.LoadAsync("tests/ofsted-agent");   // JSON: prompt, evidence, mustMention, mustNotMention, group
+var cases = await AgentTestCase.LoadAsync("tests/ofsted-agent");   // one JSON file per case (below)
 var report = await tests.RunAsync(BriefingAgents.Ofsted, cases, repeats: 3);
 var baseline = JsonSerializer.Deserialize<AgentEvaluationReport>(await File.ReadAllTextAsync("baseline.json"))!;
 
@@ -255,6 +255,23 @@ if (failures.Count > 0)
 - Scores need the Evaluation add-on or your own `IAgentRunEvaluator`; without one, only `mustMention` and
   `mustNotMention` are checked.
 - First release: pass no baseline, then save the passing report as `baseline.json`.
+
+A case file:
+
+```json
+{
+  "prompt": "Summarise URN 100000.",
+  "evidence": "Rated Good in March 2024.",
+  "mustMention": [ "Good", "2024" ],
+  "mustNotMention": [ "Outstanding" ],
+  "group": "special-schools",
+  "guardrailMayBlock": false
+}
+```
+
+- **`guardrailMayBlock`:** for cases where a Foundry guardrail blocking the run is correct, e.g. instructions injected
+  into the evidence. The case passes when blocked (`result.BlockedByGuardrail`), and is checked as usual when not.
+- **Your own fields** are kept in `testCase.Extra`, by name, for your own checks.
 
 ## Responsible AI
 
@@ -338,8 +355,8 @@ For fairness, give release-gate test cases a `group` (e.g. `"special-schools"`) 
   ```
 
 - **Cost cap:** `MaxOutputTokensPerRun` caps output tokens per run, reasoning and tool rounds included.
-- **Cost:** add each model's prices per 1,000 tokens; `result.Cost` is one run, `results.ToTokenUsageSummary().Cost`
-  several. `gpt-5.1` also matches `gpt-5.1-2025-11-13` and `my-connection/gpt-5.1`.
+- **Cost:** add each model's prices per 1,000 tokens (`Currency` defaults to `GBP`); `result.Cost` is one run,
+  `results.ToTokenUsageSummary().Cost` several. `gpt-5.1` also matches `gpt-5.1-2025-11-13` and `my-connection/gpt-5.1`.
 
   ```json
   "Pricing": {
@@ -391,30 +408,34 @@ Assign in Azure (Access control (IAM)) to each identity, e.g. the app's managed 
 
 All under `AiAgents`, or in code with `agents.Configure(o => ...)`.
 
-| Setting                           | Default             | Purpose                                                                              |
-| --------------------------------- | ------------------- | ------------------------------------------------------------------------------------ |
-| `ApplicationName`                 | Entry assembly name | Telemetry tag, and scope of the temporary-agent sweep                                |
-| `RunTimeout`                      | None                | Longest time one run may take                                                        |
-| `MaxOutputTokensPerRun`           | 64000               | Output tokens one run may use (minimum 16)                                           |
-| `MaxEvidenceCharacters`           | 200000              | Longer evidence is cut, keeping the start                                            |
-| `MaxToolOutputCharacters`         | 40000               | Longer tool output is cut                                                            |
-| `FenceToolOutput`                 | `true`              | Fences tool output as data                                                           |
-| `MaxConcurrency`                  | None                | Runs at once on one instance                                                         |
-| `GlobalConcurrency`               | Off                 | `MaxConcurrentRuns` across instances, and the `BlobContainerUri` for slots           |
-| `MaxWaitForRunSlot`               | 2 minutes           | Longest wait for a slot                                                              |
-| `AgentCacheDuration`              | 30 seconds          | How long a resolved version is reused; `0` turns caching off                         |
-| `VersionPins`                     | None                | The version this environment runs, per agent                                         |
-| `ProtectedVersions`               | None                | Versions pruning must keep, per agent                                                |
-| `KeepLatestVersions`              | None                | Versions kept each time one is created (minimum 2)                                   |
-| `ExternallyManagedAgents`         | None                | Agents from a provisioning job, with versions; optional `Endpoint`, `Authentication` |
-| `ResponseFormatKey`               | None                | A system prompt appended to every agent's instructions                               |
-| `ResponseFormatExemptPromptTypes` | None                | Prompt keys `ResponseFormatKey` isn't appended to                                    |
-| `RequireTokenUsageTelemetry`      | `true`              | Fails startup when token metrics aren't recorded                                     |
-| `ValidateAgentToolsAtStartup`     | `true`              | Fails startup if a pinned or external agent's tools can't run here                   |
-| `EnableDriftDetection`            | `false`             | Warns when a pinned version no longer matches its definition                         |
-| `Pricing`                         | None                | Prices per model, so results and metrics report cost                                 |
-| `MaxRetries`                      | 6                   | Retries on a rate limit or transient failure; a retried 5xx may be billed twice      |
-| `LowRemainingTokensPercent`       | 10                  | Threshold for `dfe.ai_agents.tokens.low`; `0` turns it off                           |
+| Setting                           | Default             | Purpose                                                                                               |
+| --------------------------------- | ------------------- | ----------------------------------------------------------------------------------------------------- |
+| `Foundry:Endpoint`                | Required            | The Foundry project endpoint                                                                          |
+| `Foundry:DefaultModel`            | Required            | The model deployment agents use, e.g. `<connection>/gpt-5.1`                                          |
+| `Authentication`                  | None                | The default identity: `TenantId`, `ClientId` and `ClientSecret`, unless set in code                   |
+| `PromptFiles`                     | None                | `SystemPrompts` and `UserPrompts`: each prompt key and its file                                       |
+| `ApplicationName`                 | Entry assembly name | Telemetry tag, and scope of the temporary-agent sweep                                                 |
+| `RunTimeout`                      | None                | Longest time one run may take                                                                         |
+| `MaxOutputTokensPerRun`           | 64000               | Output tokens one run may use (minimum 16)                                                            |
+| `MaxEvidenceCharacters`           | 200000              | Longer evidence is cut, keeping the start                                                             |
+| `MaxToolOutputCharacters`         | 40000               | Longer tool output is cut                                                                             |
+| `FenceToolOutput`                 | `true`              | Fences tool output as data                                                                            |
+| `MaxConcurrency`                  | None                | Runs at once on one instance                                                                          |
+| `GlobalConcurrency`               | Off                 | `MaxConcurrentRuns` across instances, and the `BlobContainerUri` for slots                            |
+| `MaxWaitForRunSlot`               | 2 minutes           | Longest wait for a slot                                                                               |
+| `AgentCacheDuration`              | 30 seconds          | How long a resolved version is reused; `0` turns caching off                                          |
+| `VersionPins`                     | None                | The version this environment runs, per agent                                                          |
+| `ProtectedVersions`               | None                | Versions pruning must keep, per agent                                                                 |
+| `KeepLatestVersions`              | None                | Versions kept each time one is created (minimum 2)                                                    |
+| `ExternallyManagedAgents`         | None                | Agents from a provisioning job, with versions; optional `Endpoint`, `Authentication`                  |
+| `ResponseFormatKey`               | None                | A system prompt appended to every agent's instructions                                                |
+| `ResponseFormatExemptPromptTypes` | None                | Prompt keys `ResponseFormatKey` isn't appended to                                                     |
+| `RequireTokenUsageTelemetry`      | `true`              | Fails startup when token metrics aren't recorded                                                      |
+| `ValidateAgentToolsAtStartup`     | `true`              | Fails startup if a pinned or external agent's tools can't run here                                    |
+| `EnableDriftDetection`            | `false`             | Warns when a pinned version no longer matches its definition                                          |
+| `Pricing`                         | None                | Prices per model per 1,000 tokens, and `Currency` (default `GBP`), so results and metrics report cost |
+| `MaxRetries`                      | 6                   | Retries on a rate limit or transient failure; a retried 5xx may be billed twice                       |
+| `LowRemainingTokensPercent`       | 10                  | Threshold for `dfe.ai_agents.tokens.low`; `0` turns it off                                            |
 
 ## Testing your app
 

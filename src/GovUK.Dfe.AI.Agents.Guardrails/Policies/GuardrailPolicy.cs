@@ -10,6 +10,12 @@ namespace GovUK.Dfe.AI.Agents.Guardrails.Policies;
 internal sealed record GuardrailPolicy(string Name, GuardrailSeverity? BlockFrom, bool PromptShields, bool IndirectAttacks,
     bool ProtectedMaterial, IReadOnlyList<string> Blocklists)
 {
+    /// <summary>Exactly the same guardrail, blocklists in any order: ApplyAsync then has nothing to write.</summary>
+    public bool Matches(GuardrailPolicy other)
+        => Name == other.Name && BlockFrom == other.BlockFrom && PromptShields == other.PromptShields
+           && IndirectAttacks == other.IndirectAttacks && ProtectedMaterial == other.ProtectedMaterial
+           && Blocklists.ToHashSet(StringComparer.Ordinal).SetEquals(other.Blocklists);
+
     public static GuardrailPolicy From(GuardrailSettings settings)
         => new(settings.Name!, settings.BlockFrom, settings.PromptShields, settings.IndirectAttacks, settings.ProtectedMaterial,
             [.. settings.Blocklists.Keys.Order(StringComparer.Ordinal)]);

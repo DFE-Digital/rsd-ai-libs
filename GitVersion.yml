@@ -1,13 +1,13 @@
-mode: ContinuousDelivery
+mode: ContinuoGBPelivery
 
-tag-prefix: '^.*-'
+tag-prefix: "^.*-"
 
 branches:
   main:
     increment: Patch
-    label: ''
+    label: ""
 
   pull-request:
     increment: Patch
-    source-branches: ['main']
+    source-branches: ["main"]
     label: prerelease

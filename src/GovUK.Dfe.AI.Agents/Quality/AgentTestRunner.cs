@@ -1,4 +1,5 @@
 using GovUK.Dfe.AI.Agents.Enums;
+using GovUK.Dfe.AI.Agents.Exceptions;
 using GovUK.Dfe.AI.Agents.Quality.Interfaces;
 using GovUK.Dfe.AI.Agents.Services.Interfaces;
 using GovUK.Dfe.AI.Agents.ValueObjects;
@@ -49,7 +50,11 @@ internal sealed class AgentTestRunner(IAgentService agents, IAgentRunEvaluator? 
         var scores = runs.SelectMany(static run => run.Scores).GroupBy(static score => score.Key)
             .ToDictionary(static metric => metric.Key, static metric => metric.Average(static score => score.Value));
 
-        return new AgentTestResult(first.CaseName, runs[^1].Output, failures, scores) { Group = first.Group };
+        return new AgentTestResult(first.CaseName, runs[^1].Output, failures, scores)
+        {
+            Group = first.Group,
+            BlockedByGuardrail = runs.Exists(static run => run.BlockedByGuardrail),
+        };
     }
 
     private async Task<AgentTestResult> RunCaseAsync(AgentDefinition definition, AgentTestCase testCase, CancellationToken cancellationToken)
@@ -61,7 +66,13 @@ internal sealed class AgentTestRunner(IAgentService agents, IAgentRunEvaluator? 
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            return new AgentTestResult(testCase.Name, null, [$"The run failed: {ex.GetBaseException().Message}"], NoScores) { Group = testCase.Group };
+            // A guardrail block the case allows is the right outcome: it passes, with nothing to score.
+            var blocked = testCase.GuardrailMayBlock && IsGuardrailBlock(ex);
+            return new AgentTestResult(testCase.Name, null, blocked ? [] : [$"The run failed: {ex.GetBaseException().Message}"], NoScores)
+            {
+                Group = testCase.Group,
+                BlockedByGuardrail = blocked,
+            };
         }
 
         var output = result.Output ?? string.Empty;
@@ -76,5 +87,18 @@ internal sealed class AgentTestRunner(IAgentService agents, IAgentRunEvaluator? 
             : await evaluator.EvaluateAsync(new CompletedAgentRun { AgentName = definition.Name, RunId = result.RunId, CompletedAt = result.CompletedAt, AgentVersion = result.AgentVersion, Model = result.Model, Prompt = testCase.Prompt, Evidence = testCase.Evidence, Output = output }, cancellationToken).ConfigureAwait(false);
 
         return new AgentTestResult(testCase.Name, output, failures, scores) { Group = testCase.Group };
+    }
+
+    private static bool IsGuardrailBlock(Exception ex)
+    {
+        for (var current = ex; current is not null; current = current.InnerException)
+        {
+            if (current is AgentGuardrailException)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

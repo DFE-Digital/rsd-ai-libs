@@ -4,5 +4,6 @@ namespace GovUK.Dfe.AI.Agents.Guardrails.Constants;
 internal static class ErrorMessages
 {
     internal const string GuardrailAccessDenied = "This app's identity needs {0} on the Foundry resource {1} to use its guardrails.";
+    internal const string GuardrailUncheckable = "Couldn't check the Foundry guardrail '{0}' at startup, and FailWhenUnreachable is on. See the inner exception.";
     internal const string GuardrailNotApplied = "The Foundry guardrail '{0}' isn't in place: {1}. Run IFoundryGuardrailsService.ApplyAsync from your provisioning job.";
 }

@@ -56,6 +56,8 @@ Recorded under `AgentTelemetry.SourceName`, so the core package's OpenTelemetry 
 ## Good to know
 
 - **Cost:** each scored answer costs one judge call.
+- **Nothing stored:** like agent runs, judge calls store nothing in Foundry, though they carry the run's prompt,
+  evidence and answer.
 - **Reasoning models** work as judges: the judge sends only the model name and messages.
 - **Missing scores:** if a metric can't be scored (e.g. a wrong model name), the reason is logged.
 - **Custom metrics:** `agents.AddQualityEvaluation(evaluator: new MyEvaluator())` with any Microsoft.Extensions.AI

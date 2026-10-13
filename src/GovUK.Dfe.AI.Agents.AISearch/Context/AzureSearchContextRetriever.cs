@@ -103,7 +103,9 @@ public sealed class AzureSearchContextRetriever(IReadOnlyDictionary<string, Sear
         CancellationToken cancellationToken)
     {
         var fields = FieldsFor(scope);
-        var searchOptions = BuildSearchOptions(query, size, filter, fields, _indexes.GetValueOrDefault(scope));
+        var index = _indexes.GetValueOrDefault(scope);
+        var labelFields = index?.LabelFields ?? true;
+        var searchOptions = BuildSearchOptions(query, size, filter, fields, index);
         var semantic = searchOptions.QueryType == SearchQueryType.Semantic;
         var results = new List<SearchResultItem>();
 
@@ -114,7 +116,7 @@ public sealed class AzureSearchContextRetriever(IReadOnlyDictionary<string, Sear
 
             await foreach (var result in response.GetResultsAsync().WithCancellation(cancellationToken).ConfigureAwait(false))
             {
-                if (ToItem(result, fields, semantic) is { } item)
+                if (ToItem(result, fields, labelFields, semantic) is { } item)
                 {
                     results.Add(item);
                 }
@@ -161,30 +163,47 @@ public sealed class AzureSearchContextRetriever(IReadOnlyDictionary<string, Sear
     }
 
     /// <summary>
-    /// One result as evidence, with its citation link: the first value (in field order) that is wholly a full https or http
-    /// address. That value is left out of the evidence, so the model never sees the link. Null when there's no content.
+    /// One result as evidence: each value labelled with its field, one per line (e.g. <c>number_on_roll: 398</c>), so the
+    /// model can tell similar values apart; or the values alone with <c>LabelFields: false</c>. Its citation link is the first
+    /// value (in field order) that is wholly a full https or http address, left out of the evidence so the model never sees
+    /// it; its citation text is the start of the other values. Null when there's no content.
     /// </summary>
-    private static SearchResultItem? ToItem(SearchResult<SearchDocument> result, IReadOnlyList<string> fields, bool semantic)
+    private static SearchResultItem? ToItem(SearchResult<SearchDocument> result, IReadOnlyList<string> fields, bool labelFields, bool semantic)
     {
+        // Listed content fields come back whatever their type; with none listed, only text fields, which leaves out ids and vectors.
         var values = (fields.Count > 0
-                ? fields.Select(field => result.Document.TryGetValue(field, out var value) ? value : null)
-                : result.Document.Select(static field => field.Value))
-            .OfType<string>()
-            .Where(static value => !string.IsNullOrWhiteSpace(value))
+                ? fields.Select(field => (Field: field, Value: Text(result.Document.TryGetValue(field, out var value) ? value : null)))
+                : result.Document.Select(static field => (Field: field.Key, Value: field.Value as string)))
+            .Where(static pair => !string.IsNullOrWhiteSpace(pair.Value))
+            .Select(static pair => (pair.Field, Value: pair.Value!.Trim()))
             .ToList();
-        var linkValue = values.FirstOrDefault(static value => WebAddress(value) is not null);
-        var content = string.Join(" ", values.Where(value => !ReferenceEquals(value, linkValue)));
-        if (string.IsNullOrWhiteSpace(content))
+        var link = values.FindIndex(static pair => WebAddress(pair.Value) is not null);
+        var shown = values.Where((_, i) => i != link).ToList();
+        if (shown.Count == 0)
         {
             return null;
         }
 
+        var content = labelFields
+            ? string.Join("\n", shown.Select(static pair => $"{pair.Field}: {pair.Value}"))
+            : string.Join(" ", shown.Select(static pair => pair.Value));
+
         // The semantic ranker's score reflects meaning; without it, the keyword or hybrid score.
         return new SearchResultItem(content, semantic ? result.SemanticSearch?.RerankerScore ?? result.Score : result.Score)
         {
-            Link = linkValue is null ? null : WebAddress(linkValue),
+            Name = CitationText(string.Join(" ", shown.Select(static pair => pair.Value))),
+            Link = link < 0 ? null : WebAddress(values[link].Value),
         };
     }
+
+    /// <summary>A field's value as text: strings as they are, numbers, dates and true/false in an invariant format; else null.</summary>
+    private static string? Text(object? value) => value switch
+    {
+        string text => text,
+        bool flag => flag ? "true" : "false",
+        IFormattable formattable => formattable.ToString(null, System.Globalization.CultureInfo.InvariantCulture),
+        _ => null,
+    };
 
     private IReadOnlyList<string> FieldsFor(string scope)
     {

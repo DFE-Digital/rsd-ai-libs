@@ -69,6 +69,12 @@ public sealed partial class GuardrailSettings
     /// <summary>At startup, fails when a deployment lacks the guardrail. Off: a warning only.</summary>
     public bool RequireAtStartup { get; set; } = true;
 
+    /// <summary>
+    /// Fails startup when the guardrail can't be checked, e.g. Azure Resource Manager is unreachable, so the app never runs
+    /// without its guardrail confirmed. Off (default): a warning, so an Azure outage doesn't stop new instances starting.
+    /// </summary>
+    public bool FailWhenUnreachable { get; set; }
+
     /// <summary>Optional: a service principal for Azure Resource Manager only. Unset: the default.</summary>
     public AgentsOptions.ServicePrincipalSettings? Authentication { get; set; }
 

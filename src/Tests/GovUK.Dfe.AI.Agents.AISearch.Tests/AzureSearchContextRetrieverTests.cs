@@ -215,7 +215,7 @@ public sealed class AzureSearchContextRetrieverTests
         var establishment = await sut.GetContextAsync("establishment_index", "Oak", cancellationToken: cancellationToken);
         var inspection = await sut.GetContextAsync("ofsted_index", "Oak", cancellationToken: cancellationToken);
 
-        Assert.Contains("Oak Primary Academy, 420 pupils.", establishment.Text, StringComparison.Ordinal);
+        Assert.Contains("name: Oak Primary\nsummary: Academy, 420 pupils.", establishment.Text, StringComparison.Ordinal);   // labelled
         Assert.DoesNotContain("est-1", establishment.Text, StringComparison.Ordinal);
         Assert.Contains("Rated Good in March 2024.", inspection.Text, StringComparison.Ordinal);
         Assert.DoesNotContain("https://example", inspection.Text, StringComparison.Ordinal);
@@ -264,14 +264,14 @@ public sealed class AzureSearchContextRetrieverTests
     {
         SetUpSearchResults(("first result about the school", 1.0), ("second result about the school", 0.9), ("third result", 0.8));
         var sut = new AzureSearchContextRetriever(new Dictionary<string, SearchClient> { [Scope] = _client }, _relevanceFilter,
-            maxEvidenceCharacters: 140);
+            maxEvidenceCharacters: 160);   // two labelled results fit; the third doesn't
 
         var text = (await sut.GetContextAsync(Scope, "query", cancellationToken: cancellationToken)).Text;
 
         Assert.Contains("first result about the school", text);
         Assert.Contains("second result about the school", text);   // whole, never cut mid-way
         Assert.DoesNotContain("third result", text);
-        Assert.EndsWith("[1 less relevant result(s) left out to keep the evidence within 140 characters.]", text);
+        Assert.EndsWith("[1 less relevant result(s) left out to keep the evidence within 160 characters.]", text);
     }
 
     [Fact]
@@ -371,5 +371,29 @@ public sealed class AzureSearchContextRetrieverTests
 
         Assert.Equal(["content", "url"], _sent!.Select);
         Assert.Equal(new Uri("https://reports.ofsted.gov.uk/provider/21/100000"), Assert.Single(result.Sources).Link);
+    }
+
+    // ===================== Field labels =====================
+
+    [Theory]
+    [InlineData(true, "name: Oakfield Primary\ncapacity: 420\nnumber_on_roll: 398\nattendance: 94.8\nconverter: true")]
+    [InlineData(false, "Oakfield Primary 420 398 94.8 true")]
+    public async Task EachValue_IsLabelledWithItsField_SoTheModelCanTellSimilarNumbersApart(bool labelFields, string expected)
+    {
+        SetUpDocuments(new SearchDocument
+        {
+            ["name"] = "Oakfield Primary", ["capacity"] = 420, ["number_on_roll"] = 398, ["attendance"] = 94.8, ["converter"] = true,
+            ["id"] = "est-1",
+        });
+        var sut = new AzureSearchContextRetriever(new Dictionary<string, SearchClient> { [Scope] = _client }, _relevanceFilter,
+            indexes: new Dictionary<string, AzureSearchIndexOptions>
+            {
+                [Scope] = new() { Name = Scope, ContentFields = ["name", "capacity", "number_on_roll", "attendance", "converter"], LabelFields = labelFields },
+            });
+
+        var result = await sut.GetContextAsync(Scope, "query", cancellationToken: cancellationToken);
+
+        Assert.EndsWith(expected, result.Text, StringComparison.Ordinal);   // listed fields come back whatever their type
+        Assert.Equal("Oakfield Primary 420 398 94.8 true", Assert.Single(result.Sources).Name);   // citations read the plain values
     }
 }

@@ -114,7 +114,7 @@ public sealed partial class AgentsOptions
     public sealed class PricingSettings
     {
         /// <summary>The currency the prices are in, e.g. "GBP". It tags the cost metrics.</summary>
-        public string Currency { get; set; } = "USD";
+        public string Currency { get; set; } = "GBP";
 
         /// <summary>Prices per model. A model with no entry has no cost reported.</summary>
         public Dictionary<string, ModelPrice> Models { get; set; } = [];

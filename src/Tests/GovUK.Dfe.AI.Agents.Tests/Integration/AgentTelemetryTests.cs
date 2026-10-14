@@ -219,7 +219,7 @@ public sealed class AgentTelemetryTests : IDisposable
 
         var span = Assert.Single(SpansOf("invoke_agent"));
         Assert.Equal(ActivityStatusCode.Error, span.Status);
-        Assert.Equal("The agent run failed.", span.StatGBPescription);
+        Assert.Equal("The agent run failed.", span.StatusDescription);
         Assert.Equal(typeof(InvalidOperationException).FullName, span.GetTagItem(AgentTelemetry.ErrorTypeTag));
         Assert.DoesNotContain(span.TagObjects, tag => tag.Value?.ToString()?.Contains("Jane Doe", StringComparison.Ordinal) == true);
         Assert.Equal(typeof(InvalidOperationException).FullName,
@@ -310,9 +310,9 @@ public sealed class AgentTelemetryTests : IDisposable
     // gpt-4o at 0.0025 per 1,000 input tokens and 0.01 per 1,000 output; each fake answer is 10 in and 240 out.
     private const decimal RunCost = (10 * 0.0025m + 240 * 0.01m) / 1_000m;
 
+    /// <summary>No Currency is set, so the cost metrics carry the default, GBP.</summary>
     private void PriceGpt4o()
     {
-        _configuration["AiAgents:Pricing:Currency"] = "GBP";
         _configuration["AiAgents:Pricing:Models:gpt-4o:CostPer1kTokensInput"] = "0.0025";
         _configuration["AiAgents:Pricing:Models:gpt-4o:CostPer1kTokensOutput"] = "0.01";
     }

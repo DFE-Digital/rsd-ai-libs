@@ -360,7 +360,6 @@ For fairness, give release-gate test cases a `group` (e.g. `"special-schools"`) 
 
   ```json
   "Pricing": {
-    "Currency": "GBP",
     "Models": { "gpt-5.1": { "CostPer1kTokensInput": 0.001, "CostPer1kTokensCachedInput": 0.0001, "CostPer1kTokensOutput": 0.008 } }
   }
   ```

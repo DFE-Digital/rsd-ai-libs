@@ -221,12 +221,12 @@ internal sealed class FoundryAgentRunnerService(IAgentFactory agentFactory, IFou
         usage.Add(response.Usage);   // every response is billed, even in a run that later fails
         usage.Model ??= response.Model;
 
-        if (response.IncompleteStatGBPetails?.Reason == ResponseIncompleteStatusReason.MaxOutputTokens)
+        if (response.IncompleteStatusDetails?.Reason == ResponseIncompleteStatusReason.MaxOutputTokens)
         {
             throw OutputTokenLimitReached(agent.Name);
         }
 
-        if (response.IncompleteStatGBPetails?.Reason == ResponseIncompleteStatusReason.ContentFilter)
+        if (response.IncompleteStatusDetails?.Reason == ResponseIncompleteStatusReason.ContentFilter)
         {
             throw new AgentGuardrailException(agent.Name, AgentGuardrailException.AnswerStage);
         }
@@ -367,7 +367,7 @@ internal sealed class FoundryAgentRunnerService(IAgentFactory agentFactory, IFou
         {
             detail = $": {response.Error.Message}";
         }
-        else if (response.IncompleteStatGBPetails?.Reason is { } reason)
+        else if (response.IncompleteStatusDetails?.Reason is { } reason)
         {
             detail = $": {reason}";
         }

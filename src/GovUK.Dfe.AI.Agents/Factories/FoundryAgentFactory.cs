@@ -42,6 +42,7 @@ internal sealed class FoundryAgentFactory(AgentAdministrationClient administrati
         ArgumentNullException.ThrowIfNull(spec);
         ArgumentException.ThrowIfNullOrWhiteSpace(spec.Name);
         ArgumentException.ThrowIfNullOrWhiteSpace(spec.Instructions);
+        ThrowIfNotAllowed(spec);
 
         // Ephemeral agents are used once, so there's nothing to cache.
         var cacheKey = AgentRuntimeService.IsEphemeralName(spec.Name) ? null : SpecSignature(spec);
@@ -104,6 +105,14 @@ internal sealed class FoundryAgentFactory(AgentAdministrationClient administrati
         return deployed.Definition is DeclarativeAgentDefinition definition
             ? [.. definition.Tools.OfType<FunctionTool>().Select(tool => tool.FunctionName)]
             : [];
+    }
+
+    public async Task<string?> GetGuardrailAsync(string name, string? version = null, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+
+        var deployed = await GetVersionAsync(name, version, cancellationToken).ConfigureAwait(false);
+        return deployed.Definition?.ContentFilterConfiguration?.RaiPolicyName;
     }
 
     public async Task<bool> MatchesDeployedVersionAsync(AgentSpec spec, string version, CancellationToken cancellationToken = default)
@@ -297,10 +306,11 @@ internal sealed class FoundryAgentFactory(AgentAdministrationClient administrati
         ProjectsAgentVersion version;
         try
         {
-            var definition = new DeclarativeAgentDefinition(model: spec.Model ?? options.DefaultModel)
+            var definition = new DeclarativeAgentDefinition(model: ModelOf(spec))
             {
                 Instructions = spec.Instructions,
                 TextOptions = spec.OutputSchema is null ? null : ToTextOptions(spec.OutputSchema),
+                ContentFilterConfiguration = GuardrailOf(spec) is { } guardrail ? new ContentFilterConfiguration(guardrail) : null,
             };
             foreach (var tool in spec.Tools)
             {
@@ -351,10 +361,28 @@ internal sealed class FoundryAgentFactory(AgentAdministrationClient administrati
         }
     }
 
-    /// <summary>Whether a deployed version has the spec's model, instructions, tools (in order) and output schema.</summary>
+    private string ModelOf(AgentSpec spec) => spec.Model ?? options.DefaultModel;
+
+    private string? GuardrailOf(AgentSpec spec) => spec.Guardrail ?? options.Guardrail;
+
+    /// <summary>
+    /// When the default model is on a connection, every version, including test copies and ephemeral agents, must use a
+    /// model on the same connection, so no model call bypasses it.
+    /// </summary>
+    private void ThrowIfNotAllowed(AgentSpec spec)
+    {
+        var connection = ModelConnectionRule.ConnectionOf(options.DefaultModel);
+        if (!ModelConnectionRule.Allows(connection, ModelOf(spec)))
+        {
+            throw new InvalidOperationException(string.Format(ErrorMessages.ModelNotFromConnection, spec.Name, ModelOf(spec), connection));
+        }
+    }
+
+    /// <summary>Whether a deployed version has the spec's model, guardrail, instructions, tools (in order) and output schema.</summary>
     private bool Matches(AgentSpec spec, ProjectsAgentDefinition? deployed)
         => deployed is DeclarativeAgentDefinition definition
-            && definition.Model == (spec.Model ?? options.DefaultModel)
+            && definition.Model == ModelOf(spec)
+            && definition.ContentFilterConfiguration?.RaiPolicyName == GuardrailOf(spec)
             && definition.Instructions == spec.Instructions
             && definition.Tools.Select(ToolSignature).SequenceEqual(spec.Tools.Select(static tool => ToolSignature(tool.Tool)))
             && OutputFormatMatches(definition.TextOptions, spec.OutputSchema);
@@ -380,10 +408,10 @@ internal sealed class FoundryAgentFactory(AgentAdministrationClient administrati
 
     private static string ToolSignature(ResponseTool tool) => ModelReaderWriter.Write(tool).ToString();
 
-    /// <summary>A hash of everything that decides the version: model, instructions, tools and output schema.</summary>
+    /// <summary>A hash of everything that decides the version: model, guardrail, instructions, tools and output schema.</summary>
     private string SpecSignature(AgentSpec spec)
     {
-        var content = string.Join('\u001f', [spec.Model ?? options.DefaultModel, spec.Instructions,
+        var content = string.Join('\u001f', [ModelOf(spec), GuardrailOf(spec) ?? string.Empty, spec.Instructions,
             .. spec.Tools.Select(static tool => ToolSignature(tool.Tool)), spec.OutputSchema?.Name ?? string.Empty, spec.OutputSchema?.JsonSchema ?? string.Empty]);
         return "spec:" + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(content)));
     }

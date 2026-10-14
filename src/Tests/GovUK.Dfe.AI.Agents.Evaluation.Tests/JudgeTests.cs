@@ -6,6 +6,7 @@ using GovUK.Dfe.AI.Agents.Builders;
 using GovUK.Dfe.AI.Agents.Evaluation.Quality;
 using GovUK.Dfe.AI.Agents.Quality.Interfaces;
 using GovUK.Dfe.AI.Agents.Quality;
+using GovUK.Dfe.AI.Agents.Services.Interfaces;
 using GovUK.Dfe.AI.Agents.Tests.Integration.Fakes;
 using GovUK.Dfe.AI.Agents.ValueObjects;
 using Microsoft.Extensions.AI.Evaluation.Quality;
@@ -114,14 +115,29 @@ public sealed class JudgeTests
     }
 
     [Theory]
-    [InlineData(null, "AiAgents:Evaluation (agents.AddQualityEvaluation() needs this section)")]
-    [InlineData(" ", "AiAgents:Evaluation:JudgeModel")]
-    public void AddQualityEvaluation_WithoutAJudgeModel_FailsStartup_NamingTheSetting(string? judgeModel, string reported)
+    [InlineData(null)]
+    [InlineData(" ")]
+    public async Task WithoutAJudgeModel_TheJudgeUsesTheDefaultModel(string? judgeModel)
     {
-        var ex = Assert.Throws<InvalidOperationException>(() => Build(agents => agents.AddQualityEvaluation(),
-            settings: new() { ["AiAgents:Evaluation:JudgeModel"] = judgeModel }));
+        var (runner, specs) = JudgeAgent("&lt;S2>4&lt;/S2>");
+        using var provider = Build(agents => agents.AddQualityEvaluation(new GroundednessEvaluator()),
+            settings: new() { ["AiAgents:Foundry:DefaultModel"] = "myconnection/gpt-4o", ["AiAgents:Evaluation:JudgeModel"] = judgeModel },
+            services: services => services.AddSingleton(runner));
 
-        Assert.Contains(reported, ex.Message, StringComparison.Ordinal);
+        await provider.GetRequiredService<IAgentRunEvaluator>().EvaluateAsync(Sample, cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Equal("myconnection/gpt-4o", Assert.Single(specs).Model);
+    }
+
+    /// <summary>A runner standing in for Foundry: records each judge agent's spec and answers with <paramref name="output"/>.</summary>
+    private static (IAgentRunnerService Runner, List<AgentSpec> Specs) JudgeAgent(string output)
+    {
+        var specs = new List<AgentSpec>();
+        var runner = Substitute.For<IAgentRunnerService>();
+        runner.RunFromSpecAsync(Arg.Do<AgentSpec>(specs.Add), Arg.Any<string>(), Arg.Any<string?>(), Arg.Any<ToolCallResolver?>(),
+                Arg.Any<Func<AgentResult, string?>?>(), Arg.Any<CancellationToken>())
+            .Returns(new AgentResult { AgentName = "quality-judge", Output = output, TotalTokens = 90 });
+        return (runner, specs);
     }
 
     [Theory]
@@ -149,9 +165,58 @@ public sealed class JudgeTests
             sent()!.InputItems.OfType<MessageResponseItem>().Select(item => item.Role));
     }
 
+    [Fact]
+    public async Task OnAModelConnection_TheJudgeRunsAsAnAgent_OnTheConnectionModel_AndItsScoresAreRead()
+    {
+        // As the runner returns it: the HTML-like score tags shown as text.
+        var (runner, specs) = JudgeAgent("&lt;S0>Checked.&lt;/S0>&lt;S1>Grounded.&lt;/S1>&lt;S2>4&lt;/S2>");
+        using var provider = Build(agents => agents.AddQualityEvaluation(new GroundednessEvaluator()),
+            services: services => services.AddSingleton(runner));
+
+        var scores = await provider.GetRequiredService<IAgentRunEvaluator>().EvaluateAsync(Sample, cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Equal(new Dictionary<string, double> { ["Groundedness"] = 4 }, scores);
+        var spec = Assert.Single(specs);
+        Assert.StartsWith("quality-judge-", spec.Name, StringComparison.Ordinal);
+        Assert.Equal("myconnection/gpt-5.1", spec.Model);
+        Assert.Empty(spec.Tools);
+        Assert.False(string.IsNullOrWhiteSpace(spec.Instructions));
+    }
+
+    [Fact]
+    public async Task EachEvaluator_KeepsOneJudgeAgent_ReusedForEveryAnswer_SoNoVersionIsCreatedPerScore()
+    {
+        var (runner, specs) = JudgeAgent("&lt;S2>4&lt;/S2>");
+        using var provider = Build(agents => agents.AddQualityEvaluation(), services: services => services.AddSingleton(runner));
+        var evaluator = provider.GetRequiredService<IAgentRunEvaluator>();
+
+        await evaluator.EvaluateAsync(Sample, cancellationToken: TestContext.Current.CancellationToken);
+        await evaluator.EvaluateAsync(Sample with { Prompt = "Who inspected it?", Evidence = "Inspected by J Smith.", Output = "J Smith." },
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        // Groundedness and relevance each send the same instructions every time, so each has one unchanging spec.
+        Assert.Equal(4, specs.Count);
+        var perEvaluator = specs.GroupBy(spec => spec.Name).ToList();
+        Assert.Equal(2, perEvaluator.Count);
+        Assert.All(perEvaluator, group => Assert.Single(group.DistinctBy(spec => spec.Instructions)));
+    }
+
+    [Theory]
+    [InlineData("gpt-5.1")]
+    [InlineData("otherconnection/gpt-5.1")]
+    public void AJudgeModelOffTheDefaultModelsConnection_FailsStartup(string judgeModel)
+    {
+        var ex = Assert.Throws<InvalidOperationException>(() => Build(agents => agents.AddQualityEvaluation(),
+            settings: new() { ["AiAgents:Evaluation:JudgeModel"] = judgeModel }));
+
+        Assert.Contains("AiAgents:Evaluation:JudgeModel (must be on the connection in Foundry:DefaultModel, as myconnection/<model>)",
+            ex.Message, StringComparison.Ordinal);
+    }
+
     /// <summary>Registers with a judge model under <c>AiAgents:Evaluation</c>; <paramref name="settings"/> override it (null removes one).</summary>
+    /// <param name="services">Replaces services after registration, e.g. with a fake.</param>
     private static ServiceProvider Build(Action<AgentsBuilder> configure, Action<ILoggingBuilder>? logging = null,
-        Dictionary<string, string?>? settings = null)
+        Dictionary<string, string?>? settings = null, Action<IServiceCollection>? services = null)
     {
         var all = new Dictionary<string, string?>
         {
@@ -170,14 +235,15 @@ public sealed class JudgeTests
                 all[key] = value;
             }
         }
-        var services = new ServiceCollection();
-        services.AddLogging(builder => logging?.Invoke(builder));
-        services.AddAgents(new ConfigurationBuilder().AddInMemoryCollection(all).Build(), agents =>
+        var collection = new ServiceCollection();
+        collection.AddLogging(builder => logging?.Invoke(builder));
+        collection.AddAgents(new ConfigurationBuilder().AddInMemoryCollection(all).Build(), agents =>
         {
             agents.UseCredential(Substitute.For<TokenCredential>());
             configure(agents);
         });
-        return services.BuildServiceProvider();
+        services?.Invoke(collection);
+        return collection.BuildServiceProvider();
     }
 
     [Fact]

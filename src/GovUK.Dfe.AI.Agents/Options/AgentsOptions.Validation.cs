@@ -12,7 +12,13 @@ public sealed partial class AgentsOptions
         => string.IsNullOrWhiteSpace(value) ? [$"{SectionName}:{name}"] : [];
 
     private IEnumerable<string> FoundryProblems()
-        => [.. Missing(Foundry.Endpoint, "Foundry:Endpoint"), .. Missing(Foundry.DefaultModel, "Foundry:DefaultModel")];
+        => [.. Missing(Foundry.Endpoint, "Foundry:Endpoint"), .. Missing(Foundry.DefaultModel, "Foundry:DefaultModel"),
+            .. GatewayErrorProblems()];
+
+    private IEnumerable<string> GatewayErrorProblems()
+        => Foundry.GatewayGuardrailErrors.Exists(static error => error.Status is < 400 or > 599)
+            ? [$"{SectionName}:Foundry:GatewayGuardrailErrors (each needs an error Status, 400 to 599)"]
+            : [];
 
     private IEnumerable<string> LimitProblems()
     {

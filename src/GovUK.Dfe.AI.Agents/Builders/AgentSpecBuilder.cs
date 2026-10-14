@@ -37,6 +37,7 @@ internal sealed class AgentSpecBuilder(IPromptProvider promptProvider, IEnumerab
                 {
                     Tools = AgentToolResolver.FilterToAllowed(custom.Tools, definition),
                     OutputSchema = custom.OutputSchema ?? definition.OutputSchema,
+                    Guardrail = custom.Guardrail ?? definition.Guardrail,
                 };
         }
 
@@ -46,6 +47,7 @@ internal sealed class AgentSpecBuilder(IPromptProvider promptProvider, IEnumerab
             Instructions = promptProvider.GetSystemPrompt(definition.SystemPromptKey),
             Tools = await AgentToolResolver.ResolveAsync(ToolProviders, definition, cancellationToken).ConfigureAwait(false),
             OutputSchema = definition.OutputSchema,
+            Guardrail = definition.Guardrail,
         };
     }
 }

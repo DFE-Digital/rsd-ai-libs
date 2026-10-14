@@ -81,11 +81,8 @@ public static class AgentsServiceCollectionExtensions
         services.AddSingleton(runOptions);
         services.AddSingleton(options.ToVersionPinning());
         services.AddFoundryAgents(_ => new Uri(options.Foundry.Endpoint!), _ => foundryCredential,
-            _ => new FoundryAgentFactoryOptions(options.Foundry.DefaultModel!)
-            {
-                KeepLatestVersions = options.KeepLatestVersions,
-                AgentCacheDuration = options.AgentCacheDuration,
-            }, FoundryClientOptions(options, runOptions.ApplicationName));
+            _ => FactoryOptions(options) with { KeepLatestVersions = options.KeepLatestVersions },
+            FoundryClientOptions(options, runOptions.ApplicationName));
         services.AddFilePrompts(section, options.ResponseFormatKey, options.ResponseFormatExemptPromptTypes);
 
         if (options.EnableDriftDetection)
@@ -105,6 +102,16 @@ public static class AgentsServiceCollectionExtensions
         RegisterAgents(services, builder.Definitions, options, foundryCredential);
         return services;
     }
+
+    /// <summary>
+    /// What every agent version must have: the default model (whose connection every model must use) and the guardrail.
+    /// Read when first used, after every package has registered, so a package's guardrail is included.
+    /// </summary>
+    private static FoundryAgentFactoryOptions FactoryOptions(AgentsOptions options) => new(options.Foundry.DefaultModel!)
+    {
+        AgentCacheDuration = options.AgentCacheDuration,
+        Guardrail = string.IsNullOrWhiteSpace(options.Foundry.Guardrail) ? null : options.Foundry.Guardrail,
+    };
 
     /// <summary>Tools needing approval must be allowed tools, and need an approver, or they could never run.</summary>
     private static IEnumerable<string> ApprovalProblems(AgentsBuilder builder)
@@ -160,7 +167,7 @@ public static class AgentsServiceCollectionExtensions
             var client = new AIProjectClient(new Uri(external.Endpoint!), credential,
                 FoundryClientOptions(options, sp.GetRequiredService<AgentRunOptions>().ApplicationName));
             return new ExternalFoundryProjectService(credential, client.AgentAdministrationClient, new FoundryResponsesClient(client.ProjectOpenAIClient),
-                new FoundryAgentFactoryOptions(options.Foundry.DefaultModel!) { AgentCacheDuration = options.AgentCacheDuration },
+                FactoryOptions(options),
                 sp.GetRequiredService<AgentRunOptions>(), sp.GetRequiredService<IAgentRunLimiter>(), sp.GetRequiredService<ILoggerFactory>());
         });
 

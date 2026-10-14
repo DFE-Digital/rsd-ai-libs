@@ -31,4 +31,7 @@ public sealed record AgentDefinition(string Name, string SystemPromptKey, bool I
     /// <c>[Evidence n]</c>. Turn off for an answer with nowhere to cite, e.g. a schema with no text fields.
     /// </summary>
     public bool RequiredCitations { get; init; } = true;
+
+    /// <summary>Optional: the Foundry guardrail its versions use. Unset: <c>Foundry:Guardrail</c>, if set.</summary>
+    public string? Guardrail { get; init; }
 }

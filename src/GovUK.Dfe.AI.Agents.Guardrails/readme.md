@@ -46,6 +46,26 @@ builder.Services.AddAgents(builder.Configuration, agents => agents
 - If Azure Resource Manager can't be reached, startup logs a warning, so an outage doesn't stop new instances. Set
   `"FailWhenUnreachable": true` to fail startup instead, for apps that must confirm the guardrail first.
 
+## Models through a connection
+
+When models are reached through a connection (`Foundry:DefaultModel` is `<connection>/<model>`), their deployments
+aren't in your Foundry resource, so put the guardrail on the agents instead:
+
+```json
+"Guardrails": {
+  "SubscriptionId": "<subscription id>",
+  "ResourceGroup": "<resource group>",
+  "Name": "briefing-guardrail",
+  "Targets": "Agents"
+}
+```
+
+- `Deployments` isn't needed; `ApplyAsync` creates or updates the guardrail and blocklists only.
+- Every agent version the app creates gets the guardrail (it becomes `Foundry:Guardrail`).
+- `CheckAsync` and the startup check confirm each pinned or externally managed version carries it, e.g.
+  `agent 'rsd-trust-agent' version 4 uses no guardrail`. Fix it by provisioning a new version.
+- `"Targets": "Deployments, Agents"` does both.
+
 ## Settings
 
 | Setting                           | Default                            | Purpose                                                                                     |
@@ -53,13 +73,14 @@ builder.Services.AddAgents(builder.Configuration, agents => agents
 | `SubscriptionId`, `ResourceGroup` | Required                           | Where the Foundry resource is                                                               |
 | `AccountName`                     | The resource in `Foundry:Endpoint` | Set only if the deployments are on another Foundry resource                                 |
 | `Name`                            | Required                           | The guardrail's name in Foundry                                                             |
-| `Deployments`                     | Required                           | Every model deployment your agents use                                                      |
+| `Targets`                         | `Deployments`                      | Where the guardrail goes: `Deployments`, `Agents`, or both                                  |
+| `Deployments`                     | Required for `Deployments`         | Every model deployment your agents use                                                      |
 | `BlockFrom`                       | `Medium`                           | Lowest harm severity blocked in prompts and answers. `Low` blocks the most                  |
 | `PromptShields`                   | `true`                             | Blocks jailbreak attempts                                                                   |
 | `IndirectAttacks`                 | `true`                             | Blocks instructions hidden in documents and tool output                                     |
 | `ProtectedMaterial`               | `true`                             | Blocks answers that reproduce protected text or code                                        |
 | `Blocklists`                      | None                               | Your own blocked terms and patterns (see below)                                             |
-| `RequireAtStartup`                | `true`                             | Fails startup when a deployment lacks the guardrail                                         |
+| `RequireAtStartup`                | `true`                             | Fails startup when a deployment or agent version lacks the guardrail                        |
 | `FailWhenUnreachable`             | `false`                            | Fails startup when the guardrail can't be checked, e.g. Resource Manager is unreachable     |
 | `Authentication`                  | The default identity               | A separate identity for Resource Manager (or `agents.UseGuardrailsCredential(...)` in code) |
 

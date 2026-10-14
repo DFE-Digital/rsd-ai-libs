@@ -62,4 +62,7 @@ internal sealed record AgentRunOptions
 
     /// <summary>At startup, checks this app can run every tool its pinned and externally managed agents call.</summary>
     public bool ValidateAgentToolsAtStartup { get; init; } = true;
+
+    /// <summary>Gateway errors that mean its content filter blocked the prompt; see <c>Foundry:GatewayGuardrailErrors</c>.</summary>
+    public IReadOnlyList<AgentsOptions.GatewayGuardrailError> GatewayGuardrailErrors { get; init; } = [];
 }

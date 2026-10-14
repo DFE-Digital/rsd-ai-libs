@@ -5,6 +5,7 @@ using GovUK.Dfe.AI.Agents.Evaluation.Quality;
 using GovUK.Dfe.AI.Agents.Extensibility;
 using GovUK.Dfe.AI.Agents.Extensibility.Interfaces;
 using GovUK.Dfe.AI.Agents.Quality.Interfaces;
+using GovUK.Dfe.AI.Agents.Services.Interfaces;
 using Microsoft.Extensions.AI.Evaluation.Quality;
 using Microsoft.Extensions.AI.Evaluation;
 using Microsoft.Extensions.Configuration;
@@ -21,7 +22,7 @@ public static class QualityEvaluationExtensions
     private const string SectionName = "Evaluation";
 
     /// <summary>
-    /// Scores answers with the <c>AiAgents:Evaluation:JudgeModel</c> in this app's Foundry project: every
+    /// Scores answers with the <c>AiAgents:Evaluation:JudgeModel</c> (default: <c>Foundry:DefaultModel</c>): every
     /// <c>IAgentTestRunner</c> case, and a <c>SampleRate</c> share of live runs in the background.
     /// </summary>
     /// <param name="evaluator">Default: groundedness and relevance, each scored 1–5.</param>
@@ -30,8 +31,10 @@ public static class QualityEvaluationExtensions
         ArgumentNullException.ThrowIfNull(agents);
 
         var scoring = evaluator ?? new CompositeEvaluator(new GroundednessEvaluator(), new RelevanceEvaluator());
-        return agents.AddPackage(new EvaluationPackage(judgeModel => sp => new ExtensionsAiEvaluator(scoring,
-            new ChatConfiguration(new FoundryJudgeChatClient(sp.GetRequiredService<ProjectOpenAIClient>(), judgeModel!)),
+        return agents.AddPackage(new EvaluationPackage((judgeModel, asAgent) => sp => new ExtensionsAiEvaluator(scoring,
+            new ChatConfiguration(asAgent
+                ? new AgentJudgeChatClient(sp.GetRequiredService<IAgentRunnerService>(), judgeModel!)
+                : new FoundryJudgeChatClient(sp.GetRequiredService<ProjectOpenAIClient>(), judgeModel!)),
             sp.GetService<ILogger<ExtensionsAiEvaluator>>()), needsJudge: true));
     }
 
@@ -44,26 +47,21 @@ public static class QualityEvaluationExtensions
         ArgumentNullException.ThrowIfNull(agents);
         ArgumentNullException.ThrowIfNull(evaluator);
 
-        return agents.AddPackage(new EvaluationPackage(_ => evaluator, needsJudge: false));
+        return agents.AddPackage(new EvaluationPackage((_, _) => evaluator, needsJudge: false));
     }
 
     /// <summary>One package whichever way it's added, so scoring is registered once.</summary>
-    private sealed class EvaluationPackage(Func<string?, Func<IServiceProvider, IAgentRunEvaluator>> evaluatorFor, bool needsJudge)
+    /// <param name="evaluatorFor">The evaluator, given the judge model and whether the judge runs as a temporary agent.</param>
+    private sealed class EvaluationPackage(Func<string?, bool, Func<IServiceProvider, IAgentRunEvaluator>> evaluatorFor, bool needsJudge)
         : IAgentsPackage
     {
         public string Name => "Evaluation";
 
         public void Register(AgentsPackageContext context)
         {
-            var section = context.Section.GetSection(SectionName);
-            if (needsJudge && !section.Exists())
-            {
-                context.ReportProblem($"{SectionName} (agents.AddQualityEvaluation() needs this section)");
-                return;
-            }
-
-            var settings = section.Get<EvaluationSettings>() ?? new EvaluationSettings();
-            var problems = settings.Problems(needsJudge).ToList();
+            var settings = context.Section.GetSection(SectionName).Get<EvaluationSettings>() ?? new EvaluationSettings();
+            var foundry = context.Options.Foundry;
+            var problems = settings.Problems(needsJudge, foundry).ToList();
             problems.ForEach(problem => context.ReportProblem($"{SectionName}:{problem}"));
             if (problems.Count > 0)
             {
@@ -71,7 +69,8 @@ public static class QualityEvaluationExtensions
             }
 
             var services = context.Services;
-            services.AddSingleton(evaluatorFor(settings.JudgeModel));
+            // With a model connection, the judge runs as an agent, so its calls get the same connection and guardrail.
+            services.AddSingleton(evaluatorFor(settings.JudgeModelFor(foundry), foundry.ModelConnection is not null));
             if (settings.SampleRate <= 0)
             {
                 return;

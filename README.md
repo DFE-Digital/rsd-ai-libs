@@ -64,6 +64,20 @@ dotnet build GovUK.Dfe.AI.Agents.slnx
 dotnet test GovUK.Dfe.AI.Agents.slnx
 ```
 
+### Live checks before a release
+
+`LiveFoundryTests` run against a dev Foundry project, and are skipped otherwise. They check that Foundry keeps each
+agent version's guardrail (so versions are reused), and that a jailbreak is reported as a guardrail block. If a gateway
+blocks it instead, the failure shows the status and error code to add to `Foundry:GatewayGuardrailErrors`.
+
+```sh
+az login
+export AiAgents__Foundry__Endpoint="https://<resource>.services.ai.azure.com/api/projects/<project>"
+export AiAgents__Foundry__DefaultModel="<connection>/gpt-5.1"
+export AiAgents__Foundry__Guardrail="<guardrail>"
+dotnet test src/Tests/GovUK.Dfe.AI.Agents.Tests --filter "FullyQualifiedName~LiveFoundryTests"
+```
+
 ## Releasing
 
 Each package has its own workflow, `.github/workflows/build-deploy-ai-agents[-{addon}].yml`, which runs when that

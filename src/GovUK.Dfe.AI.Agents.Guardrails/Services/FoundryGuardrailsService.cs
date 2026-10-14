@@ -8,12 +8,18 @@ using Microsoft.Extensions.Logging;
 using System.Net;
 using GovUK.Dfe.AI.Agents.Guardrails.Diagnostics;
 using GovUK.Dfe.AI.Agents.Guardrails.Options;
+using GovUK.Dfe.AI.Agents.Guardrails.Enums;
+using GovUK.Dfe.AI.Agents.Factories.Interfaces;
 
 namespace GovUK.Dfe.AI.Agents.Guardrails.Services;
 
-internal sealed class FoundryGuardrailsService(IGuardrailStore store, GuardrailSettings settings, ILogger<FoundryGuardrailsService> logger)
-    : IFoundryGuardrailsService
+internal sealed class FoundryGuardrailsService(IGuardrailStore store, GuardrailSettings settings, ILogger<FoundryGuardrailsService> logger,
+    IAgentFactory? agentFactory = null) : IFoundryGuardrailsService
 {
+    private bool OnDeployments => settings.Targets.HasFlag(GuardrailTargets.Deployments);
+
+    private bool OnAgents => settings.Targets.HasFlag(GuardrailTargets.Agents);
+
     /// <remarks>
     /// Reads first and writes only what differs, so when the guardrail is already in place a job needs only Reader.
     /// </remarks>
@@ -39,7 +45,8 @@ internal sealed class FoundryGuardrailsService(IGuardrailStore store, GuardrailS
                 logger.SavedGuardrailPart("guardrail", required.Name);
             }
 
-            foreach (var deployment in settings.Deployments)
+            // Agent versions can't be changed: this app's agents get the guardrail in each new version they create.
+            foreach (var deployment in OnDeployments ? settings.Deployments : [])
             {
                 var (exists, current) = await store.GetDeploymentAsync(deployment, cancellationToken).ConfigureAwait(false);
                 if (exists && current != required.Name)
@@ -83,17 +90,9 @@ internal sealed class FoundryGuardrailsService(IGuardrailStore store, GuardrailS
                 }
             }
 
-            foreach (var deployment in settings.Deployments)
+            if (OnDeployments)
             {
-                var (exists, current) = await store.GetDeploymentAsync(deployment, cancellationToken).ConfigureAwait(false);
-                if (!exists)
-                {
-                    problems.Add($"deployment '{deployment}' doesn't exist");
-                }
-                else if (current != required.Name)
-                {
-                    problems.Add($"deployment '{deployment}' uses {(current is null ? "no guardrail" : $"'{current}'")}");
-                }
+                problems.AddRange(await DeploymentProblemsAsync(required.Name, cancellationToken).ConfigureAwait(false));
             }
         }
         catch (RequestFailedException ex) when (ex.Status == (int)HttpStatusCode.Forbidden)
@@ -101,7 +100,61 @@ internal sealed class FoundryGuardrailsService(IGuardrailStore store, GuardrailS
             throw AccessDenied("Reader", ex);
         }
 
+        if (OnAgents)
+        {
+            problems.AddRange(await AgentProblemsAsync(cancellationToken).ConfigureAwait(false));
+        }
+
         return new GuardrailReport(required.Name, problems);
+    }
+
+    private async Task<List<string>> DeploymentProblemsAsync(string guardrail, CancellationToken cancellationToken)
+    {
+        var problems = new List<string>();
+        foreach (var deployment in settings.Deployments)
+        {
+            var (exists, current) = await store.GetDeploymentAsync(deployment, cancellationToken).ConfigureAwait(false);
+            if (!exists)
+            {
+                problems.Add($"deployment '{deployment}' doesn't exist");
+            }
+            else if (current != guardrail)
+            {
+                problems.Add($"deployment '{deployment}' uses {(current is null ? "no guardrail" : $"'{current}'")}");
+            }
+        }
+
+        return problems;
+    }
+
+    /// <summary>
+    /// Pinned and externally managed versions run as they are, so each must already carry its guardrail. Agents this app
+    /// creates aren't checked: a version without the guardrail is never reused.
+    /// </summary>
+    private async Task<List<string>> AgentProblemsAsync(CancellationToken cancellationToken)
+    {
+        var problems = new List<string>();
+        foreach (var agent in settings.Agents)
+        {
+            var version = agent.Version is null ? "latest version" : $"version {agent.Version}";
+            string? current;
+            try
+            {
+                current = await agentFactory!.GetGuardrailAsync(agent.Name, agent.Version, cancellationToken).ConfigureAwait(false);
+            }
+            catch (InvalidOperationException)
+            {
+                problems.Add($"agent '{agent.Name}' {version} doesn't exist");
+                continue;
+            }
+
+            if (current != agent.Guardrail)
+            {
+                problems.Add($"agent '{agent.Name}' {version} uses {(current is null ? "no guardrail" : $"'{current}'")}");
+            }
+        }
+
+        return problems;
     }
 
     private InvalidOperationException AccessDenied(string role, RequestFailedException ex)

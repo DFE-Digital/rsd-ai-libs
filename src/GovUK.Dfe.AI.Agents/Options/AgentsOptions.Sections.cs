@@ -10,11 +10,49 @@ public sealed partial class AgentsOptions
         /// <summary>The Foundry project endpoint, e.g. https://&lt;resource&gt;.services.ai.azure.com/api/projects/&lt;project&gt;.</summary>
         public string? Endpoint { get; set; }
 
-        /// <summary>The model agents use unless their spec says otherwise, e.g. "my-connection/gpt-5.1".</summary>
+        /// <summary>
+        /// The model agents use unless their spec says otherwise, e.g. "my-connection/gpt-5.1". When it names a connection,
+        /// every model (an agent's own, test copies, the judge) must be on that connection.
+        /// </summary>
         public string? DefaultModel { get; set; }
 
         /// <summary>Optional: a service principal for Foundry only. Unset: the default.</summary>
         public ServicePrincipalSettings? Authentication { get; set; }
+
+        /// <summary>
+        /// Optional: the Foundry guardrail every agent version this app creates uses, unless its definition names its own.
+        /// The Guardrails package sets it from its <c>Name</c> when its <c>Targets</c> include <c>Agents</c>.
+        /// </summary>
+        public string? Guardrail { get; set; }
+
+        /// <summary>
+        /// Optional: errors from a gateway in front of the model that mean its content filter blocked the prompt, e.g.
+        /// <c>{ "Status": 403, "Code": "ContentSafetyBlocked" }</c> for API Management's <c>llm-content-safety</c> policy.
+        /// They're reported as guardrail blocks, like Foundry's own.
+        /// </summary>
+        public List<GatewayGuardrailError> GatewayGuardrailErrors { get; set; } = [];
+
+        /// <summary>The connection in <see cref="DefaultModel"/>, e.g. "my-connection"; null when it names a deployment directly.</summary>
+        public string? ModelConnection => ModelConnectionRule.ConnectionOf(DefaultModel);
+
+        /// <summary>
+        /// Whether agents may use <paramref name="model"/>: any model when <see cref="DefaultModel"/> names no connection,
+        /// else only a model on <see cref="ModelConnection"/>.
+        /// </summary>
+        public bool AllowsModel(string? model) => ModelConnectionRule.Allows(ModelConnection, model);
+    }
+
+    /// <summary>A gateway error that means its content filter blocked the prompt.</summary>
+    public sealed class GatewayGuardrailError
+    {
+        /// <summary>The HTTP status, e.g. 403.</summary>
+        public int Status { get; set; }
+
+        /// <summary>
+        /// Optional, but advised: the error's code, read from <c>error.code</c> or <c>code</c> in the JSON body. Without
+        /// it, every error with <see cref="Status"/> counts, including a 403 for a missing role.
+        /// </summary>
+        public string? Code { get; set; }
     }
 
     /// <summary>A Microsoft Entra ID service principal: an <c>Authentication</c> block.</summary>

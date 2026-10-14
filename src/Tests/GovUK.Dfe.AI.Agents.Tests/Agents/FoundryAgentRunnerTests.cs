@@ -103,6 +103,23 @@ public sealed class FoundryAgentRunnerTests
         Assert.Equal(isBlock, FoundryAgentRunnerService.IsGuardrailBlock(new System.ClientModel.ClientResultException("content_filter", response)));
     }
 
+    [Theory]
+    [InlineData(403, "{\"error\":{\"code\":\"ContentSafetyBlocked\"}}", true)]
+    [InlineData(403, "{\"code\":\"contentsafetyblocked\",\"message\":\"Blocked.\"}", true)]
+    [InlineData(403, "{\"error\":{\"code\":\"AuthorizationFailed\"}}", false)]   // a missing role isn't a block
+    [InlineData(403, "not json", false)]
+    [InlineData(400, "{\"error\":{\"code\":\"ContentSafetyBlocked\"}}", false)]
+    public void AGatewayBlock_IsRecognisedByItsConfiguredStatusAndCode(int status, string body, bool isBlock)
+    {
+        var response = Substitute.For<System.ClientModel.Primitives.PipelineResponse>();
+        response.Status.Returns(status);
+        response.Content.Returns(BinaryData.FromString(body));
+        AgentsOptions.GatewayGuardrailError[] gatewayErrors = [new() { Status = 403, Code = "ContentSafetyBlocked" }];
+
+        Assert.Equal(isBlock, FoundryAgentRunnerService.IsGatewayGuardrailBlock(
+            new System.ClientModel.ClientResultException("Forbidden.", response), gatewayErrors));
+    }
+
     [Fact]
     public async Task RunAsync_WhenAGuardrailBlocksThePrompt_FailsWithAgentGuardrailException_AndCountsTheBlock()
     {

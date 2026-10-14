@@ -278,6 +278,29 @@ A case file:
 Hooks for the [UK Government AI Playbook](https://www.gov.uk/government/publications/ai-playbook-for-the-uk-government).
 Your app owns the decisions, the user interface, the DPIA and the ATRS record.
 
+### Every model call goes through a model connection
+
+Put `DefaultModel` on a connection you control (e.g. an API Management gateway with content safety), and every model
+call goes through it:
+
+```json
+"Foundry": {
+  "DefaultModel": "myconnection/gpt-5.1",
+  "Guardrail": "briefing-guardrail"
+}
+```
+
+- Every agent version the app creates, including release-gate copies and temporary agents, must use a model on the same
+  connection (`myconnection/<model>`); any other is refused. The Evaluation judge uses `DefaultModel` unless
+  `JudgeModel` is set.
+- `Guardrail` is optional. When set, every new agent version gets it, and a version without it is replaced, never
+  reused. `AddGuardrails()` with `"Targets": "Agents"` sets it for you and checks pinned and externally managed versions.
+- An agent can name its own with `new AgentDefinition(...) { Guardrail = "..." }`; it's optional.
+- If your gateway blocks content itself, list its errors so they're reported as guardrail blocks:
+  `"GatewayGuardrailErrors": [ { "Status": 403, "Code": "<its error code>" } ]`. Take both from one real blocked call,
+  as the error reaches your app; always give the `Code`, as a 403 alone also means a missing role.
+- A `DefaultModel` with no connection, e.g. `gpt-5.1`, allows any model.
+
 ### A person approves changes
 
 ```csharp
@@ -410,7 +433,9 @@ All under `AiAgents`, or in code with `agents.Configure(o => ...)`.
 | Setting                           | Default             | Purpose                                                                                               |
 | --------------------------------- | ------------------- | ----------------------------------------------------------------------------------------------------- |
 | `Foundry:Endpoint`                | Required            | The Foundry project endpoint                                                                          |
-| `Foundry:DefaultModel`            | Required            | The model deployment agents use, e.g. `<connection>/gpt-5.1`                                          |
+| `Foundry:DefaultModel`            | Required            | The model agents use, e.g. `<connection>/gpt-5.1`; every model must then be on that connection        |
+| `Foundry:Guardrail`               | None                | The guardrail every new agent version uses                                                            |
+| `Foundry:GatewayGuardrailErrors`  | None                | Gateway errors (`Status`, `Code`) reported as guardrail blocks                                        |
 | `Authentication`                  | None                | The default identity: `TenantId`, `ClientId` and `ClientSecret`, unless set in code                   |
 | `PromptFiles`                     | None                | `SystemPrompts` and `UserPrompts`: each prompt key and its file                                       |
 | `ApplicationName`                 | Entry assembly name | Telemetry tag, and scope of the temporary-agent sweep                                                 |

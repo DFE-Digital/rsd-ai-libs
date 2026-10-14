@@ -3,6 +3,7 @@ using Azure.ResourceManager.CognitiveServices.Models;
 using Azure;
 using GovUK.Dfe.AI.Agents.Builders;
 using GovUK.Dfe.AI.Agents.Enums;
+using GovUK.Dfe.AI.Agents.Factories.Interfaces;
 using GovUK.Dfe.AI.Agents.Guardrails.Enums;
 using GovUK.Dfe.AI.Agents.Guardrails.Options;
 using GovUK.Dfe.AI.Agents.Guardrails.Policies;
@@ -214,15 +215,68 @@ public sealed class GuardrailTests
         Assert.Contains("harm filters block from nothing, not Medium", read.WeakerThan(GuardrailPolicy.From(Settings())));
     }
 
+    [Fact]
+    public async Task OnAgents_EachVersionInUseMustCarryTheGuardrail_AndDeploymentsArentLookedUp()
+    {
+        var agents = Substitute.For<IAgentFactory>();
+        agents.GetGuardrailAsync("rsd-trust-agent", "4", Arg.Any<CancellationToken>()).Returns((string?)null);
+        agents.GetGuardrailAsync("ofsted-agent", null, Arg.Any<CancellationToken>()).Returns("briefing-guardrail");
+        agents.GetGuardrailAsync("academies-agent", "2", Arg.Any<CancellationToken>()).Returns("Microsoft.DefaultV2");
+        agents.GetGuardrailAsync("old-agent", "9", Arg.Any<CancellationToken>())
+            .Returns(Task.FromException<string?>(new InvalidOperationException("Agent 'old-agent' version '9' was not found.")));
+        var settings = Settings();
+        settings.Targets = GuardrailTargets.Agents;   // its Deployments aren't in the store: looking them up would report them
+        settings.Agents = [new("rsd-trust-agent", "4", "briefing-guardrail"), new("ofsted-agent", null, "briefing-guardrail"),
+            new("academies-agent", "2", "briefing-guardrail"), new("old-agent", "9", "briefing-guardrail")];
+
+        var report = await new FoundryGuardrailsService(_store, settings, NullLogger<FoundryGuardrailsService>.Instance, agents)
+            .ApplyAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(["agent 'rsd-trust-agent' version 4 uses no guardrail", "agent 'academies-agent' version 2 uses 'Microsoft.DefaultV2'",
+            "agent 'old-agent' version 9 doesn't exist"], report.Problems);
+        Assert.Empty(_store.Deployments);
+    }
+
+    [Fact]
+    public void OnAgents_TheGuardrailIsEveryNewVersionsDefault_AndPinnedAndExternalVersionsAreChecked()
+    {
+        var guardrails = ValidGuardrail();
+        guardrails.Remove("Deployments:0");
+        guardrails["Targets"] = "Agents";
+
+        var services = Build(guardrails, extra: new()
+        {
+            ["AiAgents:VersionPins:rsd-trust-agent"] = "4",
+            ["AiAgents:ExternallyManagedAgents:ofsted-agent"] = "latest",
+        });
+
+        var settings = (GuardrailSettings)services.Single(service => service.ServiceType == typeof(GuardrailSettings)).ImplementationInstance!;
+        Assert.Equal([new AgentInUse("rsd-trust-agent", "4", "briefing-guardrail"), new AgentInUse("ofsted-agent", null, "briefing-guardrail")],
+            settings.Agents);
+    }
+
+    [Fact]
+    public void OnDeployments_DeploymentsAreStillNeeded()
+    {
+        var guardrails = ValidGuardrail();
+        guardrails.Remove("Deployments:0");
+
+        var ex = Assert.Throws<InvalidOperationException>(() => Build(guardrails));
+
+        Assert.Contains("AiAgents:Guardrails:Deployments", ex.Message, StringComparison.Ordinal);
+    }
+
     private static Dictionary<string, string?> ValidGuardrail() => new()
     {
         ["SubscriptionId"] = Subscription, ["ResourceGroup"] = "rg-1", ["Name"] = "briefing-guardrail", ["Deployments:0"] = "gpt-5.1",
     };
 
     /// <summary>Registers with these <c>AiAgents:Guardrails</c> settings; by default every service signs in with one code credential.</summary>
-    private static IServiceCollection Build(Dictionary<string, string?> guardrails, Action<AgentsBuilder>? configure = null)
+    /// <param name="extra">Other <c>AiAgents</c> settings, by full path.</param>
+    private static IServiceCollection Build(Dictionary<string, string?> guardrails, Action<AgentsBuilder>? configure = null,
+        Dictionary<string, string?>? extra = null)
     {
-        var settings = new Dictionary<string, string?>
+        var settings = new Dictionary<string, string?>(extra ?? [])
         {
             ["AiAgents:Foundry:Endpoint"] = FoundryEndpoint,
             ["AiAgents:Foundry:DefaultModel"] = "myconnection/gpt-5.1",

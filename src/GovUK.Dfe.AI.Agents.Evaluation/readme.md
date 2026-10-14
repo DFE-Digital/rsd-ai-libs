@@ -18,7 +18,6 @@ dotnet add package GovUK.Dfe.AI.Agents.Evaluation
 ```json
 "AiAgents": {
   "Evaluation": {
-    "JudgeModel": "<connection>/gpt-5.1",
     "SampleRate": 0.05
   }
 }
@@ -30,12 +29,12 @@ builder.Services.AddAgents(builder.Configuration, agents => agents
     .AddQualityEvaluation());
 ```
 
-| Setting      | Default  | Purpose                                                                          |
-| ------------ | -------- | -------------------------------------------------------------------------------- |
-| `JudgeModel` | Required | Any model in your Foundry project. It's called with the app's Foundry credential |
-| `SampleRate` | `0.05`   | Share of live runs scored, from 0 to 1. `0` scores only release-gate tests       |
+| Setting      | Default                | Purpose                                                                                           |
+| ------------ | ---------------------- | ------------------------------------------------------------------------------------------------- |
+| `JudgeModel` | `Foundry:DefaultModel` | The model that scores answers. On a connection, it must be the same one as `Foundry:DefaultModel` |
+| `SampleRate` | `0.05`                 | Share of live runs scored, from 0 to 1. `0` scores only release-gate tests                        |
 
-A missing `JudgeModel` or a `SampleRate` outside 0 to 1 fails startup, listed with any other missing settings.
+The whole section is optional. A `JudgeModel` on another connection, or a `SampleRate` outside 0 to 1, fails startup.
 
 ## What gets scored
 
@@ -56,6 +55,9 @@ Recorded under `AgentTelemetry.SourceName`, so the core package's OpenTelemetry 
 ## Good to know
 
 - **Cost:** each scored answer costs one judge call.
+- **On a model connection:** the judge runs as an agent with no tools, through the connection and with the guardrail.
+  Each metric keeps one agent (`quality-judge-<id>`), created once and reused. Its tokens and cost appear in the usual
+  telemetry.
 - **Nothing stored:** like agent runs, judge calls store nothing in Foundry, though they carry the run's prompt,
   evidence and answer.
 - **Reasoning models** work as judges: the judge sends only the model name and messages.

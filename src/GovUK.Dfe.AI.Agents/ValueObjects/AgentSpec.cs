@@ -23,4 +23,7 @@ public sealed record AgentSpec
 
     /// <summary>A JSON schema the agent's answer must follow, or <see langword="null"/> for free text.</summary>
     public AgentOutputSchema? OutputSchema { get; init; }
+
+    /// <summary>The Foundry guardrail (RAI policy) its versions use, or the default from <c>Foundry:Guardrail</c>.</summary>
+    public string? Guardrail { get; init; }
 }

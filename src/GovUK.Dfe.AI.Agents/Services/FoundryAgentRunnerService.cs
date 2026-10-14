@@ -205,7 +205,7 @@ internal sealed class FoundryAgentRunnerService(IAgentFactory agentFactory, IFou
                 : await responsesClient.CreateResponseAsync(agent.Name, inputItems, agent.Version, outputTokensLeft, cancellationToken)
                     .ConfigureAwait(false);
         }
-        catch (ClientResultException ex) when (IsGuardrailBlock(ex))
+        catch (ClientResultException ex) when (IsGuardrailBlock(ex) || IsGatewayGuardrailBlock(ex, _runOptions.GatewayGuardrailErrors))
         {
             RecordCall(agent, started, null, "content_filter");
             throw new AgentGuardrailException(agent.Name, AgentGuardrailException.PromptStage, ex);
@@ -260,12 +260,54 @@ internal sealed class FoundryAgentRunnerService(IAgentFactory agentFactory, IFou
         {
             return false;
         }
-
-        static string? CodeOf(JsonElement element)
-            => element.ValueKind == JsonValueKind.Object && element.TryGetProperty("code", out var code) && code.ValueKind == JsonValueKind.String
-                ? code.GetString()
-                : null;
     }
+
+    /// <summary>
+    /// A gateway in front of the model, e.g. API Management's <c>llm-content-safety</c> policy, blocked the prompt: the
+    /// error has a configured status and, when one is given, its code (<c>error.code</c> or <c>code</c>).
+    /// </summary>
+    internal static bool IsGatewayGuardrailBlock(ClientResultException ex, IReadOnlyList<AgentsOptions.GatewayGuardrailError> gatewayErrors)
+    {
+        var matching = gatewayErrors.Where(error => error.Status == ex.Status).ToList();
+        if (matching.Count == 0)
+        {
+            return false;
+        }
+
+        if (matching.Exists(static error => string.IsNullOrWhiteSpace(error.Code)))
+        {
+            return true;
+        }
+
+        var code = ErrorCodeOf(ex);
+        return code is not null && matching.Exists(error => string.Equals(error.Code, code, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static string? ErrorCodeOf(ClientResultException ex)
+    {
+        if (ex.GetRawResponse()?.Content is not { } content)
+        {
+            return null;
+        }
+
+        try
+        {
+            using var body = JsonDocument.Parse(content.ToMemory());
+            var root = body.RootElement;
+            return root.ValueKind == JsonValueKind.Object && root.TryGetProperty("error", out var error) && CodeOf(error) is { } nested
+                ? nested
+                : CodeOf(root);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    private static string? CodeOf(JsonElement element)
+        => element.ValueKind == JsonValueKind.Object && element.TryGetProperty("code", out var code) && code.ValueKind == JsonValueKind.String
+            ? code.GetString()
+            : null;
 
     /// <summary>How long one Foundry call took, so a slow model or deployment shows up in the metrics.</summary>
     private void RecordCall(AgentReference agent, long started, string? model, string? errorType)

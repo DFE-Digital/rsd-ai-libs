@@ -5,7 +5,8 @@ namespace GovUK.Dfe.AI.Agents.Factories.Interfaces;
 /// <summary>Advanced: agent versions in Foundry. <c>IAgentService</c> uses it for you; use it directly for maintenance.</summary>
 public interface IAgentFactory
 {
-    /// <summary>Reuses a version matching <paramref name="spec"/>'s model, instructions, tools and schema, or creates one.</summary>
+    /// <summary>Reuses a version matching <paramref name="spec"/>'s model, guardrail, instructions, tools and schema, or creates one.</summary>
+    /// <exception cref="InvalidOperationException">The model isn't on the connection in <c>Foundry:DefaultModel</c>.</exception>
     Task<AgentReference> GetOrCreateAsync(AgentSpec spec, CancellationToken cancellationToken = default);
 
     /// <summary>The given <paramref name="version"/>, or the latest when null.</summary>
@@ -28,6 +29,10 @@ public interface IAgentFactory
     /// <summary>The function tools a version (latest when null) expects this app to run.</summary>
     /// <exception cref="InvalidOperationException">The agent or version doesn't exist.</exception>
     Task<IReadOnlyList<string>> GetFunctionToolNamesAsync(string name, string? version = null, CancellationToken cancellationToken = default);
+
+    /// <summary>The Foundry guardrail (RAI policy) a version (latest when null) uses, or null when it uses none.</summary>
+    /// <exception cref="InvalidOperationException">The agent or version doesn't exist.</exception>
+    Task<string?> GetGuardrailAsync(string name, string? version = null, CancellationToken cancellationToken = default);
 
     /// <summary>Whether the deployed <paramref name="version"/> matches <paramref name="spec"/>. False if it doesn't exist.</summary>
     Task<bool> MatchesDeployedVersionAsync(AgentSpec spec, string version, CancellationToken cancellationToken = default);

@@ -8,7 +8,7 @@ using GovUK.Dfe.AI.Agents.Guardrails.Options;
 namespace GovUK.Dfe.AI.Agents.Guardrails.Validators;
 
 /// <summary>
-/// At startup, checks every deployment in <c>Deployments</c> carries the guardrail. A missing or weaker guardrail fails
+/// At startup, checks every deployment in <c>Deployments</c>, or agent version in use, carries the guardrail. A missing or weaker guardrail fails
 /// startup (or warns, with <c>RequireAtStartup: false</c>); an unreachable Resource Manager warns, or fails startup with
 /// <c>FailWhenUnreachable: true</c>.
 /// </summary>

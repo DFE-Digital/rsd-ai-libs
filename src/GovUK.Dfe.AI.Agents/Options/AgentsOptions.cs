@@ -134,5 +134,6 @@ public sealed partial class AgentsOptions
         RequireTokenUsageTelemetry = RequireTokenUsageTelemetry,
         Pricing = Pricing,
         ValidateAgentToolsAtStartup = ValidateAgentToolsAtStartup,
+        GatewayGuardrailErrors = [.. Foundry.GatewayGuardrailErrors],
     };
 }

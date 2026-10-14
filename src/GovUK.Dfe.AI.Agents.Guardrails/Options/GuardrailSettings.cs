@@ -5,8 +5,8 @@ using System.Text.RegularExpressions;
 namespace GovUK.Dfe.AI.Agents.Guardrails.Options;
 
 /// <summary>
-/// The <c>AiAgents:Guardrails</c> section: the Foundry guardrail (content filters, Prompt Shields,
-/// blocklists) every model deployment agents use must carry. A provisioning job applies it; every app checks it at startup.
+/// The <c>AiAgents:Guardrails</c> section: the Foundry guardrail (content filters, Prompt Shields, blocklists) every
+/// model deployment, or every agent version, must carry. A provisioning job applies it; every app checks it at startup.
 /// </summary>
 public sealed partial class GuardrailSettings
 {
@@ -48,8 +48,14 @@ public sealed partial class GuardrailSettings
     /// <summary>The guardrail's name in Foundry, e.g. "briefing-guardrail".</summary>
     public string? Name { get; set; }
 
-    /// <summary>The model deployments agents use, e.g. "gpt-5.1". Each must carry the guardrail.</summary>
+    /// <summary>Where the guardrail goes: <c>Deployments</c> (default), <c>Agents</c>, or both.</summary>
+    public GuardrailTargets Targets { get; set; } = GuardrailTargets.Deployments;
+
+    /// <summary>The model deployments agents use, e.g. "gpt-5.1". Each must carry the guardrail. Needed when <see cref="Targets"/> include <c>Deployments</c>.</summary>
     public List<string> Deployments { get; set; } = [];
+
+    /// <summary>The agent versions this app runs as they are, which must carry the guardrail; worked out when the package is registered.</summary>
+    internal IReadOnlyList<AgentInUse> Agents { get; set; } = [];
 
     /// <summary>The lowest harm severity blocked, for hate, sexual, violence and self-harm, in prompts and answers.</summary>
     public GuardrailSeverity BlockFrom { get; set; } = GuardrailSeverity.Medium;
@@ -100,7 +106,12 @@ public sealed partial class GuardrailSettings
             yield return "Name";
         }
 
-        if (Deployments.Count == 0 || Deployments.Exists(string.IsNullOrWhiteSpace))
+        if (Targets == 0 || (Targets & ~(GuardrailTargets.Deployments | GuardrailTargets.Agents)) != 0)
+        {
+            yield return "Targets (Deployments, Agents, or both)";
+        }
+
+        if (Deployments.Exists(string.IsNullOrWhiteSpace) || (Targets.HasFlag(GuardrailTargets.Deployments) && Deployments.Count == 0))
         {
             yield return "Deployments";
         }
@@ -121,6 +132,10 @@ public sealed partial class GuardrailSettings
     [GeneratedRegex("^[A-Za-z0-9_-]{1,64}$")]
     private static partial Regex BlockRegex();
 }
+
+/// <summary>An agent version this app runs without creating it, and the guardrail it must carry.</summary>
+/// <param name="Version">Null: the latest.</param>
+internal sealed record AgentInUse(string Name, string? Version, string Guardrail);
 
 /// <summary>One Foundry blocklist: exact terms and regular expressions, matched in prompts and answers.</summary>
 public sealed class GuardrailBlocklistSettings

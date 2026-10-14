@@ -27,6 +27,7 @@ internal static class ErrorMessages
     public const string AgentToolsNotRunnable = "Agent '{0}' version {1} calls tools this app can't run: {2}. Configure the MCP server that allows them and list them in the agent's AllowedTools, or re-provision the agent.";
     public const string AiAgentsSettingsMissing = "AI agents can't start: these settings are missing or empty: {0}.";
     public const string AgentRunFailed = "Agent '{0}' failed.";
+    public const string ModelNotFromConnection = "Agent '{0}' can't use model '{1}': every model must be on the connection in Foundry:DefaultModel, as '{2}/<model>'.";
     public const string AgentRateLimited = "Agent '{0}' failed: Foundry's rate limit (HTTP 429) was still reached after retrying. Lower MaxConcurrency or GlobalConcurrency, or raise the model deployment's tokens-per-minute quota.";
     public const string AgentGetOrCreateFailed = "Failed to get or create Foundry agent '{0}'.";
     public const string AgentCreateFailed = "Failed to create Foundry agent '{0}'.";

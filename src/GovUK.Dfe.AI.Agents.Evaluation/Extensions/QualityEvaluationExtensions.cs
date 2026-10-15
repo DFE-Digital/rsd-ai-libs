@@ -1,7 +1,8 @@
 using Azure.AI.Extensions.OpenAI;
 using GovUK.Dfe.AI.Agents.Builders;
 using GovUK.Dfe.AI.Agents.Evaluation.Options;
-using GovUK.Dfe.AI.Agents.Evaluation.Quality;
+using GovUK.Dfe.AI.Agents.Evaluation.Clients;
+using GovUK.Dfe.AI.Agents.Evaluation.QualityGates;
 using GovUK.Dfe.AI.Agents.Extensibility;
 using GovUK.Dfe.AI.Agents.Extensibility.Interfaces;
 using GovUK.Dfe.AI.Agents.Quality.Interfaces;

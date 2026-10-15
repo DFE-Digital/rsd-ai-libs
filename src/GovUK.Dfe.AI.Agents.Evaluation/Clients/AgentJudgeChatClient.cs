@@ -6,7 +6,7 @@ using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 using System.Text;
 
-namespace GovUK.Dfe.AI.Agents.Evaluation.Quality;
+namespace GovUK.Dfe.AI.Agents.Evaluation.Clients;
 
 /// <summary>
 /// The judge run as an agent, used when <c>Foundry:DefaultModel</c> is on a connection: like every agent, it calls its

@@ -84,22 +84,10 @@ internal sealed class FoundryAgentRunnerService(IAgentFactory agentFactory, IFou
             var response = await RunResponsesAsync(agent, history, resolveToolCalls, usage, runToken).ConfigureAwait(false);
             telemetry.AnsweredBy(response.Model);
 
-            // One retry, with the run so far and the reason. A streamed answer has already been shown, so it fails instead.
-            if (validateOutput?.Invoke(ToResult(agent, response, usage, runId)) is { } problem)
+            if (validateOutput is not null)
             {
-                if (AnswerStream.Current is not null)
-                {
-                    throw new InvalidOperationException(string.Format(ErrorMessages.StreamedAnswerInvalid, agent.Name, problem));
-                }
-
-                _logger.LogWarning("Agent {AgentName} gave an invalid answer; asking once more: {Problem}", agent.Name, problem);
-                history.Add(ResponseItem.CreateUserMessageItem(string.Format(PromptText.AnswerRejected, problem)));
-                response = await RunResponsesAsync(agent, history, resolveToolCalls, usage, runToken).ConfigureAwait(false);
-
-                if (validateOutput(ToResult(agent, response, usage, runId)) is { } stillInvalid)
-                {
-                    throw new InvalidOperationException(string.Format(ErrorMessages.AgentAnswerInvalid, agent.Name, stillInvalid));
-                }
+                response = await CheckAnswerAsync(agent, history, response, resolveToolCalls, validateOutput, usage, runId, runToken)
+                    .ConfigureAwait(false);
             }
 
             return ToResult(agent, response, usage, runId);
@@ -135,6 +123,34 @@ internal sealed class FoundryAgentRunnerService(IAgentFactory agentFactory, IFou
             telemetry.Record(usage.Total, usage.InferenceCalls, usage.ToolCalls, _runOptions.Pricing.CostOf(usage.Model, usage.Total),
                 _runOptions.Pricing.Currency);
         }
+    }
+
+    /// <summary>
+    /// Checks the answer, and if it fails, asks once more with the run so far and the reason. A second failure fails the
+    /// run, as does any failure of a streamed answer, which has already been shown.
+    /// </summary>
+    /// <returns>The answer that passed.</returns>
+    private async Task<ResponseResult> CheckAnswerAsync(AgentReference agent, List<ResponseItem> history, ResponseResult response,
+        ToolCallResolver? resolveToolCalls, Func<AgentResult, string?> validateOutput, UsageTally usage, string runId,
+        CancellationToken cancellationToken)
+    {
+        if (validateOutput(ToResult(agent, response, usage, runId)) is not { } problem)
+        {
+            return response;
+        }
+
+        if (AnswerStream.Current is not null)
+        {
+            throw new InvalidOperationException(string.Format(ErrorMessages.StreamedAnswerInvalid, agent.Name, problem));
+        }
+
+        _logger.LogWarning("Agent {AgentName} gave an invalid answer; asking once more: {Problem}", agent.Name, problem);
+        history.Add(ResponseItem.CreateUserMessageItem(string.Format(PromptText.AnswerRejected, problem)));
+        var retried = await RunResponsesAsync(agent, history, resolveToolCalls, usage, cancellationToken).ConfigureAwait(false);
+
+        return validateOutput(ToResult(agent, retried, usage, runId)) is { } stillInvalid
+            ? throw new InvalidOperationException(string.Format(ErrorMessages.AgentAnswerInvalid, agent.Name, stillInvalid))
+            : retried;
     }
 
     private AgentResult ToResult(AgentReference agent, ResponseResult response, UsageTally usage, string runId)

@@ -7,7 +7,7 @@ using GovUK.Dfe.AI.Agents.ValueObjects;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
-namespace GovUK.Dfe.AI.Agents.Evaluation.Quality;
+namespace GovUK.Dfe.AI.Agents.Evaluation.QualityGates;
 
 /// <summary>
 /// Scores a sample of live runs in the background and records <c>dfe.ai_agents.evaluation.score</c>. Runs never wait: samples

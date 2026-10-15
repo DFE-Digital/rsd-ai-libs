@@ -3,7 +3,7 @@ using Microsoft.Extensions.AI;
 using OpenAI.Responses;
 using System.Runtime.CompilerServices;
 
-namespace GovUK.Dfe.AI.Agents.Evaluation.Quality;
+namespace GovUK.Dfe.AI.Agents.Evaluation.Clients;
 
 /// <summary>A judge model called through this app's Foundry project, with no extra client or credential.</summary>
 /// <remarks>

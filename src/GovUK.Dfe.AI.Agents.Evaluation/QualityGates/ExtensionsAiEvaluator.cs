@@ -7,7 +7,7 @@ using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Logging;
 
-namespace GovUK.Dfe.AI.Agents.Evaluation.Quality;
+namespace GovUK.Dfe.AI.Agents.Evaluation.QualityGates;
 
 /// <summary>
 /// Scores answers with Microsoft.Extensions.AI.Evaluation evaluators, e.g. <see cref="GroundednessEvaluator"/> and

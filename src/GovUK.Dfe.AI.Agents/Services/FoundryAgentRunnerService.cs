@@ -86,8 +86,8 @@ internal sealed class FoundryAgentRunnerService(IAgentFactory agentFactory, IFou
 
             if (validateOutput is not null)
             {
-                response = await CheckAnswerAsync(agent, history, response, resolveToolCalls, validateOutput, usage, runId, runToken)
-                    .ConfigureAwait(false);
+                response = await CheckAnswerAsync(new RunInProgress(agent, history, resolveToolCalls, usage, runId), response,
+                    validateOutput, runToken).ConfigureAwait(false);
             }
 
             return ToResult(agent, response, usage, runId);
@@ -130,10 +130,10 @@ internal sealed class FoundryAgentRunnerService(IAgentFactory agentFactory, IFou
     /// run, as does any failure of a streamed answer, which has already been shown.
     /// </summary>
     /// <returns>The answer that passed.</returns>
-    private async Task<ResponseResult> CheckAnswerAsync(AgentReference agent, List<ResponseItem> history, ResponseResult response,
-        ToolCallResolver? resolveToolCalls, Func<AgentResult, string?> validateOutput, UsageTally usage, string runId,
-        CancellationToken cancellationToken)
+    private async Task<ResponseResult> CheckAnswerAsync(RunInProgress run, ResponseResult response,
+        Func<AgentResult, string?> validateOutput, CancellationToken cancellationToken)
     {
+        var (agent, history, resolveToolCalls, usage, runId) = run;
         if (validateOutput(ToResult(agent, response, usage, runId)) is not { } problem)
         {
             return response;
@@ -152,6 +152,10 @@ internal sealed class FoundryAgentRunnerService(IAgentFactory agentFactory, IFou
             ? throw new InvalidOperationException(string.Format(ErrorMessages.AgentAnswerInvalid, agent.Name, stillInvalid))
             : retried;
     }
+
+    /// <summary>The run an answer belongs to: what's needed to check it and, if it's invalid, ask once more.</summary>
+    private sealed record RunInProgress(AgentReference Agent, List<ResponseItem> History, ToolCallResolver? ResolveToolCalls,
+        UsageTally Usage, string RunId);
 
     private AgentResult ToResult(AgentReference agent, ResponseResult response, UsageTally usage, string runId)
         => new()

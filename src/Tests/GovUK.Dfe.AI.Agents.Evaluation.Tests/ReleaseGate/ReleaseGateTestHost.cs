@@ -24,6 +24,9 @@ internal sealed class ReleaseGateTestHost : IDisposable
 
     public static readonly AgentDefinition[] Agents = [new("ofsted-agent", "Ofsted"), new("trust-agent", "Trust")];
 
+    /// <summary>As the release gate writes reports.</summary>
+    private static readonly JsonSerializerOptions ReportJson = new(JsonSerializerDefaults.Web);
+
     private readonly string _root = Directory.CreateTempSubdirectory("release-gate-tests-").FullName;
     private ServiceProvider? _provider;
 
@@ -85,7 +88,7 @@ internal sealed class ReleaseGateTestHost : IDisposable
             var report = new AgentEvaluationReport(agent.Name,
                 [new AgentTestResult("case", "Rated Good [Evidence 1].", [], JudgeMetrics.All.ToDictionary(m => m, _ => score))]);
             File.WriteAllText(Path.Combine(BaselinesDirectory, $"{agent.Name}.json"),
-                JsonSerializer.Serialize(report, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+                JsonSerializer.Serialize(report, ReportJson));
         }
     }
 

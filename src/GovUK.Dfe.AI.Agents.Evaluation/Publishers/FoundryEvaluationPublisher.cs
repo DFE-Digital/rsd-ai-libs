@@ -23,6 +23,7 @@ internal sealed class FoundryEvaluationPublisher(
     ILogger<FoundryEvaluationPublisher> logger) : IFoundryEvaluationPublisher
 {
     private const int EvaluationsToSearch = 100;
+    internal static readonly string[] requiredProperties = ["query", "context", "response"];
 
     public async Task PublishAsync(string agentName, IReadOnlyList<(AgentTestCase Case, AgentTestResult Result)> cases,
         CancellationToken cancellationToken = default)
@@ -94,7 +95,7 @@ internal sealed class FoundryEvaluationPublisher(
                             context = new { type = "string" },
                             response = new { type = "string" },
                         },
-                        required = new[] { "query", "context", "response" },
+                        required = requiredProperties,
                     },
                 },
                 testing_criteria = new object[]

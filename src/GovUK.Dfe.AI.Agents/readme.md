@@ -13,7 +13,7 @@ Install core, plus only the add-ons you need.
 | [`GovUK.Dfe.AI.Agents.Mcp`](https://github.com/DFE-Digital/rsd-ai-libs/blob/main/src/GovUK.Dfe.AI.Agents.Mcp/readme.md)               | Tools from your own MCP servers                          | `.AddMcpServers()`        |
 | [`GovUK.Dfe.AI.Agents.AISearch`](https://github.com/DFE-Digital/rsd-ai-libs/blob/main/src/GovUK.Dfe.AI.Agents.AISearch/readme.md)     | Evidence from Azure AI Search, with citations            | `.AddAISearch()`          |
 | [`GovUK.Dfe.AI.Agents.Evaluation`](https://github.com/DFE-Digital/rsd-ai-libs/blob/main/src/GovUK.Dfe.AI.Agents.Evaluation/readme.md) | A judge model that scores answers                        | `.AddQualityEvaluation()` |
-| [`GovUK.Dfe.AI.Agents.Guardrails`](https://github.com/DFE-Digital/rsd-ai-libs/blob/main/src/GovUK.Dfe.AI.Agents.Guardrails/readme.md) | Foundry guardrails on your model deployments             | `.AddGuardrails()`        |
+| [`GovUK.Dfe.AI.Agents.Guardrails`](https://github.com/DFE-Digital/rsd-ai-libs/blob/main/src/GovUK.Dfe.AI.Agents.Guardrails/readme.md) | Foundry guardrails on your models or agents              | `.AddGuardrails()`        |
 
 ## Quick start
 
@@ -107,7 +107,7 @@ public sealed class BriefingService(IAgentService agents)
 ```
 
 Instructions go in `prompt`. Untrusted material (documents, search results, other agents' output) goes in `evidence`,
-which is fenced as data so text inside it can't act as an instruction.
+fenced as data so it can't act as an instruction.
 
 `AddAgents` and every add-on's `Add…()` are in `Microsoft.Extensions.DependencyInjection`. The types you'll use most:
 
@@ -166,14 +166,14 @@ await foreach (var update in agents.RunStreamingAsync(BriefingAgents.Synthesis, 
 }
 ```
 
-- It works like `RunAsync`: same slots, limits, tools, redaction, cleaning and telemetry. Stop reading to cancel.
-- Checks run once the answer is complete. It's already shown, so a failed check throws at the end with no retry.
-- Single runs only. For a chain, run the earlier agents with `RunSequentialAsync`, then stream the last one.
+- Same slots, limits, tools, redaction, cleaning and telemetry as `RunAsync`. Stop reading to cancel.
+- Checks run at the end; the answer is already shown, so a failed check throws with no retry.
+- Single runs only. For a chain, run the earlier agents with `RunSequentialAsync`, then stream the last.
 
 ### Tools and other agents
 
-- **Web search:** `agents.AddTools("news-agent", new WebSearchToolProvider())`. Results are biased towards a location
-  (default London); for a different town per run, use a temporary agent:
+- **Web search:** `agents.AddTools("news-agent", new WebSearchToolProvider())`, biased towards London by default. For
+  a different town per run, use a temporary agent:
 
   ```csharp
   var tools = await new WebSearchToolProvider(WebSearchLocation.ForCity(trust.Town)).GetToolsAsync(ct);   // IAgentRuntimeService runtime
@@ -182,16 +182,16 @@ await foreach (var update in agents.RunStreamingAsync(BriefingAgents.Synthesis, 
       $"Recent news about {trust.Name} in {trust.Town}.", cancellationToken: ct);
   ```
 
-- **Your own tools:** implement `IAgentToolProvider`, return `AgentTool.Function(name, description, jsonSchema)`, and
-  add it with `agents.AddTools(...)`. Your app runs the calls. For MCP servers, use the Mcp add-on.
+- **Your own tools:** implement `IAgentToolProvider` returning `AgentTool.Function(name, description, jsonSchema)`, and
+  add it with `agents.AddTools(...)`; your app runs the calls. For MCP servers, use the Mcp add-on.
 - **Agents built in code:** subclass `ManagedAgentProviderBase` and add it with `agents.AddAgentProvider<T>()`.
-- **User prompt templates:** add them under `PromptFiles:UserPrompts` with `{{Name}}` placeholders, and fill one with
-  `IPromptTemplateBuilder.Build("Key", values)`.
+- **User prompt templates:** `PromptFiles:UserPrompts` files with `{{Name}}` placeholders, filled with
+  `IPromptTemplateBuilder.Build("Key", values)`. Values aren't fenced: put untrusted text in evidence.
 
 ## Answer checks
 
-- **Your own rules:** `Validate` returns why the answer is wrong, or `null` if it's fine.
-- **Retry:** a failed check is sent back once, with the run so far. If it fails again, the run fails.
+`Validate` returns why an answer is wrong, or `null` if it's fine. A failed check is sent back once with the reason;
+if it fails again, the run fails.
 
 ```csharp
 public static readonly AgentDefinition Ofsted = new("ofsted-agent", "Ofsted")
@@ -219,15 +219,16 @@ When evidence is numbered, as search results are, `RequiredCitations` decides wh
 
 So it's safe to show as Markdown or HTML:
 
-- **Images become their alt text,** as a browser loads an image without a click, which could leak data.
-- **HTML the model writes is shown as text** (`<script>` becomes `&lt;script>`), so injected markup can't run. A `<`
-  that can't start a tag, as in "below < 90%", is left alone. Citation links are the only real HTML.
-- **Links without a full address become text,** as they'd 404 in your app. Full `https://` and `mailto:` links are
-  kept: show each link's domain, so users see where it goes.
+- **Images become their alt text:** a browser loads an image without a click, which could leak data.
+- **HTML the model writes is shown as text** (`<script>` becomes `&lt;script>`). A `<` that can't start a tag, as in
+  "below < 90%", is left alone. Citation links are the only real HTML.
+- **Links without a full address become text,** as they'd 404 in your app. Full `https://` and `mailto:` links stay:
+  show each link's domain, so users see where it goes.
 
 ## Release gate
 
-Run fixed test cases in CI and fail the build if an agent got worse:
+Run fixed test cases in CI and fail the build if an agent got worse. For a ready-made gate that loads cases, writes
+reports and compares baselines, use the Evaluation add-on's `AddReleaseGate()`. To build your own:
 
 ```csharp
 var tests = services.GetRequiredService<IAgentTestRunner>();
@@ -250,10 +251,9 @@ if (failures.Count > 0)
 ```
 
 - Each failure is a readable line, e.g. `Groundedness: fell from 4.5 to 4.2, more than the tolerance 0.2`.
-- **Tolerance** stops a judge's run-to-run noise failing a release; **repeats** average scores over several runs.
-- Cases run against a temporary copy of the agent; pass `AgentTestTarget.Deployed` to test the live version.
-- Scores need the Evaluation add-on or your own `IAgentRunEvaluator`; without one, only `mustMention` and
-  `mustNotMention` are checked.
+- **Tolerance** absorbs the judge's run-to-run noise; **repeats** average scores over several runs.
+- Cases run on a temporary copy of the agent; pass `AgentTestTarget.Deployed` to test the live version.
+- Scores need the Evaluation add-on or your own `IAgentRunEvaluator`; without one, only the facts are checked.
 - First release: pass no baseline, then save the passing report as `baseline.json`.
 
 A case file:
@@ -269,9 +269,9 @@ A case file:
 }
 ```
 
-- **`guardrailMayBlock`:** for cases where a Foundry guardrail blocking the run is correct, e.g. instructions injected
-  into the evidence. The case passes when blocked (`result.BlockedByGuardrail`), and is checked as usual when not.
-- **Your own fields** are kept in `testCase.Extra`, by name, for your own checks.
+- **`guardrailMayBlock`:** the case passes if a guardrail blocks it, e.g. instructions planted in the evidence, and is
+  checked as usual if not.
+- **Your own fields** are kept in `testCase.Extra`.
 
 ## Responsible AI
 
@@ -280,7 +280,7 @@ Your app owns the decisions, the user interface, the DPIA and the ATRS record.
 
 ### Every model call goes through a model connection
 
-Put `DefaultModel` on a connection you control (e.g. an API Management gateway with content safety), and every model
+Put `DefaultModel` on a connection you control, e.g. an API Management gateway with content safety, and every model
 call goes through it:
 
 ```json
@@ -290,16 +290,13 @@ call goes through it:
 }
 ```
 
-- Every agent version the app creates, including release-gate copies and temporary agents, must use a model on the same
-  connection (`myconnection/<model>`); any other is refused. The Evaluation judge uses `DefaultModel` unless
-  `JudgeModel` is set.
-- `Guardrail` is optional. When set, every new agent version gets it, and a version without it is replaced, never
-  reused. `AddGuardrails()` with `"Targets": "Agents"` sets it for you and checks pinned and externally managed versions.
-- An agent can name its own with `new AgentDefinition(...) { Guardrail = "..." }`; it's optional.
-- If your gateway blocks content itself, list its errors so they're reported as guardrail blocks:
-  `"GatewayGuardrailErrors": [ { "Status": 403, "Code": "<its error code>" } ]`. Take both from one real blocked call,
-  as the error reaches your app; always give the `Code`, as a 403 alone also means a missing role.
-- A `DefaultModel` with no connection, e.g. `gpt-5.1`, allows any model.
+- Every agent version, including test copies, temporary agents and the Evaluation judge, must use a model on that
+  connection (`myconnection/<model>`); any other is refused. A `DefaultModel` without one, e.g. `gpt-5.1`, allows any.
+- `Guardrail` (optional) goes on every new agent version; a version without it is replaced, not reused. An agent can
+  set its own (`AgentDefinition.Guardrail`). `AddGuardrails()` with `"Targets": "Agents"` sets it for you.
+- If the gateway blocks content itself, list its errors so they count as guardrail blocks:
+  `"GatewayGuardrailErrors": [ { "Status": 403, "Code": "<its error code>" } ]`. Copy both from a real blocked call,
+  and always set `Code`: a 403 alone also means a missing role.
 
 ### A person approves changes
 
@@ -323,7 +320,7 @@ public sealed class ManagerApprover(IApprovalQueue queue) : IToolCallApprover   
 }
 ```
 
-A denied call doesn't run, and the agent is told why. The run waits within `RunTimeout`. Startup fails if a tool needs
+A denied call doesn't run, and the agent is told why. Waiting counts towards `RunTimeout`. Startup fails if a tool needs
 approval but there's no approver.
 
 ### Personal data is removed before the model sees it
@@ -336,15 +333,15 @@ agents.AddRedactor(new PatternRedactor(new Dictionary<string, string>
 }));
 ```
 
-- Prompts, evidence and tool output are redacted before they're sent (`Pupil [UPN removed]`), as are the copies given
-  to evaluators and observers. If a redactor fails, the run fails.
+- Prompts, evidence and tool output are redacted before they're sent (`Pupil [UPN removed]`), and so are the copies
+  evaluators and observers get. If a redactor fails, the run fails.
 - Patterns can't find names: leave name fields out of search results and tool output, or implement
   `IAgentInputRedactor`.
 
 ### Every answer can be traced
 
-Each `AgentResult` has a `RunId` and `CompletedAt` (also on the trace as `dfe.ai_agents.run_id`). Use them to label
-answers as AI-generated, save an audit record from an `IAgentRunObserver`, and store user feedback against the run.
+Each `AgentResult` has a `RunId` and `CompletedAt` (on the trace as `dfe.ai_agents.run_id`). Use them to label answers
+as AI-generated, save an audit record from an `IAgentRunObserver`, and store user feedback against the run.
 
 For fairness, give release-gate test cases a `group` (e.g. `"special-schools"`) and set `MaxGroupGap`.
 
@@ -378,7 +375,7 @@ For fairness, give release-gate test cases a `group` (e.g. `"special-schools"`) 
   ```
 
 - **Cost cap:** `MaxOutputTokensPerRun` caps output tokens per run, reasoning and tool rounds included.
-- **Cost:** add each model's prices per 1,000 tokens (`Currency` defaults to `GBP`); `result.Cost` is one run,
+- **Cost:** add each model's prices per 1,000 tokens (`Currency` defaults to `GBP`). `result.Cost` is one run;
   `results.ToTokenUsageSummary().Cost` several. `gpt-5.1` also matches `gpt-5.1-2025-11-13` and `my-connection/gpt-5.1`.
 
   ```json
@@ -463,7 +460,7 @@ All under `AiAgents`, or in code with `agents.Configure(o => ...)`.
 
 ## Testing your app
 
-Substitute `IAgentService` in unit tests (match evidence with `Arg.Any<AgentEvidence?>()`):
+Substitute `IAgentService` in unit tests, matching evidence with `Arg.Any<AgentEvidence?>()`:
 
 ```csharp
 agents.RunAsync(BriefingAgents.Ofsted, Arg.Any<string>(), Arg.Any<AgentEvidence?>(), Arg.Any<CancellationToken>())

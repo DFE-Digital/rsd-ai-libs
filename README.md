@@ -11,9 +11,9 @@ citations, cost and concurrency limits, and token and cost telemetry. Nothing is
 | `GovUK.Dfe.AI.Agents.Mcp`        | Tools from your own MCP servers               | [readme](src/GovUK.Dfe.AI.Agents.Mcp/readme.md)        |
 | `GovUK.Dfe.AI.Agents.AISearch`   | Evidence from Azure AI Search, with citations | [readme](src/GovUK.Dfe.AI.Agents.AISearch/readme.md)   |
 | `GovUK.Dfe.AI.Agents.Evaluation` | A judge model that scores answers             | [readme](src/GovUK.Dfe.AI.Agents.Evaluation/readme.md) |
-| `GovUK.Dfe.AI.Agents.Guardrails` | Foundry guardrails on your model deployments  | [readme](src/GovUK.Dfe.AI.Agents.Guardrails/readme.md) |
+| `GovUK.Dfe.AI.Agents.Guardrails` | Foundry guardrails on your models or agents   | [readme](src/GovUK.Dfe.AI.Agents.Guardrails/readme.md) |
 
-Install core plus only the add-ons you need. Each package is released on its own, so you can upgrade any one separately.
+Install core plus only the add-ons you need. Each package is released, and can be upgraded, on its own.
 
 ## Quick start
 
@@ -32,14 +32,13 @@ var evidence = await search.GetContextAsync("ofsted_index", $"URN {urn}", filter
 var result = await agents.RunAsync(BriefingAgents.Ofsted, "Summarise the latest inspection.", evidence, ct);
 ```
 
-Start with the [core readme](src/GovUK.Dfe.AI.Agents/readme.md): configuration, defining agents, running them, and the
-Azure roles each identity needs.
+Start with the [core readme](src/GovUK.Dfe.AI.Agents/readme.md): configuration, agents, runs and Azure roles.
 
 ## UK Government AI Playbook
 
-The libraries help services meet the
-[AI Playbook for the UK Government](https://www.gov.uk/government/publications/ai-playbook-for-the-uk-government).
-Some principles are the service team's responsibility, whatever library it uses.
+How the libraries help meet the
+[AI Playbook for the UK Government](https://www.gov.uk/government/publications/ai-playbook-for-the-uk-government), and
+what stays with the service team:
 
 | Principle                        | The libraries provide                                                                                                                     | Your service must still                                                                |
 | -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
@@ -52,8 +51,8 @@ Some principles are the service team's responsibility, whatever library it uses.
 | 7. Open and collaborative        | Open source; OpenTelemetry standard names                                                                                                 | Publish an ATRS record                                                                 |
 | 8–10. Commercial, skills, policy | Quota and concurrency limits; readmes                                                                                                     | Contracts, training, DfE AI governance                                                 |
 
-Bias: give release-gate test cases a `group`, and fail the gate when one group is served worse
-(`report.GroupGaps(...)`). See [Responsible AI](src/GovUK.Dfe.AI.Agents/readme.md#responsible-ai) in the core readme.
+Bias: give release-gate test cases a `group` and set `MaxGroupGap`, so the gate fails when one group is served worse.
+See [Responsible AI](src/GovUK.Dfe.AI.Agents/readme.md#responsible-ai).
 
 ## Build and test
 
@@ -66,9 +65,9 @@ dotnet test GovUK.Dfe.AI.Agents.slnx
 
 ### Live checks before a release
 
-`LiveFoundryTests` run against a dev Foundry project, and are skipped otherwise. They check that Foundry keeps each
-agent version's guardrail (so versions are reused), and that a jailbreak is reported as a guardrail block. If a gateway
-blocks it instead, the failure shows the status and error code to add to `Foundry:GatewayGuardrailErrors`.
+`LiveFoundryTests` run against a dev Foundry project (skipped otherwise). They check that Foundry keeps each agent
+version's guardrail, and that a jailbreak is reported as a guardrail block. If a gateway blocks it instead, the failure
+shows the status and code to add to `Foundry:GatewayGuardrailErrors`.
 
 ```sh
 az login
@@ -80,22 +79,20 @@ dotnet test src/Tests/GovUK.Dfe.AI.Agents.Tests --filter "FullyQualifiedName~Liv
 
 ## Releasing
 
-Each package has its own workflow, `.github/workflows/build-deploy-ai-agents[-{addon}].yml`, which runs when that
-package's folder changes. It builds, tests, packs and pushes to NuGet.org, and creates a GitHub release. SonarCloud
-analysis runs once for the whole solution, with coverage from every test project, in
-[sonarcloud.yml](.github/workflows/sonarcloud.yml).
+Each package has its own workflow, `.github/workflows/build-deploy-ai-agents[-{addon}].yml`, run when its folder
+changes: build, test, pack, push to NuGet.org and create a GitHub release.
+[sonarcloud.yml](.github/workflows/sonarcloud.yml) analyses the whole solution once, with coverage from every test project.
 
 - **Pull request:** publishes a prerelease, e.g. `1.0.5-prerelease.3`.
 - **Merge to `main`:** publishes a release, e.g. `1.0.5`.
-- **Version:** worked out by [GitVersion](GitVersion.yml) from the package's own `{PackageName}-X.Y.Z` tags. For a
-  minor or major bump, tag the new base version on your branch, e.g.
-  `git tag GovUK.Dfe.AI.Agents.Mcp-2.0.0 && git push origin <branch> --tags`.
+- **Version:** [GitVersion](GitVersion.yml) works it out from the package's `{PackageName}-X.Y.Z` tags. For a minor
+  or major bump, tag the new base version on your branch: `git tag GovUK.Dfe.AI.Agents.Mcp-2.0.0 && git push --tags`.
 - **Release notes:** add `(%release-note: your notes %)` to the body of the commit being released.
 
 ### Releasing an add-on on its own
 
-Add-ons reference core as a project, so you can change both in one pull request and test them together. When an add-on
-is packed, it's built against the **published** core at the version in its `.csproj`:
+Add-ons reference core as a project, so both are tested together. When packed, an add-on is built against the
+**published** core at the version in its `.csproj`:
 
 ```xml
 <CoreMinimumVersion>1.2.0</CoreMinimumVersion>
@@ -105,31 +102,28 @@ Its package then depends on `GovUK.Dfe.AI.Agents >= 1.2.0`, so:
 
 - **An add-on change** releases only that add-on.
 - **A core change** releases only core. Released add-ons keep working with it.
-- **An add-on that needs something new in core** needs core released first, then `CoreMinimumVersion` raised to that
-  version. That's the only case with two releases.
+- **An add-on that needs something new in core** needs two pull requests: release core first, then raise
+  `CoreMinimumVersion`.
 
 ## Compatibility rules
 
 Apps can upgrade any package on its own because the packages follow Microsoft's
-[.NET library guidance](https://learn.microsoft.com/dotnet/standard/library-guidance/). The checks are set up in
-[src/Directory.Build.targets](src/Directory.Build.targets).
+[.NET library guidance](https://learn.microsoft.com/dotnet/standard/library-guidance/):
 
 - **Add-ons use only core's public API.** They plug in through `IAgentsPackage` and `AgentsPackageContext`.
 - **Add-ons own their settings.** Each one reads, checks and documents its own block under `AiAgents` (e.g.
   `AiAgents:Guardrails`), so a new add-on setting never needs a core release.
-- **Breaking changes need a new major version.** Removing or changing anything public breaks apps that use it, so do
-  it only in a major version. `dotnet pack` validates each package; to have it also catch breaking changes, set
-  `PackageValidationBaselineVersion` in the `.csproj` to the package's last released version.
-- **Dependencies are minimums.** Packages declare the lowest dependency versions that work. Renovate doesn't raise them
-  for minor or patch releases, and NuGet audit fails restore on a high or critical vulnerability.
+- **Breaking changes need a new major version.** Removing or changing anything public breaks apps that use it.
+- **Dependencies are minimums.** Packages declare the lowest versions that work; Renovate doesn't raise them for minor
+  or patch releases. Raise one when NuGet audit reports a vulnerability.
 
 ## Adding a package
 
-1. Create `src/GovUK.Dfe.AI.Agents.{Name}` and its tests in `src/Tests/GovUK.Dfe.AI.Agents.{Name}.Tests` (the workflow
-   finds tests by this name), and add both to [GovUK.Dfe.AI.Agents.slnx](GovUK.Dfe.AI.Agents.slnx).
-2. Implement `IAgentsPackage`, and add an `Add{Name}(this AgentsBuilder agents)` method in the
-   `Microsoft.Extensions.DependencyInjection` namespace that calls `agents.AddPackage(...)`. Use only core's public API.
-   In `Register`, use the `AgentsPackageContext`:
+1. Create `src/GovUK.Dfe.AI.Agents.{Name}` and `src/Tests/GovUK.Dfe.AI.Agents.{Name}.Tests` (the workflow finds tests
+   by this name), and add both to [GovUK.Dfe.AI.Agents.slnx](GovUK.Dfe.AI.Agents.slnx).
+2. Implement `IAgentsPackage`, and add `Add{Name}(this AgentsBuilder agents)` in the
+   `Microsoft.Extensions.DependencyInjection` namespace, calling `agents.AddPackage(...)`. In `Register`, use only
+   core's public API through `AgentsPackageContext`:
 
    | To...                         | Call                                                                                       |
    | ----------------------------- | ------------------------------------------------------------------------------------------ |
@@ -141,11 +135,10 @@ Apps can upgrade any package on its own because the packages follow Microsoft's
    | Register services             | `context.Services`                                                                         |
 
    Set `CoreMinimumVersion` in the `.csproj` to the core version you build on.
-3. Copy an add-on workflow to `.github/workflows/build-deploy-ai-agents-{name}.yml` and change the package name and paths.
-4. Add a `readme.md`, which is packed into the NuGet package, and add the package to the tables here and in the core
-   readme.
+3. Copy an add-on workflow to `.github/workflows/build-deploy-ai-agents-{name}.yml`, changing the name and paths.
+4. Add a `readme.md` (it's packed into the package), and add the package to the tables here and in the core readme.
 
 ## Contributing
 
-Branch from `main` and open a pull request. Keep the build free of warnings and SonarCloud issues, add tests for new
-behaviour, and update the package readme when usage changes.
+Branch from `main` and open a pull request. Keep the build free of warnings and SonarCloud issues, test new behaviour,
+and update the package readme when usage changes.

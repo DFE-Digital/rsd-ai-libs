@@ -1,8 +1,8 @@
 # GovUK.Dfe.AI.Agents.Guardrails
 
-Makes sure every model deployment your
+Makes sure every model deployment, or agent version, your
 [GovUK.Dfe.AI.Agents](https://github.com/DFE-Digital/rsd-ai-libs/blob/main/src/GovUK.Dfe.AI.Agents/readme.md)
-agents use has an Azure AI Foundry guardrail. Before the model answers, Foundry blocks:
+agents use has an Azure AI Foundry guardrail. Foundry then blocks:
 
 - harmful content (hate, sexual, violence, self-harm)
 - jailbreak attempts
@@ -40,16 +40,15 @@ builder.Services.AddAgents(builder.Configuration, agents => agents
 | Every app          | Nothing. At startup, the app checks each deployment has the guardrail and that it hasn't been weakened                                                                   | Reader                                                       |
 
 - **Infrastructure as code instead:** create the guardrail in Bicep or Terraform and skip `ApplyAsync`; apps still check
-  it at startup, with only Reader.
-- If a guardrail is missing or weakened, startup fails and says what's wrong (`"RequireAtStartup": false` logs a warning
-  instead).
-- If Azure Resource Manager can't be reached, startup logs a warning, so an outage doesn't stop new instances. Set
-  `"FailWhenUnreachable": true` to fail startup instead, for apps that must confirm the guardrail first.
+  it, with only Reader.
+- **Missing or weakened:** startup fails, saying what's wrong (`"RequireAtStartup": false` only warns).
+- **Resource Manager unreachable:** startup warns, so an outage doesn't stop new instances
+  (`"FailWhenUnreachable": true` fails instead).
 
 ## Models through a connection
 
-When models are reached through a connection (`Foundry:DefaultModel` is `<connection>/<model>`), their deployments
-aren't in your Foundry resource, so put the guardrail on the agents instead:
+When `Foundry:DefaultModel` is `<connection>/<model>`, the deployments aren't in your Foundry resource, so put the
+guardrail on the agents:
 
 ```json
 "Guardrails": {
@@ -60,10 +59,10 @@ aren't in your Foundry resource, so put the guardrail on the agents instead:
 }
 ```
 
-- `Deployments` isn't needed; `ApplyAsync` creates or updates the guardrail and blocklists only.
+- No `Deployments`; `ApplyAsync` creates or updates only the guardrail and blocklists.
 - Every agent version the app creates gets the guardrail (it becomes `Foundry:Guardrail`).
-- `CheckAsync` and the startup check confirm each pinned or externally managed version carries it, e.g.
-  `agent 'rsd-trust-agent' version 4 uses no guardrail`. Fix it by provisioning a new version.
+- The startup check confirms each pinned or externally managed version has it, e.g.
+  `agent 'rsd-trust-agent' version 4 uses no guardrail`. Fix by provisioning a new version.
 - `"Targets": "Deployments, Agents"` does both.
 
 ## Settings
@@ -94,15 +93,14 @@ Block your own terms, such as project code names or case reference formats:
 }
 ```
 
-`ApplyAsync` creates each blocklist, keeps its entries exactly as configured, and applies it to prompts and answers. The
-startup check reports a blocklist that's detached or missing entries, showing counts only, never the entries
-themselves. Load sensitive terms from Key Vault, not appsettings.json.
+`ApplyAsync` creates each blocklist with exactly these entries, for prompts and answers. The startup check reports a
+blocklist that's detached or missing entries, by count only. Load sensitive terms from Key Vault, not appsettings.json.
 
 ## When Foundry blocks something
 
-The run fails, and its inner exception is an `AgentGuardrailException` whose `Stage` is `prompt` or `answer`. The
-`dfe.ai_agents.guardrail.blocks` metric counts each block. In parallel and sequential runs, the agent gets a fallback
-result instead. Core does this reporting, with or without this package.
+The run fails with an inner `AgentGuardrailException` (`Stage`: `prompt` or `answer`), counted by
+`dfe.ai_agents.guardrail.blocks`. In parallel and sequential runs, the agent gets a fallback result instead. Core
+reports blocks with or without this package.
 
 ## Not included
 

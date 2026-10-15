@@ -34,19 +34,18 @@ builder.Services.AddAgents(builder.Configuration, agents => agents
 | `JudgeModel` | `Foundry:DefaultModel` | The model that scores answers. On a connection, it must be the same one as `Foundry:DefaultModel` |
 | `SampleRate` | `0.05`                 | Share of live runs scored, from 0 to 1. `0` scores only release-gate tests                        |
 
-The whole section is optional. A `JudgeModel` on another connection, or a `SampleRate` outside 0 to 1, fails startup.
+The section is optional. A `JudgeModel` on another connection, or a `SampleRate` outside 0 to 1, fails startup.
 
 ## What gets scored
 
-- **Live runs:** a `SampleRate` share is scored in the background, so runs aren't slowed. If the judge falls behind,
-  extra samples are dropped.
-- **Release gate:** every test case is scored. Use the ready-made gate below, or core's `IAgentTestRunner` and
-  `report.FailuresAgainst(gate, baseline)` directly
-  ([Release gate](https://github.com/DFE-Digital/rsd-ai-libs/blob/main/src/GovUK.Dfe.AI.Agents/readme.md#release-gate)).
+- **Live runs:** a `SampleRate` share, in the background, so runs aren't slowed. If the judge falls behind, extra
+  samples are dropped.
+- **Release gate:** every test case, with the gate below or core's
+  [`IAgentTestRunner`](https://github.com/DFE-Digital/rsd-ai-libs/blob/main/src/GovUK.Dfe.AI.Agents/readme.md#release-gate).
 
 ## Release gate
 
-`AddReleaseGate()` tests agents before they're released, typically in a provisioning job or CI:
+`AddReleaseGate()` tests agents before release, e.g. in a provisioning job or CI:
 
 ```csharp
 builder.Services.AddAgents(builder.Configuration, agents => agents
@@ -64,39 +63,40 @@ if (results.Any(r => !r.Passed)) { /* don't provision; each r.Problems line says
 }
 ```
 
-- **Test cases:** one folder per agent under `TestCasesDirectory` (default `TestCases`), one JSON file per case. Each
-  runs on a temporary copy of the agent, up to `MaxParallelTestRuns` (default 4) at a time, `Repeats` times.
-- **The gate:** an agent fails if a case fails, or, with an evaluator, a metric (`Metrics`, default groundedness and
-  relevance) averages below `MinimumScore`, isn't scored, falls more than `Tolerance` below the agent's baseline
-  (`BaselinesDirectory/<agent>.json`, a previous report), or one case `group` scores more than `MaxGroupGap` below another.
-- **Refusals:** a case whose `mustMention` includes one of `RefusalPhrases` is checked by that sentence and left out of
-  the scores, as relevance marks any refusal as irrelevant, however correct.
-- **Reports:** `ReportsDirectory/<agent>.json` (default `evaluation-reports`), with every answer, score and failure. Copy
-  a passing one into `BaselinesDirectory` to set the bar.
-- **Clean-up:** leftover test agents are deleted afterwards, even when the gate throws.
-- **Without an evaluator,** only `mustMention` and `mustNotMention` are checked.
+- **Test cases:** one folder per agent under `TestCasesDirectory`, one JSON file per case. Each runs on a temporary
+  copy of the agent, `Repeats` times, `MaxParallelTestRuns` at a time.
+- **An agent fails** if a case fails, or a metric averages below `MinimumScore`, isn't scored, falls more than
+  `Tolerance` below its baseline (`BaselinesDirectory/<agent>.json`), or one case `group` trails another by more than
+  `MaxGroupGap`. Without an evaluator, only the cases' facts are checked.
+- **Refusals:** a case whose `mustMention` includes one of `RefusalPhrases` is checked by that sentence and not scored:
+  relevance marks any refusal as irrelevant, however correct.
+- **Reports:** `ReportsDirectory/<agent>.json`, with every answer, score and failure. Copy a passing one into
+  `BaselinesDirectory` to set the bar.
+- **Clean-up:** test agents are deleted afterwards, even when the gate throws.
 
 ### Results in Foundry
 
-Off by default. With `"PublishToFoundry": true`, each release's answers are also scored by Foundry's built-in groundedness and relevance
-evaluators, using the judge model (a `<connection>/<model>` works). Results are on the Foundry project's **Evaluations**
-page: one evaluation per agent, `<agent> release gate (<model>)`, with one run per release. It doesn't affect the gate,
-and a failure is only logged. The identity needs **Foundry User** on the Foundry resource, as Microsoft requires for
-evaluations that call a model.
+Off by default. With `"PublishToFoundry": true`, each release's answers are also scored by Foundry's built-in
+groundedness and relevance evaluators, with the judge model, and shown on the project's **Evaluations** page: one
+evaluation per agent (`<agent> release gate (<model>)`), one run per release.
 
-| Setting               | Default              | Purpose                                                                   |
-| --------------------- | -------------------- | ------------------------------------------------------------------------- |
-| `TestCasesDirectory`  | `TestCases`          | One folder of cases per agent, relative to the app's folder               |
-| `ReportsDirectory`    | `evaluation-reports` | Where reports are written, relative to the working directory              |
-| `BaselinesDirectory`  | `Baselines`          | Each agent's accepted report, relative to the app's folder                |
-| `Metrics`             | Groundedness, Relevance | The metrics each agent must be scored on                               |
-| `MinimumScore`        | `3.5`                | Lowest average per metric (1 to 5)                                        |
-| `Tolerance`           | `0.2`                | How far a score may fall below the baseline                               |
-| `MaxGroupGap`         | Off                  | Largest gap between case groups                                           |
-| `Repeats`             | `1`                  | Runs per case; scores are averaged                                        |
-| `MaxParallelTestRuns` | `4`                  | Cases run at once                                                         |
-| `RefusalPhrases`      | None                 | Fixed refusals whose cases aren't scored                                  |
-| `PublishToFoundry`    | `false`              | Also sends answers to a Foundry evaluation                                |
+- It doesn't affect the gate; a failure is only logged.
+- It sends test prompts, evidence and answers to Foundry.
+- The identity needs **Foundry User** on the Foundry resource.
+
+| Setting               | Default                 | Purpose                                                      |
+| --------------------- | ----------------------- | ------------------------------------------------------------ |
+| `TestCasesDirectory`  | `TestCases`             | One folder of cases per agent, relative to the app's folder  |
+| `ReportsDirectory`    | `evaluation-reports`    | Where reports are written, relative to the working directory |
+| `BaselinesDirectory`  | `Baselines`             | Each agent's accepted report, relative to the app's folder   |
+| `Metrics`             | Groundedness, Relevance | The metrics each agent must be scored on                     |
+| `MinimumScore`        | `3.5`                   | Lowest average per metric (1 to 5)                           |
+| `Tolerance`           | `0.2`                   | How far a score may fall below the baseline                  |
+| `MaxGroupGap`         | Off                     | Largest gap between case groups                              |
+| `Repeats`             | `1`                     | Runs per case; scores are averaged                           |
+| `MaxParallelTestRuns` | `4`                     | Cases run at once                                            |
+| `RefusalPhrases`      | None                    | Fixed refusals whose cases aren't scored                     |
+| `PublishToFoundry`    | `false`                 | Also sends answers to a Foundry evaluation                   |
 
 ## Metrics
 
@@ -113,15 +113,13 @@ Recorded under `AgentTelemetry.SourceName`, so the core package's OpenTelemetry 
 ## Good to know
 
 - **Cost:** each scored answer costs one judge call.
-- **On a model connection:** the judge runs as an agent with no tools, through the connection and with the guardrail.
-  Each metric keeps one agent (`quality-judge-<id>`), created once and reused. Its tokens and cost appear in the usual
-  telemetry.
-- **Nothing stored:** like agent runs, judge calls store nothing in Foundry, though they carry the run's prompt,
-  evidence and answer.
-- **Reasoning models** work as judges: the judge sends only the model name and messages.
+- **On a model connection:** the judge runs as a tool-less agent through the connection, with the guardrail. Each
+  metric keeps one agent (`quality-judge-<id>`), created once and reused; its tokens and cost show in telemetry.
+- **Nothing stored:** judge calls store nothing in Foundry, though they carry the run's prompt, evidence and answer.
+- **Reasoning models** work as judges.
 - **Missing scores:** if a metric can't be scored (e.g. a wrong model name), the reason is logged.
 - **Custom metrics:** `agents.AddQualityEvaluation(evaluator: new MyEvaluator())` with any Microsoft.Extensions.AI
   `IEvaluator`.
-- **Your own scorer:** `agents.AddCustomQualityEvaluation(sp => new MyEvaluator())` with any `IAgentRunEvaluator`; no
-  `JudgeModel` needed, and `SampleRate` still applies.
+- **Your own scorer:** `agents.AddCustomQualityEvaluation(sp => new MyEvaluator())` with any `IAgentRunEvaluator`;
+  `SampleRate` still applies.
 - **No safety metrics** (Microsoft's are preview-only): use the Guardrails package to block harmful content.

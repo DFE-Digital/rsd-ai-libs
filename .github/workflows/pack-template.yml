@@ -1,0 +1,135 @@
+name: NuGet Pack and Release Template
+
+on:
+  workflow_call:
+    inputs:
+      project_name:
+        required: true
+        type: string
+        description: "The name of the project (used for tag prefix and release title)"
+      project_path:
+        required: true
+        type: string
+        description: "Relative path to the project .csproj"
+    secrets:
+      NUGET_API_KEY:
+        required: true
+        description: "NuGet.org API key"
+
+jobs:
+  pack:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+    env:
+      PROJECT_NAME: ${{ inputs.project_name }}
+      PROJECT_PATH: ${{ inputs.project_path }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Install GitVersion
+        uses: gittools/actions/gitversion/setup@bc6623af8fc07d5a8903052dd46da33403eec8e8 # v4.5.0
+        with:
+          versionSpec: '6.7.x'
+
+      - name: Add .NET global tools to PATH
+        run: echo "$HOME/.dotnet/tools" >> $GITHUB_PATH
+
+      - name: Determine version
+        id: gitversion
+        run: |
+          BASE=$(dotnet-gitversion \
+            /overrideconfig tag-prefix="^${PROJECT_NAME}-" \
+            /showvariable MajorMinorPatch)
+
+          RAW_TAG=$(dotnet-gitversion \
+            /overrideconfig tag-prefix="^${PROJECT_NAME}-" \
+            /showvariable PreReleaseTag)
+
+          LABEL=${RAW_TAG%%[0-9]*}
+          NUM=$(dotnet-gitversion \
+            /overrideconfig tag-prefix="^${PROJECT_NAME}-" \
+            /showvariable PreReleaseNumber)
+
+          if [ -n "$LABEL" ]; then
+            VERSION="${BASE}-${LABEL}${NUM}"
+          else
+            VERSION="$BASE"
+          fi
+
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          echo "Determined version: $VERSION"
+
+      - name: Add GitHub Packages source
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          dotnet nuget add source \
+            --username USERNAME \
+            --password "$GITHUB_TOKEN" \
+            --store-password-in-clear-text \
+            --name github \
+            https://nuget.pkg.github.com/DFE-Digital/index.json
+
+      - name: Add NuGet.org source
+        run: |
+          dotnet nuget add source \
+            --name nuget \
+            https://api.nuget.org/v3/index.json || true
+
+      - name: Build, pack and push
+        env:
+          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+        run: |
+          # One command restores, builds and packs with the same properties, so nothing can restore in between:
+          # add-ons build against the published core at their CoreMinimumVersion (see src/Directory.Build.targets),
+          # and AssemblyVersion and FileVersion are derived from the package version.
+          dotnet pack "$PROJECT_PATH" \
+            -c Release \
+            -p:UseCorePackage=true \
+            -p:PackageVersion="$VERSION" \
+            --output ./artifacts
+          dotnet nuget push ./artifacts/*.nupkg \
+            --api-key "$NUGET_API_KEY" \
+            --source https://api.nuget.org/v3/index.json \
+            --skip-duplicate
+
+      - name: Extract release notes
+        id: extract_description
+        run: |
+          COMMIT_BODY=$(git log -1 --pretty=format:"%b")
+          if [ -z "$COMMIT_BODY" ]; then
+            echo "RELEASE_NOTES=No release notes provided." >> $GITHUB_ENV
+          else
+            NOTES=$(echo "$COMMIT_BODY" |
+              tr '\n' '~' |
+              grep -Eo '\(%release-note:.*%\)' |
+              sed 's/.*%release-note:\(.*\)%/\1/' |
+              sed 's/~/\n/g')
+          echo "RELEASE_NOTES<<EOF" >> $GITHUB_ENV
+          echo "$NOTES"               >> $GITHUB_ENV
+          echo "EOF"                  >> $GITHUB_ENV
+          fi
+
+      # Values are read from the environment, never expanded into the script: release notes come from a commit message.
+      - name: Create GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PRERELEASE: ${{ github.event_name == 'pull_request' }}
+        run: |
+          TAG="${PROJECT_NAME}-${VERSION}"
+          gh release create "$TAG" \
+            --title "Release ${VERSION} for ${PROJECT_NAME}" \
+            --notes "$RELEASE_NOTES" \
+            --draft=false \
+            --prerelease="$PRERELEASE"

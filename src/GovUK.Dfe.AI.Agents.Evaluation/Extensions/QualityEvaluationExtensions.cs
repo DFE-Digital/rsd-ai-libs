@@ -31,12 +31,33 @@ public static class QualityEvaluationExtensions
     {
         ArgumentNullException.ThrowIfNull(agents);
 
-        var scoring = evaluator ?? new CompositeEvaluator(new GroundednessEvaluator(), new RelevanceEvaluator());
-        return agents.AddPackage(new EvaluationPackage((judgeModel, asAgent) => sp => new ExtensionsAiEvaluator(scoring,
-            new ChatConfiguration(asAgent
-                ? new AgentJudgeChatClient(sp.GetRequiredService<IAgentRunnerService>(), judgeModel!)
-                : new FoundryJudgeChatClient(sp.GetRequiredService<ProjectOpenAIClient>(), judgeModel!)),
-            sp.GetService<ILogger<ExtensionsAiEvaluator>>()), needsJudge: true));
+        IEvaluator[] scoring = evaluator is null ? [new GroundednessEvaluator(), new RelevanceEvaluator()] : [evaluator];
+        return agents.AddPackage(new EvaluationPackage((judgeModel, asAgent) => sp => asAgent
+            ? JudgedByAgents(scoring, sp.GetRequiredService<IAgentRuntimeService>(), judgeModel!, sp)
+            : new ExtensionsAiEvaluator(Combined(scoring),
+                new ChatConfiguration(new FoundryJudgeChatClient(sp.GetRequiredService<ProjectOpenAIClient>(), judgeModel!)),
+                sp.GetService<ILogger<ExtensionsAiEvaluator>>()), needsJudge: true));
+    }
+
+    /// <summary>
+    /// One evaluator as it is, as a team's own may not list its metric names, which <c>CompositeEvaluator</c> requires.
+    /// </summary>
+    private static IEvaluator Combined(IEvaluator[] evaluators)
+        => evaluators.Length == 1 ? evaluators[0] : new CompositeEvaluator(evaluators);
+
+    /// <summary>
+    /// Each evaluator gets its own temporary judge agent, named after what it scores (e.g. "answer-judge-groundedness")
+    /// and deleted after each score.
+    /// </summary>
+    private static ExtensionsAiEvaluator JudgedByAgents(IEvaluator[] evaluators, IAgentRuntimeService runtime, string judgeModel,
+        IServiceProvider services)
+    {
+        var judged = evaluators.Select(evaluator => (IEvaluator)new MetricJudgeEvaluator(evaluator,
+            new ChatConfiguration(new AgentJudgeChatClient(runtime, judgeModel, evaluator.EvaluationMetricNames))));
+
+        // Each evaluator above uses its own judge, so this one is only a fallback that's never called.
+        var fallback = new ChatConfiguration(new AgentJudgeChatClient(runtime, judgeModel, []));
+        return new ExtensionsAiEvaluator(Combined([.. judged]), fallback, services.GetService<ILogger<ExtensionsAiEvaluator>>());
     }
 
     /// <summary>

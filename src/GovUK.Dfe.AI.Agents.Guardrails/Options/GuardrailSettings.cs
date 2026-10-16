@@ -81,6 +81,32 @@ public sealed partial class GuardrailSettings
     /// <summary>Blocks answers that reproduce protected text or code.</summary>
     public bool ProtectedMaterial { get; set; } = true;
 
+    /// <summary>
+    /// Scans each run's evidence with Azure AI Content Safety Prompt Shields before it's sent, and blocks the run when it
+    /// finds planted instructions. A Foundry guardrail can't: it doesn't scan evidence in an agent's input. Needs the
+    /// <b>Cognitive Services User</b> role on the Foundry resource. Off by default.
+    /// </summary>
+    public bool ScanEvidence { get; set; }
+
+    /// <summary>
+    /// Optional: the Content Safety endpoint <see cref="ScanEvidence"/> calls. Unset: the Foundry resource's own,
+    /// https://&lt;resource&gt;.cognitiveservices.azure.com/.
+    /// </summary>
+    public string? ContentSafetyEndpoint { get; set; }
+
+    /// <summary><see cref="ContentSafetyEndpoint"/>, else the Foundry resource's Cognitive Services endpoint.</summary>
+    internal Uri? ContentSafetyEndpointFor(string? foundryEndpoint)
+    {
+        if (!string.IsNullOrWhiteSpace(ContentSafetyEndpoint))
+        {
+            return Uri.TryCreate(ContentSafetyEndpoint, UriKind.Absolute, out var endpoint) && endpoint.Scheme == Uri.UriSchemeHttps
+                ? endpoint
+                : null;
+        }
+
+        return AccountNameFor(foundryEndpoint) is { } account ? new Uri($"https://{account}.cognitiveservices.azure.com/") : null;
+    }
+
     /// <summary>Your own blocklists, keyed by name: terms and patterns blocked in prompts and answers.</summary>
     public Dictionary<string, GuardrailBlocklistSettings> Blocklists { get; set; } = [];
 
@@ -116,6 +142,11 @@ public sealed partial class GuardrailSettings
         if (string.IsNullOrWhiteSpace(Name))
         {
             yield return "Name";
+        }
+
+        if (ScanEvidence && ContentSafetyEndpointFor(foundryEndpoint) is null)
+        {
+            yield return "ContentSafetyEndpoint (an https URL, needed for ScanEvidence)";
         }
 
         if (Targets == 0 || (Targets & ~(GuardrailTargets.Deployments | GuardrailTargets.Agents)) != 0)

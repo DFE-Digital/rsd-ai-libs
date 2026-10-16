@@ -334,6 +334,42 @@ public sealed class GuardrailTests
         Assert.Single(services, service => service.ImplementationType == typeof(GuardrailStartupValidator));
     }
 
+    [Theory]
+    [InlineData(null, false)]
+    [InlineData("false", false)]
+    [InlineData("true", true)]
+    public void ScanEvidence_RegistersTheEvidenceShield_OnlyWhenOn(string? scanEvidence, bool registered)
+    {
+        var guardrail = ValidGuardrail();
+        guardrail["ScanEvidence"] = scanEvidence;
+
+        var services = Build(guardrail);
+
+        Assert.Equal(registered, services.Any(service => service.ServiceType == typeof(Safety.Interfaces.IEvidenceShield)));
+    }
+
+    [Theory]
+    [InlineData(null, "https://foundry-1.cognitiveservices.azure.com/")]   // the Foundry resource's own
+    [InlineData("https://content-safety-1.cognitiveservices.azure.com/", "https://content-safety-1.cognitiveservices.azure.com/")]
+    public void TheContentSafetyEndpoint_IsTheFoundryResources_UnlessSet(string? contentSafetyEndpoint, string expected)
+    {
+        var settings = new GuardrailSettings { ContentSafetyEndpoint = contentSafetyEndpoint };
+
+        Assert.Equal(new Uri(expected), settings.ContentSafetyEndpointFor("https://foundry-1.services.ai.azure.com/api/projects/test"));
+    }
+
+    [Fact]
+    public void ScanEvidence_WithAnEndpointThatIsntHttps_FailsStartup()
+    {
+        var guardrail = ValidGuardrail();
+        guardrail["ScanEvidence"] = "true";
+        guardrail["ContentSafetyEndpoint"] = "http://content-safety-1.cognitiveservices.azure.com/";
+
+        var ex = Assert.Throws<InvalidOperationException>(() => Build(guardrail));
+
+        Assert.Contains("AiAgents:Guardrails:ContentSafetyEndpoint", ex.Message, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void AddGuardrails_WithoutAGuardrailsSection_FailsStartup()
     {

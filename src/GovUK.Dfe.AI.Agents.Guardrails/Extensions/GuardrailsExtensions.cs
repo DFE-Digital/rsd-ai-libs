@@ -10,6 +10,7 @@ using GovUK.Dfe.AI.Agents.Guardrails.Stores.Interfaces;
 using GovUK.Dfe.AI.Agents.Guardrails.Validators;
 using GovUK.Dfe.AI.Agents.Extensibility;
 using GovUK.Dfe.AI.Agents.Extensibility.Interfaces;
+using GovUK.Dfe.AI.Agents.Safety.Interfaces;
 using Microsoft.Extensions.Configuration;
 
 // In Microsoft.Extensions.DependencyInjection, as Microsoft recommends for libraries' Add... methods, so apps can
@@ -72,6 +73,13 @@ public static class GuardrailsExtensions
             services.AddSingleton<IGuardrailStore>(_ => new ArmGuardrailStore(new ArmClient(credential), new ResourceIdentifier(settings.ResourceId!)));
             services.AddSingleton<IFoundryGuardrailsService, FoundryGuardrailsService>();
             services.AddHostedService<GuardrailStartupValidator>();
+
+            // A Foundry guardrail doesn't scan evidence in an agent's input, so Prompt Shields scans it before it's sent.
+            if (settings.ScanEvidence)
+            {
+                var endpoint = settings.ContentSafetyEndpointFor(context.Options.Foundry.Endpoint)!;
+                services.AddSingleton<IEvidenceShield>(_ => new PromptShieldEvidenceShield(endpoint, credential));
+            }
         }
 
         /// <summary>

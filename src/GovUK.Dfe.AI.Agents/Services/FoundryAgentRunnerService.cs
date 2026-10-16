@@ -9,6 +9,7 @@ using GovUK.Dfe.AI.Agents.Exceptions;
 using GovUK.Dfe.AI.Agents.Extensions;
 using GovUK.Dfe.AI.Agents.Factories.Interfaces;
 using GovUK.Dfe.AI.Agents.Options;
+using GovUK.Dfe.AI.Agents.Safety.Interfaces;
 using GovUK.Dfe.AI.Agents.Services.Interfaces;
 using GovUK.Dfe.AI.Agents.ValueObjects;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -26,7 +27,8 @@ namespace GovUK.Dfe.AI.Agents.Services;
 /// items, including encrypted reasoning, and tool outputs) and sends it with each call.
 /// </remarks>
 internal sealed class FoundryAgentRunnerService(IAgentFactory agentFactory, IFoundryResponsesClient responsesClient,
-    ILogger<FoundryAgentRunnerService>? logger = null, AgentRunOptions? runOptions = null, IAgentRunLimiter? runLimiter = null)
+    ILogger<FoundryAgentRunnerService>? logger = null, AgentRunOptions? runOptions = null, IAgentRunLimiter? runLimiter = null,
+    IEvidenceShield? evidenceShield = null)
     : IAgentRunnerService
 {
     /// <summary>The most tool-call rounds in one run.</summary>
@@ -384,20 +386,27 @@ internal sealed class FoundryAgentRunnerService(IAgentFactory agentFactory, IFou
     }
 
     /// <summary>
-    /// The first input: the evidence, cut to size, redacted and fenced as data, then the prompt. Cut before redacting, so a
-    /// redactor that calls a service only checks what's sent.
+    /// The first input: the evidence, cut to size, redacted, scanned for planted instructions and fenced as data, then the
+    /// prompt. Cut before redacting, so a redactor or shield that calls a service only checks what's sent.
     /// </summary>
     private async Task<IReadOnlyList<ResponseItem>> BuildInitialInputItemsAsync(string agentName, string prompt, string? additionalContext,
         CancellationToken cancellationToken)
     {
-        var redactedPrompt = ResponseItem.CreateUserMessageItem(await _runOptions.RedactAsync(prompt, cancellationToken).ConfigureAwait(false));
+        var redactedPrompt = await _runOptions.RedactAsync(prompt, cancellationToken).ConfigureAwait(false);
+        var promptItem = ResponseItem.CreateUserMessageItem(redactedPrompt);
         if (string.IsNullOrWhiteSpace(additionalContext))
         {
-            return [redactedPrompt];
+            return [promptItem];
         }
 
         var evidence = await _runOptions.RedactAsync(LimitEvidence(agentName, additionalContext), cancellationToken).ConfigureAwait(false);
-        return [ResponseItem.CreateUserMessageItem(PromptText.FenceReferenceMaterial(evidence)), redactedPrompt];
+        if (evidenceShield is not null
+            && await evidenceShield.FindsAttackAsync(redactedPrompt, evidence, cancellationToken).ConfigureAwait(false))
+        {
+            throw new AgentGuardrailException(agentName, AgentGuardrailException.EvidenceStage);
+        }
+
+        return [ResponseItem.CreateUserMessageItem(PromptText.FenceReferenceMaterial(evidence)), promptItem];
     }
 
     /// <summary>

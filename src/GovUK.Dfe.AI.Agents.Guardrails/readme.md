@@ -79,6 +79,8 @@ guardrail on the agents:
 | `BlockFrom`                       | `Medium`                           | Lowest harm severity blocked in prompts and answers. `Low` blocks the most                  |
 | `PromptShields`                   | `true`                             | Blocks jailbreak attempts                                                                   |
 | `IndirectAttacks`                 | `true`                             | Blocks instructions hidden in documents and tool output                                     |
+| `ScanEvidence`                    | `false`                            | Scans each run's evidence with Prompt Shields before it's sent (see below)                  |
+| `ContentSafetyEndpoint`           | The Foundry resource's own         | The Content Safety endpoint `ScanEvidence` calls                                            |
 | `ProtectedMaterial`               | `true`                             | Blocks answers that reproduce protected text or code                                        |
 | `Blocklists`                      | None                               | Your own blocked terms and patterns (see below)                                             |
 | `RequireAtStartup`                | `true`                             | Fails startup when a deployment or agent version lacks the guardrail                        |
@@ -100,9 +102,24 @@ blocklist that's detached or missing entries, by count only. Load sensitive term
 
 ## When Foundry blocks something
 
-The run fails with an inner `AgentGuardrailException` (`Stage`: `prompt` or `answer`), counted by
+The run fails with an inner `AgentGuardrailException` (`Stage`: `prompt`, `answer` or `evidence`), counted by
 `dfe.ai_agents.guardrail.blocks`. In parallel and sequential runs, the agent gets a fallback result instead. Core
 reports blocks with or without this package.
+
+## Scanning evidence
+
+A Foundry guardrail doesn't scan evidence passed in an agent's input for planted instructions. It only scans documents
+in Chat Completions requests and the output of Foundry's own tools (Azure AI Search, OpenAPI and others). With
+`"ScanEvidence": true`, each run's evidence, already redacted and cut to size, is checked by
+[Prompt Shields](https://learn.microsoft.com/azure/ai-services/content-safety/concepts/jailbreak-detection) before it's
+sent. If it finds an attack, the run is blocked like a guardrail block (`Stage`: `evidence`).
+
+- **Identity:** needs **Cognitive Services User** on the Foundry resource, at
+  `https://<resource>.cognitiveservices.azure.com/`.
+- **Calls:** one call per 9,000 characters of evidence, up to 4 at a time, so about 100–200 ms for typical evidence.
+- **Fails closed:** if the evidence can't be scanned, e.g. because the role is missing, the run fails rather than
+  sending it unscanned.
+- **Release gate:** a test case with `"guardrailMustBlock": true` proves the scan catches planted instructions.
 
 ## Not included
 

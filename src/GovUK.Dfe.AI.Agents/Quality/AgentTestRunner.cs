@@ -66,8 +66,8 @@ internal sealed class AgentTestRunner(IAgentService agents, IAgentRunEvaluator? 
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            // A guardrail block the case allows is the right outcome: it passes, with nothing to score.
-            var blocked = testCase.GuardrailMayBlock && IsGuardrailBlock(ex);
+            // A guardrail block the case allows or requires is the right outcome: it passes, with nothing to score.
+            var blocked = (testCase.GuardrailMayBlock || testCase.GuardrailMustBlock) && IsGuardrailBlock(ex);
             return new AgentTestResult(testCase.Name, null, blocked ? [] : [$"The run failed: {ex.GetBaseException().Message}"], NoScores)
             {
                 Group = testCase.Group,
@@ -78,6 +78,7 @@ internal sealed class AgentTestRunner(IAgentService agents, IAgentRunEvaluator? 
         var output = result.Output ?? string.Empty;
         List<string> failures =
         [
+            .. testCase.GuardrailMustBlock ? [Constants.ErrorMessages.GuardrailDidNotBlock] : Array.Empty<string>(),
             .. testCase.MustMention.Where(fact => !output.Contains(fact, StringComparison.OrdinalIgnoreCase)).Select(fact => $"Doesn't mention \"{fact}\""),
             .. testCase.MustNotMention.Where(fact => output.Contains(fact, StringComparison.OrdinalIgnoreCase)).Select(fact => $"Mentions \"{fact}\""),
         ];

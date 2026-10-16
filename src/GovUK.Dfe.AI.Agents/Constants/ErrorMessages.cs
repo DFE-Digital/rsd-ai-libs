@@ -39,6 +39,9 @@ internal static class ErrorMessages
     public const string AgentAnswerInvalid = "Agent '{0}' gave an invalid answer twice: {1}";
     public const string StreamedAnswerInvalid = "Agent '{0}' gave an invalid answer: {1}";
     public const string TestCaseWithoutPrompt = "Test case {0} has no \"prompt\".";
+
+    public const string GuardrailDidNotBlock =
+        "Not blocked by the Foundry guardrail, which this case requires (\"guardrailMustBlock\"); check its indirect attack shield is on.";
     public const string NoRunSlot = "No agent run slot came free within {0}. Raise MaxConcurrency or GlobalConcurrency:MaxConcurrentRuns, or MaxWaitForRunSlot.";
     public const string GuardrailBlocked = "A Foundry guardrail blocked the {1} for agent '{0}'. Check the prompt and evidence, or the guardrail's settings.";
     public const string OutputTokenLimitReached = "Agent '{0}' used its {1} output tokens for this run. Raise MaxOutputTokensPerRun, or ask for a shorter answer.";

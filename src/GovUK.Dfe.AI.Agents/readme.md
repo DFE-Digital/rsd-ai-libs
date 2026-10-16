@@ -265,12 +265,16 @@ A case file:
   "mustMention": [ "Good", "2024" ],
   "mustNotMention": [ "Outstanding" ],
   "group": "special-schools",
-  "guardrailMayBlock": false
+  "guardrailMayBlock": false,
+  "guardrailMustBlock": false
 }
 ```
 
 - **`guardrailMayBlock`:** the case passes if a guardrail blocks it, e.g. instructions planted in the evidence, and is
   checked as usual if not.
+- **`guardrailMustBlock`:** the case passes only if a guardrail blocks it, so the gate proves the guardrail catches the
+  attack, not just that the agent ignored it. Needs the guardrail's indirect attack shield on: evidence is sent inside
+  Foundry's `<documents>` delimiter, which is what that shield scans.
 - **Your own fields** are kept in `testCase.Extra`.
 
 ## Responsible AI

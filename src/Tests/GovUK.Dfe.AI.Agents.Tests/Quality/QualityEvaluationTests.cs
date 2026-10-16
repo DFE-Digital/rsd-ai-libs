@@ -126,7 +126,7 @@ public sealed class QualityEvaluationTests
             await File.WriteAllTextAsync(Path.Combine(directory, "urn-100000.json"),
                 """
                 { "prompt": "Summarise URN 100000.", "evidence": "Rated Good.", "mustMention": [ "Good" ], "group": "special-schools",
-                  "guardrailMayBlock": true, "ticket": "AIA-42", "expectedRating": { "value": "Good" } }
+                  "guardrailMayBlock": true, "guardrailMustBlock": true, "ticket": "AIA-42", "expectedRating": { "value": "Good" } }
                 """, cancellationToken: TestContext.Current.CancellationToken);
 
             var testCase = Assert.Single(await AgentTestCase.LoadAsync(directory, cancellationToken: TestContext.Current.CancellationToken));
@@ -136,6 +136,7 @@ public sealed class QualityEvaluationTests
             Assert.Empty(testCase.MustNotMention);
             Assert.Equal("special-schools", testCase.Group);
             Assert.True(testCase.GuardrailMayBlock);
+            Assert.True(testCase.GuardrailMustBlock);
             Assert.Equal("AIA-42", testCase.Extra["ticket"].GetString());                               // other fields are kept
             Assert.Equal("Good", testCase.Extra["expectedRating"].GetProperty("value").GetString());
         }
@@ -161,6 +162,45 @@ public sealed class QualityEvaluationTests
 
         Assert.Equal(passes, result.Passed);
         Assert.Equal(mayBlock, result.BlockedByGuardrail);
+    }
+
+    [Fact]
+    public async Task ACaseThatMustBeBlocked_PassesWhenTheGuardrailBlocksIt()
+    {
+        var agents = Substitute.For<IAgentService>();
+        agents.RunAsync(Arg.Any<AgentDefinition>(), Arg.Any<string>(), Arg.Any<AgentEvidence?>(), Arg.Any<CancellationToken>())
+            .Returns<Task<AgentResult>>(_ => throw new GovUK.Dfe.AI.Agents.Exceptions.AgentGuardrailException("ofsted-agent", "prompt"));
+
+        var result = Assert.Single((await new AgentTestRunner(agents).RunAsync(Ofsted,
+            [GoodSchool with { GuardrailMustBlock = true }], cancellationToken: TestContext.Current.CancellationToken)).Results);
+
+        Assert.True(result.Passed);
+        Assert.True(result.BlockedByGuardrail);
+    }
+
+    [Fact]
+    public async Task ACaseThatMustBeBlocked_FailsWhenTheAgentAnswers_EvenCorrectly()
+    {
+        // The agent ignored the planted instruction, but the guardrail let it through, so it isn't proven to catch it.
+        var result = Assert.Single((await new AgentTestRunner(Answers("Rated Good."))
+            .RunAsync(Ofsted, [GoodSchool with { GuardrailMustBlock = true }], cancellationToken: TestContext.Current.CancellationToken)).Results);
+
+        Assert.False(result.Passed);
+        Assert.Contains(GovUK.Dfe.AI.Agents.Constants.ErrorMessages.GuardrailDidNotBlock, result.Failures);
+    }
+
+    [Fact]
+    public async Task ACaseThatMustBeBlocked_FailsWhenTheRunFailsForAnotherReason()
+    {
+        var agents = Substitute.For<IAgentService>();
+        agents.RunAsync(Arg.Any<AgentDefinition>(), Arg.Any<string>(), Arg.Any<AgentEvidence?>(), Arg.Any<CancellationToken>())
+            .Returns<Task<AgentResult>>(_ => throw new InvalidOperationException("Rate limited."));
+
+        var result = Assert.Single((await new AgentTestRunner(agents).RunAsync(Ofsted,
+            [GoodSchool with { GuardrailMustBlock = true }], cancellationToken: TestContext.Current.CancellationToken)).Results);
+
+        Assert.False(result.Passed);
+        Assert.False(result.BlockedByGuardrail);
     }
 
     [Fact]

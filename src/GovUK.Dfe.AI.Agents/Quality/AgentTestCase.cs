@@ -26,13 +26,20 @@ public sealed record AgentTestCase(string Name, string Prompt)
     /// </summary>
     public bool GuardrailMayBlock { get; init; }
 
+    /// <summary>
+    /// The Foundry guardrail must block the prompt or answer, e.g. for instructions planted in the evidence: the case
+    /// passes only when it's blocked, so the release gate proves the guardrail catches the attack, not only that the
+    /// agent ignored it.
+    /// </summary>
+    public bool GuardrailMustBlock { get; init; }
+
     /// <summary>Any other fields in the case's file, by name, for your own checks; the runner ignores them.</summary>
     public IReadOnlyDictionary<string, JsonElement> Extra { get; init; } = new Dictionary<string, JsonElement>();
 
     /// <summary>
     /// Loads every <c>*.json</c> file in <paramref name="directory"/>, named after the file:
     /// <c>{ "prompt": "...", "evidence": "...", "mustMention": [ ... ], "mustNotMention": [ ... ], "group": "...",
-    /// "guardrailMayBlock": false }</c>. Other fields are kept in <see cref="Extra"/>.
+    /// "guardrailMayBlock": false, "guardrailMustBlock": false }</c>. Other fields are kept in <see cref="Extra"/>.
     /// </summary>
     public static async Task<IReadOnlyList<AgentTestCase>> LoadAsync(string directory, CancellationToken cancellationToken = default)
     {
@@ -54,6 +61,7 @@ public sealed record AgentTestCase(string Name, string Prompt)
                 MustNotMention = file.MustNotMention ?? [],
                 Group = file.Group,
                 GuardrailMayBlock = file.GuardrailMayBlock,
+                GuardrailMustBlock = file.GuardrailMustBlock,
                 Extra = file.Extra,
             });
         }
@@ -62,7 +70,7 @@ public sealed record AgentTestCase(string Name, string Prompt)
     }
 
     private sealed record CaseFile(string? Prompt, string? Evidence, List<string>? MustMention, List<string>? MustNotMention,
-        string? Group, bool GuardrailMayBlock)
+        string? Group, bool GuardrailMayBlock, bool GuardrailMustBlock)
     {
         /// <summary>Every other field in the file.</summary>
         [JsonExtensionData]
@@ -80,7 +88,10 @@ public sealed record AgentTestResult(string CaseName, string? Output, IReadOnlyL
     /// <summary>The case's <see cref="AgentTestCase.Group"/>.</summary>
     public string? Group { get; init; }
 
-    /// <summary>A Foundry guardrail blocked the run, as the case allowed (<see cref="AgentTestCase.GuardrailMayBlock"/>).</summary>
+    /// <summary>
+    /// A Foundry guardrail blocked the run, as the case allowed or required (<see cref="AgentTestCase.GuardrailMayBlock"/>,
+    /// <see cref="AgentTestCase.GuardrailMustBlock"/>).
+    /// </summary>
     public bool BlockedByGuardrail { get; init; }
 }
 

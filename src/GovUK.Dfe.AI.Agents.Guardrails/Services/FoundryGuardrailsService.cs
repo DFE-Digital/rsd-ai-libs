@@ -28,32 +28,13 @@ internal sealed class FoundryGuardrailsService(IGuardrailStore store, GuardrailS
         try
         {
             // Blocklists first: the guardrail refers to them.
-            foreach (var (name, blocklist) in settings.Blocklists)
-            {
-                var wanted = GuardrailPolicy.EntriesOf(blocklist);
-                if (await store.GetBlocklistAsync(name, cancellationToken).ConfigureAwait(false) is not { } current || !current.SetEquals(wanted))
-                {
-                    await store.SaveBlocklistAsync(name, wanted, cancellationToken).ConfigureAwait(false);
-                    logger.SavedGuardrailPart("blocklist", name);
-                }
-            }
-
-            var required = GuardrailPolicy.From(settings);
-            if (await store.GetGuardrailAsync(required.Name, cancellationToken).ConfigureAwait(false) is not { } actual || !actual.Matches(required))
-            {
-                await store.SaveGuardrailAsync(required, cancellationToken).ConfigureAwait(false);
-                logger.SavedGuardrailPart("guardrail", required.Name);
-            }
+            await SaveBlocklistsAsync(cancellationToken).ConfigureAwait(false);
+            var required = await SaveGuardrailAsync(cancellationToken).ConfigureAwait(false);
 
             // Agent versions can't be changed: this app's agents get the guardrail in each new version they create.
-            foreach (var deployment in OnDeployments ? settings.Deployments : [])
+            if (OnDeployments)
             {
-                var (exists, current) = await store.GetDeploymentAsync(deployment, cancellationToken).ConfigureAwait(false);
-                if (exists && current != required.Name)
-                {
-                    await store.AssignAsync(deployment, required.Name, cancellationToken).ConfigureAwait(false);
-                    logger.AssignedGuardrail(deployment, required.Name, current ?? "none");
-                }
+                await AssignToDeploymentsAsync(required.Name, cancellationToken).ConfigureAwait(false);
             }
         }
         catch (RequestFailedException ex) when (ex.Status == (int)HttpStatusCode.Forbidden)
@@ -62,6 +43,44 @@ internal sealed class FoundryGuardrailsService(IGuardrailStore store, GuardrailS
         }
 
         return await CheckAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task SaveBlocklistsAsync(CancellationToken cancellationToken)
+    {
+        foreach (var (name, blocklist) in settings.Blocklists)
+        {
+            var wanted = GuardrailPolicy.EntriesOf(blocklist);
+            if (await store.GetBlocklistAsync(name, cancellationToken).ConfigureAwait(false) is not { } current || !current.SetEquals(wanted))
+            {
+                await store.SaveBlocklistAsync(name, wanted, cancellationToken).ConfigureAwait(false);
+                logger.SavedGuardrailPart("blocklist", name);
+            }
+        }
+    }
+
+    private async Task<GuardrailPolicy> SaveGuardrailAsync(CancellationToken cancellationToken)
+    {
+        var required = GuardrailPolicy.From(settings);
+        if (await store.GetGuardrailAsync(required.Name, cancellationToken).ConfigureAwait(false) is not { } actual || !actual.Matches(required))
+        {
+            await store.SaveGuardrailAsync(required, cancellationToken).ConfigureAwait(false);
+            logger.SavedGuardrailPart("guardrail", required.Name);
+        }
+
+        return required;
+    }
+
+    private async Task AssignToDeploymentsAsync(string guardrail, CancellationToken cancellationToken)
+    {
+        foreach (var deployment in settings.Deployments)
+        {
+            var (exists, current) = await store.GetDeploymentAsync(deployment, cancellationToken).ConfigureAwait(false);
+            if (exists && current != guardrail)
+            {
+                await store.AssignAsync(deployment, guardrail, cancellationToken).ConfigureAwait(false);
+                logger.AssignedGuardrail(deployment, guardrail, current ?? "none");
+            }
+        }
     }
 
     public async Task<GuardrailReport> CheckAsync(CancellationToken cancellationToken = default)

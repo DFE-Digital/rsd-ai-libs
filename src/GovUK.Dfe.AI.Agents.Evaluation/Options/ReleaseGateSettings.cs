@@ -56,46 +56,23 @@ public sealed class ReleaseGateSettings
 
     internal IEnumerable<string> Problems()
     {
-        if (string.IsNullOrWhiteSpace(TestCasesDirectory))
-        {
-            yield return "TestCasesDirectory";
-        }
+        (bool Invalid, string Problem)[] checks =
+        [
+            (string.IsNullOrWhiteSpace(TestCasesDirectory), "TestCasesDirectory"),
+            (string.IsNullOrWhiteSpace(ReportsDirectory), "ReportsDirectory"),
+            (Metrics.Exists(string.IsNullOrWhiteSpace), "Metrics"),
+            (MinimumScore is < 1 or > 5 || double.IsNaN(MinimumScore), "MinimumScore (from 1 to 5)"),
+            (!IsZeroOrMore(Tolerance), "Tolerance (0 or more)"),
+            (MaxGroupGap is { } gap && !IsZeroOrMore(gap), "MaxGroupGap (0 or more)"),
+            (Repeats < 1, "Repeats (1 or more)"),
+            (MaxParallelTestRuns < 1, "MaxParallelTestRuns (1 or more)"),
+        ];
 
-        if (string.IsNullOrWhiteSpace(ReportsDirectory))
-        {
-            yield return "ReportsDirectory";
-        }
-
-        if (Metrics.Exists(string.IsNullOrWhiteSpace))
-        {
-            yield return "Metrics";
-        }
-
-        if (MinimumScore is < 1 or > 5 || double.IsNaN(MinimumScore))
-        {
-            yield return "MinimumScore (from 1 to 5)";
-        }
-
-        if (Tolerance < 0 || double.IsNaN(Tolerance))
-        {
-            yield return "Tolerance (0 or more)";
-        }
-
-        if (MaxGroupGap is { } gap && (gap < 0 || double.IsNaN(gap)))
-        {
-            yield return "MaxGroupGap (0 or more)";
-        }
-
-        if (Repeats < 1)
-        {
-            yield return "Repeats (1 or more)";
-        }
-
-        if (MaxParallelTestRuns < 1)
-        {
-            yield return "MaxParallelTestRuns (1 or more)";
-        }
+        return checks.Where(static check => check.Invalid).Select(static check => check.Problem);
     }
+
+    /// <summary>NaN fails too, as no comparison with it is true.</summary>
+    private static bool IsZeroOrMore(double value) => value >= 0;
 
     /// <summary>Whether a test case expects a fixed refusal, so its scores are left out.</summary>
     internal bool ExpectsRefusal(Quality.AgentTestCase testCase) =>

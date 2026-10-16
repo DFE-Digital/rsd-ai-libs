@@ -25,6 +25,7 @@ internal sealed class PromptShieldEvidenceShield : IEvidenceShield, IDisposable
 
     private const int MaxParallelCalls = 4;
     private const int MaxAttempts = 3;
+    private static readonly TimeSpan MaxRetryDelay = TimeSpan.FromSeconds(10);
     private static readonly string[] Scopes = ["https://cognitiveservices.azure.com/.default"];
 
     private readonly Uri _shieldPrompt;
@@ -73,48 +74,73 @@ internal sealed class PromptShieldEvidenceShield : IEvidenceShield, IDisposable
     /// <summary>The evidence in parts of at most <see cref="PartLength"/> characters, each overlapping the last.</summary>
     internal static IEnumerable<string> Parts(string evidence)
     {
-        for (var start = 0; ; start += PartLength - Overlap)
+        for (var start = 0; start < evidence.Length; start += PartLength - Overlap)
         {
             var length = Math.Min(PartLength, evidence.Length - start);
             yield return evidence.Substring(start, length);
-            if (start + length >= evidence.Length)
+            if (start + length == evidence.Length)
             {
-                yield break;
+                yield break;   // the last part: without this, a short tail would be sent again inside the next part
             }
         }
     }
 
+    /// <summary>Scans one part. A rate limit or server error is retried, up to <see cref="MaxAttempts"/> calls in all.</summary>
     private async Task<bool> ScanAsync(string userPrompt, string document, CancellationToken cancellationToken)
     {
-        for (var attempt = 1; ; attempt++)
+        // Each attempt returns, waits and retries, or throws, so the loop ends within MaxAttempts.
+        var attempt = 0;
+        while (true)
         {
-            var token = await _credential.GetTokenAsync(new TokenRequestContext(Scopes), cancellationToken).ConfigureAwait(false);
-            using var request = new HttpRequestMessage(HttpMethod.Post, _shieldPrompt)
-            {
-                Content = JsonContent.Create(new ShieldRequest(userPrompt, [document])),
-            };
-            request.Headers.Authorization = new("Bearer", token.Token);
-
-            using var response = await _http.SendAsync(request, cancellationToken).ConfigureAwait(false);
+            attempt++;
+            using var response = await SendAsync(userPrompt, document, cancellationToken).ConfigureAwait(false);
             if (response.IsSuccessStatusCode)
             {
-                var result = await response.Content.ReadFromJsonAsync<ShieldResult>(cancellationToken).ConfigureAwait(false);
-                return result?.DocumentsAnalysis is { Count: > 0 } documents
-                    ? documents.Exists(static analysis => analysis.AttackDetected)
-                    : throw new InvalidOperationException(Constants.ErrorMessages.EvidenceShieldNoResult);
+                return await FoundAttackAsync(response, cancellationToken).ConfigureAwait(false);
             }
 
-            if (attempt < MaxAttempts && response.StatusCode is HttpStatusCode.TooManyRequests or >= HttpStatusCode.InternalServerError)
+            if (attempt >= MaxAttempts || !IsTransient(response.StatusCode))
             {
-                var wait = response.Headers.RetryAfter?.Delta ?? TimeSpan.FromSeconds(attempt);
-                await Task.Delay(wait < TimeSpan.FromSeconds(10) ? wait : TimeSpan.FromSeconds(10), cancellationToken).ConfigureAwait(false);
-                continue;
+                throw await FailureAsync(response, cancellationToken).ConfigureAwait(false);
             }
 
-            var detail = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
-            throw new HttpRequestException(
-                string.Format(Constants.ErrorMessages.EvidenceShieldFailed, (int)response.StatusCode, detail), null, response.StatusCode);
+            await Task.Delay(RetryDelay(response, attempt), cancellationToken).ConfigureAwait(false);
         }
+    }
+
+    private async Task<HttpResponseMessage> SendAsync(string userPrompt, string document, CancellationToken cancellationToken)
+    {
+        var token = await _credential.GetTokenAsync(new TokenRequestContext(Scopes), cancellationToken).ConfigureAwait(false);
+        using var request = new HttpRequestMessage(HttpMethod.Post, _shieldPrompt)
+        {
+            Content = JsonContent.Create(new ShieldRequest(userPrompt, [document])),
+        };
+        request.Headers.Authorization = new("Bearer", token.Token);
+        return await _http.SendAsync(request, cancellationToken).ConfigureAwait(false);
+    }
+
+    private static async Task<bool> FoundAttackAsync(HttpResponseMessage response, CancellationToken cancellationToken)
+    {
+        var result = await response.Content.ReadFromJsonAsync<ShieldResult>(cancellationToken).ConfigureAwait(false);
+        return result?.DocumentsAnalysis is { Count: > 0 } documents
+            ? documents.Exists(static analysis => analysis.AttackDetected)
+            : throw new InvalidOperationException(Constants.ErrorMessages.EvidenceShieldNoResult);
+    }
+
+    private static bool IsTransient(HttpStatusCode status) => status is HttpStatusCode.TooManyRequests or >= HttpStatusCode.InternalServerError;
+
+    /// <summary>The service's <c>Retry-After</c>, else a second per attempt; at most 10 seconds.</summary>
+    private static TimeSpan RetryDelay(HttpResponseMessage response, int attempt)
+    {
+        var wait = response.Headers.RetryAfter?.Delta ?? TimeSpan.FromSeconds(attempt);
+        return wait < MaxRetryDelay ? wait : MaxRetryDelay;
+    }
+
+    private static async Task<HttpRequestException> FailureAsync(HttpResponseMessage response, CancellationToken cancellationToken)
+    {
+        var detail = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+        return new HttpRequestException(
+            string.Format(Constants.ErrorMessages.EvidenceShieldFailed, (int)response.StatusCode, detail), null, response.StatusCode);
     }
 
     public void Dispose() => _http.Dispose();

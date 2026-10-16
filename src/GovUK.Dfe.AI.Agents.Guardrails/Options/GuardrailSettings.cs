@@ -124,53 +124,28 @@ public sealed partial class GuardrailSettings
 
     internal IEnumerable<string> Problems(string? foundryEndpoint)
     {
-        if (!Guid.TryParse(SubscriptionId, out _))
-        {
-            yield return "SubscriptionId (the subscription's ID, a GUID)";
-        }
+        const GuardrailTargets AllTargets = GuardrailTargets.Deployments | GuardrailTargets.Agents;
+        (bool Invalid, string Problem)[] checks =
+        [
+            (!Guid.TryParse(SubscriptionId, out _), "SubscriptionId (the subscription's ID, a GUID)"),
+            (string.IsNullOrWhiteSpace(ResourceGroup), "ResourceGroup"),
+            (AccountNameFor(foundryEndpoint) is null, "AccountName (Foundry:Endpoint doesn't name the resource, so set it here)"),
+            (string.IsNullOrWhiteSpace(Name), "Name"),
+            (ScanEvidence && ContentSafetyEndpointFor(foundryEndpoint) is null, "ContentSafetyEndpoint (an https URL, needed for ScanEvidence)"),
+            (Targets == 0 || (Targets & ~AllTargets) != 0, "Targets (Deployments, Agents, or both)"),
+            (Deployments.Exists(string.IsNullOrWhiteSpace) || (Targets.HasFlag(GuardrailTargets.Deployments) && Deployments.Count == 0),
+                "Deployments"),
+        ];
 
-        if (string.IsNullOrWhiteSpace(ResourceGroup))
-        {
-            yield return "ResourceGroup";
-        }
-
-        if (AccountNameFor(foundryEndpoint) is null)
-        {
-            yield return "AccountName (Foundry:Endpoint doesn't name the resource, so set it here)";
-        }
-
-        if (string.IsNullOrWhiteSpace(Name))
-        {
-            yield return "Name";
-        }
-
-        if (ScanEvidence && ContentSafetyEndpointFor(foundryEndpoint) is null)
-        {
-            yield return "ContentSafetyEndpoint (an https URL, needed for ScanEvidence)";
-        }
-
-        if (Targets == 0 || (Targets & ~(GuardrailTargets.Deployments | GuardrailTargets.Agents)) != 0)
-        {
-            yield return "Targets (Deployments, Agents, or both)";
-        }
-
-        if (Deployments.Exists(string.IsNullOrWhiteSpace) || (Targets.HasFlag(GuardrailTargets.Deployments) && Deployments.Count == 0))
-        {
-            yield return "Deployments";
-        }
-
-        foreach (var (name, blocklist) in Blocklists)
-        {
-            if (!BlockRegex().IsMatch(name))
-            {
-                yield return $"Blocklists:{name} (a name of letters, digits, '-' and '_')";
-            }
-            else if (blocklist.Problem() is { } problem)
-            {
-                yield return $"Blocklists:{name} ({problem})";
-            }
-        }
+        return checks.Where(static check => check.Invalid).Select(static check => check.Problem).Concat(BlocklistProblems());
     }
+
+    private IEnumerable<string> BlocklistProblems()
+        => Blocklists.Select(static entry => BlocklistProblem(entry.Key, entry.Value) is { } problem ? $"Blocklists:{entry.Key} ({problem})" : null)
+            .OfType<string>();
+
+    private static string? BlocklistProblem(string name, GuardrailBlocklistSettings blocklist)
+        => BlockRegex().IsMatch(name) ? blocklist.Problem() : "a name of letters, digits, '-' and '_'";
 
     [GeneratedRegex("^[A-Za-z0-9_-]{1,64}$")]
     private static partial Regex BlockRegex();

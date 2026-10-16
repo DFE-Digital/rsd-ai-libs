@@ -33,7 +33,7 @@ public static class QualityEvaluationExtensions
 
         IEvaluator[] scoring = evaluator is null ? [new GroundednessEvaluator(), new RelevanceEvaluator()] : [evaluator];
         return agents.AddPackage(new EvaluationPackage((judgeModel, asAgent) => sp => asAgent
-            ? JudgedByAgents(scoring, sp.GetRequiredService<IAgentRuntimeService>(), judgeModel!, sp)
+            ? JudgedByAgents(scoring, sp.GetRequiredService<IAgentRunnerService>(), judgeModel!, sp)
             : new ExtensionsAiEvaluator(Combined(scoring),
                 new ChatConfiguration(new FoundryJudgeChatClient(sp.GetRequiredService<ProjectOpenAIClient>(), judgeModel!)),
                 sp.GetService<ILogger<ExtensionsAiEvaluator>>()), needsJudge: true));
@@ -46,17 +46,17 @@ public static class QualityEvaluationExtensions
         => evaluators.Length == 1 ? evaluators[0] : new CompositeEvaluator(evaluators);
 
     /// <summary>
-    /// Each evaluator gets its own temporary judge agent, named after what it scores (e.g. "answer-judge-groundedness")
-    /// and deleted after each score.
+    /// Each evaluator gets its own judge agent, named after what it scores (e.g. "answer-judge-groundedness"), kept and
+    /// reused.
     /// </summary>
-    private static ExtensionsAiEvaluator JudgedByAgents(IEvaluator[] evaluators, IAgentRuntimeService runtime, string judgeModel,
+    private static ExtensionsAiEvaluator JudgedByAgents(IEvaluator[] evaluators, IAgentRunnerService runner, string judgeModel,
         IServiceProvider services)
     {
         var judged = evaluators.Select(evaluator => (IEvaluator)new MetricJudgeEvaluator(evaluator,
-            new ChatConfiguration(new AgentJudgeChatClient(runtime, judgeModel, evaluator.EvaluationMetricNames))));
+            new ChatConfiguration(new AgentJudgeChatClient(runner, judgeModel, evaluator.EvaluationMetricNames))));
 
         // Each evaluator above uses its own judge, so this one is only a fallback that's never called.
-        var fallback = new ChatConfiguration(new AgentJudgeChatClient(runtime, judgeModel, []));
+        var fallback = new ChatConfiguration(new AgentJudgeChatClient(runner, judgeModel, []));
         return new ExtensionsAiEvaluator(Combined([.. judged]), fallback, services.GetService<ILogger<ExtensionsAiEvaluator>>());
     }
 

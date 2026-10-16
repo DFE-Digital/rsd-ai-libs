@@ -115,9 +115,9 @@ Recorded under `AgentTelemetry.SourceName`, so the core package's OpenTelemetry 
 
 - **Cost:** each scored answer costs one judge call.
 - **On a model connection:** the judge runs as a tool-less agent through the connection, with the guardrail. Each
-  score uses a temporary agent named after its metric (e.g. `answer-judge-groundedness-…`), deleted straight after,
-  even when scoring fails or is cancelled; any left by a crash are removed by the ephemeral agent sweep. Each score
-  costs a create and a delete as well as the model call; tokens and cost show in telemetry.
+  metric keeps one agent named after what it scores (`answer-judge-groundedness`, `answer-judge-relevance`), created
+  once and reused; a new version only when its instructions or the guardrail change. Its tokens and cost show in
+  telemetry.
 - **Nothing stored:** judge calls store nothing in Foundry, though they carry the run's prompt, evidence and answer.
 - **Reasoning models** work as judges.
 - **Missing scores:** if a metric can't be scored (e.g. a wrong model name), the reason is logged.

@@ -12,25 +12,21 @@ namespace GovUK.Dfe.AI.Agents.Evaluation.Clients;
 /// has no tools.
 /// </summary>
 /// <remarks>
-/// Each score runs a temporary agent that's deleted straight after, even when scoring fails or is cancelled, so no judge
-/// agents are left in Foundry. Any left by a crash are removed by the ephemeral agent sweep. Each score costs a create and
-/// a delete as well as the model call.
+/// Each metric has one judge agent, named after what it scores, that's created once and then reused like any other:
+/// scoring an answer costs one model call, not a create and a delete too. A new version is created only when the
+/// evaluator's instructions or the guardrail change.
 /// </remarks>
-/// <param name="runtime">Creates the temporary judge agent, runs it once, then deletes it.</param>
+/// <param name="runner">Gets or creates the judge agent, then runs it.</param>
 /// <param name="model">The judge model, e.g. "myconnection/gpt-5.1".</param>
 /// <param name="metrics">What the judge scores, e.g. "Groundedness": it names the agent, so it's clear in Foundry.</param>
-internal sealed class AgentJudgeChatClient(IAgentRuntimeService runtime, string model, IEnumerable<string> metrics) : IChatClient
+internal sealed class AgentJudgeChatClient(IAgentRunnerService runner, string model, IEnumerable<string> metrics) : IChatClient
 {
     internal const string AgentNamePrefix = "answer-judge";
 
-    /// <summary>
-    /// The longest name before the temporary run's unique suffix (33 characters), keeping it within Foundry's 63.
-    /// </summary>
-    private const int MaxNameLength = 30;
+    /// <summary>Foundry's longest agent name.</summary>
+    private const int MaxNameLength = 63;
 
-    /// <summary>
-    /// What the judge scores, e.g. "answer-judge-groundedness", in letters, digits and hyphens. Each run adds a suffix.
-    /// </summary>
+    /// <summary>What the judge scores, e.g. "answer-judge-groundedness", in letters, digits and hyphens.</summary>
     internal string AgentName { get; } = NameFor(metrics);
 
     /// <summary>Used only when an evaluator sends no system message.</summary>
@@ -45,7 +41,7 @@ internal sealed class AgentJudgeChatClient(IAgentRuntimeService runtime, string 
         var prompt = string.Join("\n\n", all.Where(static message => message.Role != ChatRole.System).Select(static message => message.Text));
         var spec = AgentFor(string.IsNullOrWhiteSpace(instructions) ? DefaultInstructions : instructions);
 
-        var result = await runtime.RunEphemeralAsync(spec, prompt, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var result = await runner.RunFromSpecAsync(spec, prompt, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         // The runner shows HTML a model writes as text ("<" becomes "&lt;"), which would hide the judge's score tags,
         // e.g. <S0>, from the evaluator; decoding restores them. The judge's answer is only parsed, never shown.
@@ -72,7 +68,7 @@ internal sealed class AgentJudgeChatClient(IAgentRuntimeService runtime, string 
 
     public void Dispose()
     {
-        // The runtime is shared and owned by the container.
+        // The runner is shared and owned by the container.
     }
 
     private static string NameFor(IEnumerable<string> metrics)

@@ -120,28 +120,25 @@ public sealed class JudgeTests
     [InlineData(" ")]
     public async Task WithoutAJudgeModel_TheJudgeUsesTheDefaultModel(string? judgeModel)
     {
-        var (runtime, specs) = JudgeAgent("&lt;S2>4&lt;/S2>");
+        var (runner, specs) = JudgeAgent("&lt;S2>4&lt;/S2>");
         using var provider = Build(agents => agents.AddQualityEvaluation(new GroundednessEvaluator()),
             settings: new() { ["AiAgents:Foundry:DefaultModel"] = "myconnection/gpt-4o", ["AiAgents:Evaluation:JudgeModel"] = judgeModel },
-            services: services => services.AddSingleton(runtime));
+            services: services => services.AddSingleton(runner));
 
         await provider.GetRequiredService<IAgentRunEvaluator>().EvaluateAsync(Sample, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal("myconnection/gpt-4o", Assert.Single(specs).Model);
     }
 
-    /// <summary>
-    /// A runtime standing in for Foundry: records each temporary judge agent's spec and answers with
-    /// <paramref name="output"/>. Temporary agents are deleted after each run.
-    /// </summary>
-    private static (IAgentRuntimeService Runtime, List<AgentSpec> Specs) JudgeAgent(string output)
+    /// <summary>A runner standing in for Foundry: records each judge agent's spec and answers with <paramref name="output"/>.</summary>
+    private static (IAgentRunnerService Runner, List<AgentSpec> Specs) JudgeAgent(string output)
     {
         var specs = new List<AgentSpec>();
-        var runtime = Substitute.For<IAgentRuntimeService>();
-        runtime.RunEphemeralAsync(Arg.Do<AgentSpec>(spec => { lock (specs) { specs.Add(spec); } }), Arg.Any<string>(),
-                Arg.Any<ToolCallResolver?>(), Arg.Any<string?>(), Arg.Any<Func<AgentResult, string?>?>(), Arg.Any<CancellationToken>())
+        var runner = Substitute.For<IAgentRunnerService>();
+        runner.RunFromSpecAsync(Arg.Do<AgentSpec>(spec => { lock (specs) { specs.Add(spec); } }), Arg.Any<string>(), Arg.Any<string?>(),
+                Arg.Any<ToolCallResolver?>(), Arg.Any<Func<AgentResult, string?>?>(), Arg.Any<CancellationToken>())
             .Returns(new AgentResult { AgentName = "answer-judge", Output = output, TotalTokens = 90 });
-        return (runtime, specs);
+        return (runner, specs);
     }
 
     [Theory]
@@ -172,10 +169,10 @@ public sealed class JudgeTests
     [Fact]
     public async Task OnAModelConnection_TheJudgeRunsAsAnAgent_OnTheConnectionModel_AndItsScoresAreRead()
     {
-        // As the runtime returns it: the HTML-like score tags shown as text.
-        var (runtime, specs) = JudgeAgent("&lt;S0>Checked.&lt;/S0>&lt;S1>Grounded.&lt;/S1>&lt;S2>4&lt;/S2>");
+        // As the runner returns it: the HTML-like score tags shown as text.
+        var (runner, specs) = JudgeAgent("&lt;S0>Checked.&lt;/S0>&lt;S1>Grounded.&lt;/S1>&lt;S2>4&lt;/S2>");
         using var provider = Build(agents => agents.AddQualityEvaluation(new GroundednessEvaluator()),
-            services: services => services.AddSingleton(runtime));
+            services: services => services.AddSingleton(runner));
 
         var scores = await provider.GetRequiredService<IAgentRunEvaluator>().EvaluateAsync(Sample, cancellationToken: TestContext.Current.CancellationToken);
 
@@ -188,19 +185,21 @@ public sealed class JudgeTests
     }
 
     [Fact]
-    public async Task EachMetric_IsScoredByATemporaryJudgeAgent_NamedAfterWhatItScores()
+    public async Task EachMetric_KeepsOneJudgeAgent_NamedAfterWhatItScores_ReusedForEveryAnswer()
     {
-        var (runtime, specs) = JudgeAgent("&lt;S2>4&lt;/S2>");
-        using var provider = Build(agents => agents.AddQualityEvaluation(), services: services => services.AddSingleton(runtime));
+        var (runner, specs) = JudgeAgent("&lt;S2>4&lt;/S2>");
+        using var provider = Build(agents => agents.AddQualityEvaluation(), services: services => services.AddSingleton(runner));
         var evaluator = provider.GetRequiredService<IAgentRunEvaluator>();
 
         await evaluator.EvaluateAsync(Sample, cancellationToken: TestContext.Current.CancellationToken);
         await evaluator.EvaluateAsync(Sample with { Prompt = "Who inspected it?", Evidence = "Inspected by J Smith.", Output = "J Smith." },
             cancellationToken: TestContext.Current.CancellationToken);
 
-        // Every score runs a temporary agent (RunEphemeralAsync), deleted straight after, so none is left in Foundry.
+        // Each metric sends the same instructions every time, so its agent keeps one unchanging spec and is reused.
         Assert.Equal(4, specs.Count);
-        Assert.Equal(["answer-judge-groundedness", "answer-judge-relevance"], specs.Select(spec => spec.Name).Distinct().Order());
+        var perMetric = specs.GroupBy(spec => spec.Name).OrderBy(group => group.Key, StringComparer.Ordinal).ToList();
+        Assert.Equal(["answer-judge-groundedness", "answer-judge-relevance"], perMetric.Select(group => group.Key));
+        Assert.All(perMetric, group => Assert.Single(group.DistinctBy(spec => spec.Instructions)));
     }
 
     [Theory]

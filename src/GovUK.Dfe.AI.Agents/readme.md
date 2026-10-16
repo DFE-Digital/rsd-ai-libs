@@ -44,7 +44,7 @@ dotnet add package Azure.Monitor.OpenTelemetry.AspNetCore   # sends token usage 
 }
 ```
 
-- Give the identity the **Foundry User** role on the project ([all roles](#roles)).
+- Give the identity the **Foundry User** role on the Foundry project ([all roles](#roles)).
 - Load `Authentication:ClientSecret` from Key Vault, or use [managed identities](#credentials).
 - Set each prompt file to _Copy to output directory_.
 
@@ -286,14 +286,15 @@ call goes through it:
 ```json
 "Foundry": {
   "DefaultModel": "myconnection/gpt-5.1",
-  "Guardrail": "briefing-guardrail"
+  "Guardrail": "/subscriptions/<id>/resourceGroups/<group>/providers/Microsoft.CognitiveServices/accounts/<resource>/raiPolicies/briefing-guardrail"
 }
 ```
 
 - Every agent version, including test copies, temporary agents and the Evaluation judge, must use a model on that
   connection (`myconnection/<model>`); any other is refused. A `DefaultModel` without one, e.g. `gpt-5.1`, allows any.
-- `Guardrail` (optional) goes on every new agent version; a version without it is replaced, not reused. An agent can
-  set its own (`AgentDefinition.Guardrail`). `AddGuardrails()` with `"Targets": "Agents"` sets it for you.
+- `Guardrail` (optional) goes on every new agent version; a version without it is replaced, not reused. Give its full
+  Resource Manager ID: the Agent Service rejects a bare name. An agent can set its own (`AgentDefinition.Guardrail`).
+  `AddGuardrails()` with `"Targets": "Agents"` sets it for you, from its `Name`.
 - If the gateway blocks content itself, list its errors so they count as guardrail blocks:
   `"GatewayGuardrailErrors": [ { "Status": 403, "Code": "<its error code>" } ]`. Copy both from a real blocked call,
   and always set `Code`: a 403 alone also means a missing role.
@@ -411,16 +412,18 @@ its code credential, else its own block, else the default. Load secrets from Key
 
 ### Roles
 
-Assign in Azure (Access control (IAM)) to each identity, e.g. the app's managed identity:
+Assign in Azure (Access control (IAM)) to each identity, e.g. the app's managed identity. Use the narrowest scope:
+**Foundry User on the project** is enough unless the app publishes evaluations to Foundry.
 
 | Role                           | Scope                                       | Needed by                                               | Why                                                          |
 | ------------------------------ | ------------------------------------------- | ------------------------------------------------------- | ------------------------------------------------------------ |
 | Foundry User                   | Foundry project                             | Every app, and a provisioning job                       | Run agents, create versions, call the Evaluation judge model |
+| Foundry User                   | Foundry resource (instead of the project)   | Apps with Evaluation `PublishToFoundry: true`           | Run Foundry evaluations, shown on the Evaluations page       |
 | Foundry User                   | The central Foundry project                 | Apps using `ExternallyManagedAgents` with an `Endpoint` | Run the central agents                                       |
 | Storage Blob Data Contributor  | Storage account, or just the container      | Apps using `GlobalConcurrency`                          | Hold run slots across instances                              |
 | Search Index Data Reader       | Search service                              | Apps using AISearch                                     | Read evidence from the indexes                               |
 | The MCP server's app role      | The server's app registration (its `Scope`) | Apps using Mcp                                          | Call the server's tools                                      |
-| Reader                         | Foundry resource                            | Apps using Guardrails                                   | Check the guardrail at startup                               |
+| Reader                         | Foundry resource (not the project)          | Apps using Guardrails                                   | Read the guardrail and deployments at startup                |
 | Cognitive Services Contributor | Foundry resource                            | Only a job that calls `ApplyAsync`                      | Create the guardrail; not needed if Bicep or Terraform does  |
 
 ## Options

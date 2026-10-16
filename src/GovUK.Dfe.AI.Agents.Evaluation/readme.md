@@ -82,7 +82,8 @@ evaluation per agent (`<agent> release gate (<model>)`), one run per release.
 
 - It doesn't affect the gate; a failure is only logged.
 - It sends test prompts, evidence and answers to Foundry.
-- The identity needs **Foundry User** on the Foundry resource.
+- The identity needs **Foundry User** on the Foundry **resource**, not just the project. Without `PublishToFoundry`,
+  Foundry User on the project is enough.
 
 | Setting               | Default                 | Purpose                                                      |
 | --------------------- | ----------------------- | ------------------------------------------------------------ |

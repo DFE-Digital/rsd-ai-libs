@@ -25,6 +25,18 @@ public sealed partial class GuardrailSettings
     /// <summary>The Foundry resource's Azure Resource Manager ID, worked out when the package is registered.</summary>
     internal string? ResourceId { get; private set; }
 
+    /// <summary>
+    /// The guardrail's full Resource Manager ID. The Agent Service needs it on agent versions: a bare name is rejected.
+    /// </summary>
+    internal string? PolicyResourceId => ResourceId is null ? null : $"{ResourceId}/raiPolicies/{Name}";
+
+    /// <summary>Whether two guardrail references, each a name or a full Resource Manager ID, name the same guardrail.</summary>
+    internal static bool SameGuardrail(string? first, string? second)
+        => first is not null && second is not null
+            && string.Equals(PolicyName(first), PolicyName(second), StringComparison.OrdinalIgnoreCase);
+
+    private static string PolicyName(string reference) => reference[(reference.LastIndexOf('/') + 1)..];
+
     /// <summary>Works out <see cref="ResourceId"/> from the subscription, resource group and account name.</summary>
     internal void ResolveResourceId(string? foundryEndpoint)
         => ResourceId = AccountNameFor(foundryEndpoint) is { } account && !string.IsNullOrWhiteSpace(ResourceGroup)

@@ -148,7 +148,7 @@ internal sealed class FoundryGuardrailsService(IGuardrailStore store, GuardrailS
                 continue;
             }
 
-            if (current != agent.Guardrail)
+            if (!GuardrailSettings.SameGuardrail(current, agent.Guardrail))
             {
                 problems.Add($"agent '{agent.Name}' {version} uses {(current is null ? "no guardrail" : $"'{current}'")}");
             }

@@ -39,6 +39,8 @@ builder.Services.AddAgents(builder.Configuration, agents => agents
 | A provisioning job | Call `await guardrails.ApplyAsync(ct)` (`IFoundryGuardrailsService`). This creates or updates the guardrail and assigns it to each deployment, writing only what differs | Cognitive Services Contributor (Reader when nothing differs) |
 | Every app          | Nothing. At startup, the app checks each deployment has the guardrail and that it hasn't been weakened                                                                   | Reader                                                       |
 
+- **Scope:** both roles are on the Foundry **resource**, not the project: guardrails and deployments belong to the
+  resource. Agents still need only Foundry User on the project.
 - **Infrastructure as code instead:** create the guardrail in Bicep or Terraform and skip `ApplyAsync`; apps still check
   it, with only Reader.
 - **Missing or weakened:** startup fails, saying what's wrong (`"RequireAtStartup": false` only warns).
@@ -60,7 +62,7 @@ guardrail on the agents:
 ```
 
 - No `Deployments`; `ApplyAsync` creates or updates only the guardrail and blocklists.
-- Every agent version the app creates gets the guardrail (it becomes `Foundry:Guardrail`).
+- Every agent version the app creates gets the guardrail, by its full Resource Manager ID (it becomes `Foundry:Guardrail`).
 - The startup check confirms each pinned or externally managed version has it, e.g.
   `agent 'rsd-trust-agent' version 4 uses no guardrail`. Fix by provisioning a new version.
 - `"Targets": "Deployments, Agents"` does both.

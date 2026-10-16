@@ -220,7 +220,9 @@ public sealed class GuardrailTests
     {
         var agents = Substitute.For<IAgentFactory>();
         agents.GetGuardrailAsync("rsd-trust-agent", "4", Arg.Any<CancellationToken>()).Returns((string?)null);
-        agents.GetGuardrailAsync("ofsted-agent", null, Arg.Any<CancellationToken>()).Returns("briefing-guardrail");
+        // Foundry reports the full Resource Manager ID; it's the same guardrail as the name.
+        agents.GetGuardrailAsync("ofsted-agent", null, Arg.Any<CancellationToken>())
+            .Returns($"/subscriptions/{Subscription}/resourceGroups/rg-1/providers/Microsoft.CognitiveServices/accounts/foundry-1/raiPolicies/briefing-guardrail");
         agents.GetGuardrailAsync("academies-agent", "2", Arg.Any<CancellationToken>()).Returns("Microsoft.DefaultV2");
         agents.GetGuardrailAsync("old-agent", "9", Arg.Any<CancellationToken>())
             .Returns(Task.FromException<string?>(new InvalidOperationException("Agent 'old-agent' version '9' was not found.")));
@@ -251,7 +253,9 @@ public sealed class GuardrailTests
         });
 
         var settings = (GuardrailSettings)services.Single(service => service.ServiceType == typeof(GuardrailSettings)).ImplementationInstance!;
-        Assert.Equal([new AgentInUse("rsd-trust-agent", "4", "briefing-guardrail"), new AgentInUse("ofsted-agent", null, "briefing-guardrail")],
+        // The full Resource Manager ID: the Agent Service rejects a guardrail given by name alone.
+        const string Guardrail = $"/subscriptions/{Subscription}/resourceGroups/rg-1/providers/Microsoft.CognitiveServices/accounts/foundry-1/raiPolicies/briefing-guardrail";
+        Assert.Equal([new AgentInUse("rsd-trust-agent", "4", Guardrail), new AgentInUse("ofsted-agent", null, Guardrail)],
             settings.Agents);
     }
 

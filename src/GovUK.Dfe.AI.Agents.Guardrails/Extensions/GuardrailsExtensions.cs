@@ -84,19 +84,21 @@ public static class GuardrailsExtensions
         private static bool UseOnAgents(AgentsPackageContext context, GuardrailSettings settings)
         {
             var foundry = context.Options.Foundry;
-            if (!string.IsNullOrWhiteSpace(foundry.Guardrail) && foundry.Guardrail != settings.Name)
+            if (!string.IsNullOrWhiteSpace(foundry.Guardrail) && !GuardrailSettings.SameGuardrail(foundry.Guardrail, settings.Name))
             {
                 context.ReportProblem($"{SectionName}:Name (Foundry:Guardrail names a different guardrail; remove one)");
                 return false;
             }
 
-            foundry.Guardrail = settings.Name;
+            // The full Resource Manager ID, as the Agent Service rejects a guardrail given by name alone.
+            var guardrail = settings.PolicyResourceId ?? settings.Name!;
+            foundry.Guardrail = guardrail;
             var external = context.Options.ExternallyManagedAgents;
             var versions = context.Options.VersionPins.Select(static pin => (pin.Key, (string?)pin.Value))
                 .Concat(external.Endpoint is null ? external.Agents.Select(static agent => (agent.Key, FollowsLatest(agent.Value) ? null : (string?)agent.Value)) : []);
             var guardrails = context.Definitions.ToDictionary(static definition => definition.Name, static definition => definition.Guardrail);
             settings.Agents = [.. versions.Select(agent => new AgentInUse(agent.Key, agent.Item2,
-                guardrails.GetValueOrDefault(agent.Key) ?? settings.Name!))];
+                guardrails.GetValueOrDefault(agent.Key) ?? guardrail))];
             return true;
         }
 

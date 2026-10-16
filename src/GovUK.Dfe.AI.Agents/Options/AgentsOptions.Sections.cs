@@ -20,8 +20,10 @@ public sealed partial class AgentsOptions
         public ServicePrincipalSettings? Authentication { get; set; }
 
         /// <summary>
-        /// Optional: the Foundry guardrail every agent version this app creates uses, unless its definition names its own.
-        /// The Guardrails package sets it from its <c>Name</c> when its <c>Targets</c> include <c>Agents</c>.
+        /// Optional: the Foundry guardrail every agent version this app creates uses, unless its definition names its own,
+        /// as its full Resource Manager ID (<c>/subscriptions/.../accounts/.../raiPolicies/&lt;name&gt;</c>): the Agent
+        /// Service rejects a bare name. The Guardrails package sets it from its <c>Name</c> when its <c>Targets</c> include
+        /// <c>Agents</c>.
         /// </summary>
         public string? Guardrail { get; set; }
 

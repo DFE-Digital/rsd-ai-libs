@@ -109,7 +109,7 @@ public static class AgentsServiceCollectionExtensions
     /// </summary>
     private static FoundryAgentFactoryOptions FactoryOptions(AgentsOptions options) => new(options.Foundry.DefaultModel!)
     {
-        AgentCacheDuration = options.AgentCacheDuration,
+        AgentCacheDuration = TimeSpan.FromSeconds(options.AgentCacheDuration),
         Guardrail = string.IsNullOrWhiteSpace(options.Foundry.Guardrail) ? null : options.Foundry.Guardrail,
     };
 

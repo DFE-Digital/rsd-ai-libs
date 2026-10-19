@@ -76,8 +76,12 @@ public sealed partial class AgentsOptions
     /// <summary>How long a run waits for a free slot (per-instance or global) before failing with a <see cref="TimeoutException"/>.</summary>
     public TimeSpan MaxWaitForRunSlot { get; set; } = TimeSpan.FromMinutes(2);
 
-    /// <summary>How long a resolved agent version is reused before asking Foundry again. 0 turns caching off.</summary>
-    public TimeSpan AgentCacheDuration { get; set; } = TimeSpan.FromSeconds(30);
+    /// <summary>
+    /// How many seconds a resolved agent version is reused before asking Foundry again, e.g. 30 or 60. 0 turns caching off.
+    /// </summary>
+    public int AgentCacheDuration { get; set; } = DefaultAgentCacheSeconds;
+
+    internal const int DefaultAgentCacheSeconds = 60;
 
     // ===== Versions =====
 

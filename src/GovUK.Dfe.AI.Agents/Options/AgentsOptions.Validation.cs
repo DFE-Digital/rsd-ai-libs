@@ -27,7 +27,7 @@ public sealed partial class AgentsOptions
             (KeepLatestVersions is < 2, "KeepLatestVersions (must be at least 2)"),
             (MaxConcurrency is < 1, "MaxConcurrency (must be at least 1)"),
             (LowRemainingTokensPercent is < 0 or > 100, "LowRemainingTokensPercent (from 0 to 100)"),
-            (AgentCacheDuration < TimeSpan.Zero, "AgentCacheDuration (0 or more)"),
+            (AgentCacheDuration < 0, "AgentCacheDuration (seconds, 0 or more)"),
             (MaxWaitForRunSlot <= TimeSpan.Zero, "MaxWaitForRunSlot (must be positive)"),
             (MaxEvidenceCharacters < 1, "MaxEvidenceCharacters (must be at least 1)"),
             (MaxOutputTokensPerRun < AgentRunOptions.MinOutputTokens, $"MaxOutputTokensPerRun (must be at least {AgentRunOptions.MinOutputTokens})"),

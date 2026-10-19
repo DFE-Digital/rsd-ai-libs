@@ -216,7 +216,7 @@ public sealed class AddAgentsTests
     [InlineData("AiAgents:GlobalConcurrency:MaxConcurrentRuns", "20", "AiAgents:GlobalConcurrency:BlobContainerUri")]
     [InlineData("AiAgents:GlobalConcurrency:BlobContainerUri", "https://account.blob.core.windows.net/run-slots", "AiAgents:GlobalConcurrency:MaxConcurrentRuns")]
     [InlineData("AiAgents:MaxEvidenceCharacters", "0", "AiAgents:MaxEvidenceCharacters")]
-    [InlineData("AiAgents:AgentCacheDuration", "-00:00:01", "AiAgents:AgentCacheDuration")]
+    [InlineData("AiAgents:AgentCacheDuration", "-1", "AiAgents:AgentCacheDuration (seconds, 0 or more)")]
     [InlineData("AiAgents:MaxConcurrency", "0", "AiAgents:MaxConcurrency")]
     [InlineData("AiAgents:LowRemainingTokensPercent", "150", "AiAgents:LowRemainingTokensPercent (from 0 to 100)")]
     [InlineData("AiAgents:MaxOutputTokensPerRun", "15", "AiAgents:MaxOutputTokensPerRun (must be at least 16)")]
@@ -246,14 +246,21 @@ public sealed class AddAgentsTests
     {
         var settings = ValidSettings();
         settings["AiAgents:MaxEvidenceCharacters"] = "50000";
-        settings["AiAgents:AgentCacheDuration"] = "00:00:00";
+        settings["AiAgents:AgentCacheDuration"] = "45";
         settings["AiAgents:MaxOutputTokensPerRun"] = "8000";
-
 
         using var provider = Build(settings);
         Assert.Equal(50_000, provider.GetRequiredService<AgentRunOptions>().MaxEvidenceCharacters);
         Assert.Equal(8_000, provider.GetRequiredService<AgentRunOptions>().MaxOutputTokensPerRun);
-        Assert.Equal(TimeSpan.Zero, provider.GetRequiredService<FoundryAgentFactoryOptions>().AgentCacheDuration);
+        Assert.Equal(TimeSpan.FromSeconds(45), provider.GetRequiredService<FoundryAgentFactoryOptions>().AgentCacheDuration);
+    }
+
+    [Fact]
+    public void AgentCacheDuration_IsInSeconds_AndDefaultsToAMinute()
+    {
+        using var provider = Build(ValidSettings());
+
+        Assert.Equal(TimeSpan.FromSeconds(60), provider.GetRequiredService<FoundryAgentFactoryOptions>().AgentCacheDuration);
     }
 
     [Theory]

@@ -451,7 +451,7 @@ All under `AiAgents`, or in code with `agents.Configure(o => ...)`.
 | `MaxConcurrency`                  | None                | Runs at once on one instance                                                                          |
 | `GlobalConcurrency`               | Off                 | `MaxConcurrentRuns` across instances, and the `BlobContainerUri` for slots                            |
 | `MaxWaitForRunSlot`               | 2 minutes           | Longest wait for a slot                                                                               |
-| `AgentCacheDuration`              | 30 seconds          | How long a resolved version is reused; `0` turns caching off                                          |
+| `AgentCacheDuration`              | 60                  | Seconds a resolved version is reused, e.g. `30`; `0` turns caching off                                |
 | `VersionPins`                     | None                | The version this environment runs, per agent                                                          |
 | `ProtectedVersions`               | None                | Versions pruning must keep, per agent                                                                 |
 | `KeepLatestVersions`              | None                | Versions kept each time one is created (minimum 2)                                                    |

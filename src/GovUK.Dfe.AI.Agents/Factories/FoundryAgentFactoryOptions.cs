@@ -14,8 +14,8 @@ internal sealed record FoundryAgentFactoryOptions(string DefaultModel)
     /// </summary>
     public int? KeepLatestVersions { get; init; }
 
-    /// <summary>How long this instance reuses a resolved agent version. Zero turns caching off. Default: 30 seconds.</summary>
-    public TimeSpan AgentCacheDuration { get; init; } = TimeSpan.FromSeconds(30);
+    /// <summary>How long this instance reuses a resolved agent version. Zero turns caching off. Default: 60 seconds.</summary>
+    public TimeSpan AgentCacheDuration { get; init; } = TimeSpan.FromSeconds(Options.AgentsOptions.DefaultAgentCacheSeconds);
 
     /// <summary>The guardrail versions use unless their spec names one. Null: none.</summary>
     public string? Guardrail { get; init; }

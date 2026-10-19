@@ -33,7 +33,7 @@ public sealed class LiveFoundryTests
         var settings = Settings();
         Assert.SkipUnless(settings.ContainsKey("AiAgents:Foundry:Endpoint"), "Set AiAgents__Foundry__Endpoint to run against a dev Foundry project.");
         settings["AiAgents:RequireTokenUsageTelemetry"] = "false";
-        settings["AiAgents:AgentCacheDuration"] = "00:00:00";   // every lookup asks Foundry
+        settings["AiAgents:AgentCacheDuration"] = "0";   // every lookup asks Foundry
 
         var services = new ServiceCollection().AddLogging();
         services.AddAgents(new ConfigurationBuilder().AddInMemoryCollection(settings).Build(), agents =>

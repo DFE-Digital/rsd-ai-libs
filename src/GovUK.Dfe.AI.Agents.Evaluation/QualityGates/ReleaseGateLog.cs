@@ -32,7 +32,7 @@ internal static partial class ReleaseGateLog
     public static partial void TestCaseFailed(this ILogger logger, string agentName, string caseName, string failures);
 
     [LoggerMessage(EventId = 5008, Level = LogLevel.Information,
-        Message = "{AgentName} / {CaseName}: blocked by the Foundry guardrail, which this case allows")]
+        Message = "{AgentName} / {CaseName}: blocked by the guardrail, as this case allows")]
     public static partial void TestCaseBlockedByGuardrail(this ILogger logger, string agentName, string caseName);
 
     [LoggerMessage(EventId = 5009, Level = LogLevel.Information,

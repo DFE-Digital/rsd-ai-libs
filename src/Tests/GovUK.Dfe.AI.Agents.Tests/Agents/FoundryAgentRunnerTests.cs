@@ -63,6 +63,8 @@ public sealed class FoundryAgentRunnerTests
 
         var blocked = Assert.IsType<AgentGuardrailException>(ex.InnerException);
         Assert.Equal(AgentGuardrailException.EvidenceStage, blocked.Stage);
+        Assert.Equal("Prompt Shields found instructions planted in the evidence for agent 'my-agent', so it wasn't sent. Check where the evidence came from.",
+            blocked.Message);
         await _responsesClient.DidNotReceiveWithAnyArgs().CreateResponseAsync(default!, default!, default, default, cancellationToken);
     }
 

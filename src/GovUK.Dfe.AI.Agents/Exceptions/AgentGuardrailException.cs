@@ -12,7 +12,7 @@ public sealed class AgentGuardrailException : Exception
     public const string EvidenceStage = "evidence";
 
     public AgentGuardrailException(string agentName, string stage, Exception? innerException = null)
-        : base(string.Format(Constants.ErrorMessages.GuardrailBlocked, agentName, stage), innerException)
+        : base(MessageFor(agentName, stage), innerException)
     {
         AgentName = agentName;
         Stage = stage;
@@ -22,4 +22,16 @@ public sealed class AgentGuardrailException : Exception
 
     /// <summary><see cref="PromptStage"/>, <see cref="AnswerStage"/> or <see cref="EvidenceStage"/>.</summary>
     public string Stage { get; }
+
+    /// <summary>
+    /// Names what blocked it: the evidence stage is the library's own Prompt Shields scan, not a Foundry guardrail. A test
+    /// copy is named after its agent, without its per-run suffix.
+    /// </summary>
+    private static string MessageFor(string agentName, string stage)
+    {
+        var agent = Diagnostics.AgentTelemetry.AgentNameForTelemetry(agentName);
+        return stage == EvidenceStage
+            ? string.Format(Constants.ErrorMessages.EvidenceBlocked, agent)
+            : string.Format(Constants.ErrorMessages.GuardrailBlocked, agent, stage);
+    }
 }

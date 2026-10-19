@@ -5,7 +5,7 @@ namespace GovUK.Dfe.AI.Agents.Evaluation.QualityGates;
 /// <summary>The release gate's messages, in one place. Log messages are in <see cref="ReleaseGateLog"/>.</summary>
 internal static class ReleaseGateMessages
 {
-    public const string BlockedByGuardrail = "Blocked by the Foundry guardrail, which this test case allows.";
+    public const string BlockedByGuardrail = "Blocked by the guardrail, as this test case allows.";
 
     public static string NoTestCases(string directory) => $"No test cases found in {directory}.";
 

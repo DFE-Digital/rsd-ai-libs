@@ -114,9 +114,9 @@ public static class AgentTelemetry
     internal static readonly Histogram<double> RunSlotWaitDuration = Meter.CreateHistogram<double>(
         "dfe.ai_agents.run_slot.wait.duration", "s", "Time agent runs waited for a free run slot.");
 
-    /// <summary>Prompts and answers a Foundry guardrail blocked, by stage.</summary>
+    /// <summary>Prompts, answers and evidence a guardrail blocked, by stage: prompt, answer or evidence.</summary>
     internal static readonly Counter<long> GuardrailBlocks = Meter.CreateCounter<long>(
-        "dfe.ai_agents.guardrail.blocks", "{block}", "Prompts and answers a Foundry guardrail blocked.");
+        "dfe.ai_agents.guardrail.blocks", "{block}", "Prompts, answers and evidence a guardrail blocked.");
 
     internal const string RunIdTag = "dfe.ai_agents.run_id";
     internal const string CurrencyTag = "dfe.ai_agents.currency";

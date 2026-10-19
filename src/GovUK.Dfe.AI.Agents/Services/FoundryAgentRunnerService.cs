@@ -107,9 +107,9 @@ internal sealed class FoundryAgentRunnerService(IAgentFactory agentFactory, IFou
         }
         catch (AgentGuardrailException ex)
         {
-            telemetry.Failed("content_filter", $"A Foundry guardrail blocked the {ex.Stage}.");   // Foundry's own error code
+            telemetry.Failed("content_filter", ex.Message);   // Foundry's own error code
             AgentTelemetry.RecordGuardrailBlock(_runOptions.ApplicationName, agent.Name, ex.Stage);
-            _logger.LogWarning(ex, "A Foundry guardrail blocked agent {AgentName}'s {Stage}", agent.Name, ex.Stage);
+            LogBlock(AgentTelemetry.AgentNameForTelemetry(agent.Name), ex.Stage);
             throw WithUsage(new InvalidOperationException(string.Format(ErrorMessages.AgentRunFailed, agent.Name), ex), usage);
         }
         catch (Exception ex)
@@ -124,6 +124,22 @@ internal sealed class FoundryAgentRunnerService(IAgentFactory agentFactory, IFou
             telemetry.AnsweredBy(usage.Model);
             telemetry.Record(usage.Total, usage.InferenceCalls, usage.ToolCalls, _runOptions.Pricing.CostOf(usage.Model, usage.Total),
                 _runOptions.Pricing.Currency);
+        }
+    }
+
+    /// <summary>
+    /// One line, without a stack trace: a block is an expected outcome, e.g. a release-gate case with planted
+    /// instructions, not a fault in the app. Says what blocked it, as the evidence is scanned by Prompt Shields, not Foundry.
+    /// </summary>
+    private void LogBlock(string agentName, string stage)
+    {
+        if (stage == AgentGuardrailException.EvidenceStage)
+        {
+            _logger.LogWarning("Prompt Shields found instructions planted in {AgentName}'s evidence, so it wasn't sent", agentName);
+        }
+        else
+        {
+            _logger.LogWarning("A Foundry guardrail blocked {AgentName}'s {Stage}", agentName, stage);
         }
     }
 

@@ -28,7 +28,7 @@ namespace GovUK.Dfe.AI.Agents.Services;
 /// </remarks>
 internal sealed class FoundryAgentRunnerService(IAgentFactory agentFactory, IFoundryResponsesClient responsesClient,
     ILogger<FoundryAgentRunnerService>? logger = null, AgentRunOptions? runOptions = null, IAgentRunLimiter? runLimiter = null,
-    IEvidenceShield? evidenceShield = null)
+    IInputShield? inputShield = null)
     : IAgentRunnerService
 {
     /// <summary>The most tool-call rounds in one run.</summary>
@@ -109,7 +109,7 @@ internal sealed class FoundryAgentRunnerService(IAgentFactory agentFactory, IFou
         {
             telemetry.Failed("content_filter", ex.Message);   // Foundry's own error code
             AgentTelemetry.RecordGuardrailBlock(_runOptions.ApplicationName, agent.Name, ex.Stage);
-            LogBlock(AgentTelemetry.AgentNameForTelemetry(agent.Name), ex.Stage);
+            LogBlock(AgentTelemetry.AgentNameForTelemetry(agent.Name), ex);
             throw WithUsage(new InvalidOperationException(string.Format(ErrorMessages.AgentRunFailed, agent.Name), ex), usage);
         }
         catch (Exception ex)
@@ -129,17 +129,17 @@ internal sealed class FoundryAgentRunnerService(IAgentFactory agentFactory, IFou
 
     /// <summary>
     /// One line, without a stack trace: a block is an expected outcome, e.g. a release-gate case with planted
-    /// instructions, not a fault in the app. Says what blocked it, as the evidence is scanned by Prompt Shields, not Foundry.
+    /// instructions, not a fault in the app. Says what blocked it: the input shield, with its reason, or Foundry.
     /// </summary>
-    private void LogBlock(string agentName, string stage)
+    private void LogBlock(string agentName, AgentGuardrailException block)
     {
-        if (stage == AgentGuardrailException.EvidenceStage)
+        if (block.Reason is { } reason)
         {
-            _logger.LogWarning("Prompt Shields found instructions planted in {AgentName}'s evidence, so it wasn't sent", agentName);
+            _logger.LogWarning("{Reason} for {AgentName}, so its {Stage} wasn't sent", reason, agentName, block.Stage);
         }
         else
         {
-            _logger.LogWarning("A Foundry guardrail blocked {AgentName}'s {Stage}", agentName, stage);
+            _logger.LogWarning("A Foundry guardrail blocked {AgentName}'s {Stage}", agentName, block.Stage);
         }
     }
 
@@ -402,27 +402,26 @@ internal sealed class FoundryAgentRunnerService(IAgentFactory agentFactory, IFou
     }
 
     /// <summary>
-    /// The first input: the evidence, cut to size, redacted, scanned for planted instructions and fenced as data, then the
-    /// prompt. Cut before redacting, so a redactor or shield that calls a service only checks what's sent.
+    /// The first input: the evidence, cut to size, redacted and fenced as data, then the prompt; both checked by the input
+    /// shield before either is sent. Cut before redacting, so a redactor or shield that calls a service only checks what's
+    /// sent.
     /// </summary>
     private async Task<IReadOnlyList<ResponseItem>> BuildInitialInputItemsAsync(string agentName, string prompt, string? additionalContext,
         CancellationToken cancellationToken)
     {
         var redactedPrompt = await _runOptions.RedactAsync(prompt, cancellationToken).ConfigureAwait(false);
+        var evidence = string.IsNullOrWhiteSpace(additionalContext)
+            ? null
+            : await _runOptions.RedactAsync(LimitEvidence(agentName, additionalContext), cancellationToken).ConfigureAwait(false);
+
+        if (inputShield is not null
+            && await inputShield.CheckAsync(redactedPrompt, evidence, cancellationToken).ConfigureAwait(false) is { } block)
+        {
+            throw new AgentGuardrailException(agentName, block.Stage, block.Reason);
+        }
+
         var promptItem = ResponseItem.CreateUserMessageItem(redactedPrompt);
-        if (string.IsNullOrWhiteSpace(additionalContext))
-        {
-            return [promptItem];
-        }
-
-        var evidence = await _runOptions.RedactAsync(LimitEvidence(agentName, additionalContext), cancellationToken).ConfigureAwait(false);
-        if (evidenceShield is not null
-            && await evidenceShield.FindsAttackAsync(redactedPrompt, evidence, cancellationToken).ConfigureAwait(false))
-        {
-            throw new AgentGuardrailException(agentName, AgentGuardrailException.EvidenceStage);
-        }
-
-        return [ResponseItem.CreateUserMessageItem(PromptText.FenceReferenceMaterial(evidence)), promptItem];
+        return evidence is null ? [promptItem] : [ResponseItem.CreateUserMessageItem(PromptText.FenceReferenceMaterial(evidence)), promptItem];
     }
 
     /// <summary>

@@ -146,6 +146,30 @@ public sealed class QualityEvaluationTests
         }
     }
 
+    [Fact]
+    public async Task TestCases_InSubfolders_AreLoadedToo_NamedWithTheirFolder()
+    {
+        var directory = Directory.CreateTempSubdirectory("aiagents-cases-").FullName;
+        try
+        {
+            Directory.CreateDirectory(Path.Combine(directory, "evaluation"));
+            Directory.CreateDirectory(Path.Combine(directory, "guardrail"));
+            const string Case = """{ "prompt": "Summarise URN 100000." }""";
+            var token = TestContext.Current.CancellationToken;
+            await File.WriteAllTextAsync(Path.Combine(directory, "evaluation", "profile.json"), Case, token);
+            await File.WriteAllTextAsync(Path.Combine(directory, "guardrail", "jailbreak-prompt.json"), Case, token);
+            await File.WriteAllTextAsync(Path.Combine(directory, "top-level.json"), Case, token);
+
+            var cases = await AgentTestCase.LoadAsync(directory, token);
+
+            Assert.Equal(["evaluation/profile", "guardrail/jailbreak-prompt", "top-level"], cases.Select(c => c.Name));
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
     [Theory]
     [InlineData(true, true)]     // a block the case allows passes
     [InlineData(false, false)]   // otherwise it's a failed run

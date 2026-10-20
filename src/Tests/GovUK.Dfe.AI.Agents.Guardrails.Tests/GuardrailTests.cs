@@ -335,17 +335,35 @@ public sealed class GuardrailTests
     }
 
     [Theory]
-    [InlineData(null, false)]
-    [InlineData("false", false)]
-    [InlineData("true", true)]
-    public void ScanEvidence_RegistersTheEvidenceShield_OnlyWhenOn(string? scanEvidence, bool registered)
+    [InlineData(null, false, false)]
+    [InlineData("ScanEvidence", true, true)]
+    [InlineData("ScanPrompts", true, true)]
+    [InlineData("CheckBlocklists", true, false)]   // checked in the app: no call to Prompt Shields
+    public void Each_input_check_registers_the_input_shield_and_Prompt_Shields_only_when_it_calls_it(
+        string? setting, bool shield, bool promptShields)
     {
         var guardrail = ValidGuardrail();
-        guardrail["ScanEvidence"] = scanEvidence;
+        guardrail["Blocklists:personal-identifiers:Patterns:0"] = "[A-Z][0-9]{11}[0-9A-Z]";
+        if (setting is not null)
+        {
+            guardrail[setting] = "true";
+        }
 
         var services = Build(guardrail);
 
-        Assert.Equal(registered, services.Any(service => service.ServiceType == typeof(Safety.Interfaces.IEvidenceShield)));
+        Assert.Equal(shield, services.Any(service => service.ServiceType == typeof(Safety.Interfaces.IInputShield)));
+        Assert.Equal(promptShields, services.Any(service => service.ServiceType == typeof(PromptShieldsClient)));
+    }
+
+    [Fact]
+    public void CheckBlocklists_WithoutABlocklist_FailsStartup()
+    {
+        var guardrail = ValidGuardrail();
+        guardrail["CheckBlocklists"] = "true";
+
+        var ex = Assert.Throws<InvalidOperationException>(() => Build(guardrail));
+
+        Assert.Contains("AiAgents:Guardrails:Blocklists (CheckBlocklists needs at least one)", ex.Message, StringComparison.Ordinal);
     }
 
     [Theory]

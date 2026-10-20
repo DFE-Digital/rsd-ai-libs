@@ -37,18 +37,22 @@ public sealed record AgentTestCase(string Name, string Prompt)
     public IReadOnlyDictionary<string, JsonElement> Extra { get; init; } = new Dictionary<string, JsonElement>();
 
     /// <summary>
-    /// Loads every <c>*.json</c> file in <paramref name="directory"/>, named after the file:
-    /// <c>{ "prompt": "...", "evidence": "...", "mustMention": [ ... ], "mustNotMention": [ ... ], "group": "...",
-    /// "guardrailMayBlock": false, "guardrailMustBlock": false }</c>. Other fields are kept in <see cref="Extra"/>.
+    /// Loads every <c>*.json</c> file in <paramref name="directory"/> and its subfolders, named after the file and any
+    /// subfolder, e.g. "guardrail/jailbreak-prompt", so cases can be sorted into sections such as <c>evaluation/</c> and
+    /// <c>guardrail/</c>: <c>{ "prompt": "...", "evidence": "...", "mustMention": [ ... ], "mustNotMention": [ ... ],
+    /// "group": "...", "guardrailMayBlock": false, "guardrailMustBlock": false }</c>. Other fields are kept in
+    /// <see cref="Extra"/>.
     /// </summary>
     public static async Task<IReadOnlyList<AgentTestCase>> LoadAsync(string directory, CancellationToken cancellationToken = default)
     {
         var cases = new List<AgentTestCase>();
-        foreach (var path in Directory.EnumerateFiles(directory, "*.json").Order(StringComparer.Ordinal))
+        var files = Directory.EnumerateFiles(directory, "*.json", SearchOption.AllDirectories)
+            .Select(path => (Path: path, Name: NameOf(directory, path)))
+            .OrderBy(static file => file.Name, StringComparer.Ordinal);
+        foreach (var (path, name) in files)
         {
             await using var stream = File.OpenRead(path);
             var file = await JsonSerializer.DeserializeAsync<CaseFile>(stream, JsonOptions, cancellationToken).ConfigureAwait(false);
-            var name = Path.GetFileNameWithoutExtension(path);
             if (string.IsNullOrWhiteSpace(file?.Prompt))
             {
                 throw new InvalidOperationException(string.Format(Constants.ErrorMessages.TestCaseWithoutPrompt, path));
@@ -68,6 +72,10 @@ public sealed record AgentTestCase(string Name, string Prompt)
 
         return cases;
     }
+
+    /// <summary>The file's path under <paramref name="directory"/>, without ".json" and with "/" between folders.</summary>
+    private static string NameOf(string directory, string path)
+        => Path.ChangeExtension(Path.GetRelativePath(directory, path), null).Replace(Path.DirectorySeparatorChar, '/');
 
     private sealed record CaseFile(string? Prompt, string? Evidence, List<string>? MustMention, List<string>? MustNotMention,
         string? Group, bool GuardrailMayBlock, bool GuardrailMustBlock)

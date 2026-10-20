@@ -2,25 +2,29 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json.Serialization;
 using Azure.Core;
-using GovUK.Dfe.AI.Agents.Safety.Interfaces;
 
 namespace GovUK.Dfe.AI.Agents.Guardrails.Services;
 
 /// <summary>
-/// Scans evidence with Azure AI Content Safety Prompt Shields (<c>text:shieldPrompt</c>), which detects instructions
-/// planted in documents. Prompt Shields takes up to 10,000 characters a call, so long evidence is scanned in overlapping
-/// parts, a few at a time; an attack in any part blocks the run. Fails closed: if a part can't be scanned, the run fails.
+/// Azure AI Content Safety Prompt Shields (<c>text:shieldPrompt</c>): finds jailbreak attempts in a question, and
+/// instructions planted in documents. Prompt Shields takes up to 10,000 characters a call, so long evidence is scanned in
+/// overlapping parts, a few at a time; an attack in any part counts. Fails closed: if something can't be scanned, it
+/// throws, so the run fails.
 /// </summary>
-internal sealed class PromptShieldEvidenceShield : IEvidenceShield, IDisposable
+internal sealed class PromptShieldsClient : IDisposable
 {
     internal const string ApiVersion = "2024-09-01";
 
-    /// <summary>Evidence per call, leaving room for the prompt within Prompt Shields' 10,000-character limit.</summary>
+    /// <summary>Prompt Shields' limit for one call.</summary>
+    internal const int MaxCallLength = 10_000;
+
+    /// <summary>Evidence per call, leaving room for the prompt within <see cref="MaxCallLength"/>.</summary>
     internal const int PartLength = 9_000;
 
     /// <summary>Repeated at the start of the next part, so an instruction split by a boundary is still seen whole.</summary>
     internal const int Overlap = 300;
 
+    /// <summary>The prompt sent with each evidence part, for context.</summary>
     internal const int MaxPromptLength = 1_000;
 
     private const int MaxParallelCalls = 4;
@@ -32,7 +36,7 @@ internal sealed class PromptShieldEvidenceShield : IEvidenceShield, IDisposable
     private readonly TokenCredential _credential;
     private readonly HttpClient _http;
 
-    public PromptShieldEvidenceShield(Uri endpoint, TokenCredential credential, HttpMessageHandler? handler = null)
+    public PromptShieldsClient(Uri endpoint, TokenCredential credential, HttpMessageHandler? handler = null)
     {
         _shieldPrompt = new Uri(endpoint, $"contentsafety/text:shieldPrompt?api-version={ApiVersion}");
         _credential = credential;
@@ -43,7 +47,19 @@ internal sealed class PromptShieldEvidenceShield : IEvidenceShield, IDisposable
         };
     }
 
-    public async ValueTask<bool> FindsAttackAsync(string prompt, string evidence, CancellationToken cancellationToken)
+    /// <summary>Whether the question is a jailbreak attempt (a user prompt attack). Its first 10,000 characters are scanned.</summary>
+    public async Task<bool> PromptIsAttackAsync(string prompt, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(prompt);
+
+        var result = await ScanAsync(prompt.Length <= MaxCallLength ? prompt : prompt[..MaxCallLength], [], cancellationToken)
+            .ConfigureAwait(false);
+        return result.UserPromptAnalysis?.AttackDetected
+               ?? throw new InvalidOperationException(Constants.ErrorMessages.PromptShieldsNoResult);
+    }
+
+    /// <summary>Whether the evidence carries planted instructions (a document attack).</summary>
+    public async Task<bool> EvidenceHasAttackAsync(string prompt, string evidence, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(prompt);
         ArgumentNullException.ThrowIfNull(evidence);
@@ -56,7 +72,13 @@ internal sealed class PromptShieldEvidenceShield : IEvidenceShield, IDisposable
             await Parallel.ForEachAsync(Parts(evidence), new ParallelOptions { MaxDegreeOfParallelism = MaxParallelCalls, CancellationToken = stop.Token },
                 async (part, token) =>
                 {
-                    if (await ScanAsync(userPrompt, part, token).ConfigureAwait(false))
+                    var result = await ScanAsync(userPrompt, [part], token).ConfigureAwait(false);
+                    if (result.DocumentsAnalysis is not { Count: > 0 } documents)
+                    {
+                        throw new InvalidOperationException(Constants.ErrorMessages.PromptShieldsNoResult);
+                    }
+
+                    if (documents.Exists(static analysis => analysis.AttackDetected))
                     {
                         Interlocked.Exchange(ref found, 1);
                         await stop.CancelAsync().ConfigureAwait(false);   // one attack is enough; skip the rest
@@ -85,18 +107,19 @@ internal sealed class PromptShieldEvidenceShield : IEvidenceShield, IDisposable
         }
     }
 
-    /// <summary>Scans one part. A rate limit or server error is retried, up to <see cref="MaxAttempts"/> calls in all.</summary>
-    private async Task<bool> ScanAsync(string userPrompt, string document, CancellationToken cancellationToken)
+    /// <summary>One call. A rate limit or server error is retried, up to <see cref="MaxAttempts"/> calls in all.</summary>
+    private async Task<ShieldResult> ScanAsync(string userPrompt, IReadOnlyList<string> documents, CancellationToken cancellationToken)
     {
         // Each attempt returns, waits and retries, or throws, so the loop ends within MaxAttempts.
         var attempt = 0;
         while (true)
         {
             attempt++;
-            using var response = await SendAsync(userPrompt, document, cancellationToken).ConfigureAwait(false);
+            using var response = await SendAsync(userPrompt, documents, cancellationToken).ConfigureAwait(false);
             if (response.IsSuccessStatusCode)
             {
-                return await FoundAttackAsync(response, cancellationToken).ConfigureAwait(false);
+                return await response.Content.ReadFromJsonAsync<ShieldResult>(cancellationToken).ConfigureAwait(false)
+                       ?? throw new InvalidOperationException(Constants.ErrorMessages.PromptShieldsNoResult);
             }
 
             if (attempt >= MaxAttempts || !IsTransient(response.StatusCode))
@@ -108,23 +131,15 @@ internal sealed class PromptShieldEvidenceShield : IEvidenceShield, IDisposable
         }
     }
 
-    private async Task<HttpResponseMessage> SendAsync(string userPrompt, string document, CancellationToken cancellationToken)
+    private async Task<HttpResponseMessage> SendAsync(string userPrompt, IReadOnlyList<string> documents, CancellationToken cancellationToken)
     {
         var token = await _credential.GetTokenAsync(new TokenRequestContext(Scopes), cancellationToken).ConfigureAwait(false);
         using var request = new HttpRequestMessage(HttpMethod.Post, _shieldPrompt)
         {
-            Content = JsonContent.Create(new ShieldRequest(userPrompt, [document])),
+            Content = JsonContent.Create(new ShieldRequest(userPrompt, documents)),
         };
         request.Headers.Authorization = new("Bearer", token.Token);
         return await _http.SendAsync(request, cancellationToken).ConfigureAwait(false);
-    }
-
-    private static async Task<bool> FoundAttackAsync(HttpResponseMessage response, CancellationToken cancellationToken)
-    {
-        var result = await response.Content.ReadFromJsonAsync<ShieldResult>(cancellationToken).ConfigureAwait(false);
-        return result?.DocumentsAnalysis is { Count: > 0 } documents
-            ? documents.Exists(static analysis => analysis.AttackDetected)
-            : throw new InvalidOperationException(Constants.ErrorMessages.EvidenceShieldNoResult);
     }
 
     private static bool IsTransient(HttpStatusCode status) => status is HttpStatusCode.TooManyRequests or >= HttpStatusCode.InternalServerError;
@@ -140,7 +155,7 @@ internal sealed class PromptShieldEvidenceShield : IEvidenceShield, IDisposable
     {
         var detail = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
         return new HttpRequestException(
-            string.Format(Constants.ErrorMessages.EvidenceShieldFailed, (int)response.StatusCode, detail), null, response.StatusCode);
+            string.Format(Constants.ErrorMessages.PromptShieldsFailed, (int)response.StatusCode, detail), null, response.StatusCode);
     }
 
     public void Dispose() => _http.Dispose();
@@ -150,7 +165,8 @@ internal sealed class PromptShieldEvidenceShield : IEvidenceShield, IDisposable
         [property: JsonPropertyName("documents")] IReadOnlyList<string> Documents);
 
     private sealed record ShieldResult(
-        [property: JsonPropertyName("documentsAnalysis")] List<DocumentAnalysis>? DocumentsAnalysis);
+        [property: JsonPropertyName("userPromptAnalysis")] Analysis? UserPromptAnalysis,
+        [property: JsonPropertyName("documentsAnalysis")] List<Analysis>? DocumentsAnalysis);
 
-    private sealed record DocumentAnalysis([property: JsonPropertyName("attackDetected")] bool AttackDetected);
+    private sealed record Analysis([property: JsonPropertyName("attackDetected")] bool AttackDetected);
 }

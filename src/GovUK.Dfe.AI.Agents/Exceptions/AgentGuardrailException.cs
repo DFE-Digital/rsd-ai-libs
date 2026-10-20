@@ -1,9 +1,10 @@
 namespace GovUK.Dfe.AI.Agents.Exceptions;
 
 /// <summary>
-/// A Foundry guardrail blocked an agent's prompt (<see cref="PromptStage"/>) or answer (<see cref="AnswerStage"/>), or
-/// the evidence shield found instructions planted in its evidence (<see cref="EvidenceStage"/>). The run fails with this
-/// as its inner exception, and <c>dfe.ai_agents.guardrail.blocks</c> counts it.
+/// A guardrail blocked an agent's prompt (<see cref="PromptStage"/>), answer (<see cref="AnswerStage"/>) or evidence
+/// (<see cref="EvidenceStage"/>): a Foundry guardrail, or this app's own input shield, which gives a
+/// <see cref="Reason"/>. The run fails with this as its inner exception, and <c>dfe.ai_agents.guardrail.blocks</c>
+/// counts it.
 /// </summary>
 public sealed class AgentGuardrailException : Exception
 {
@@ -11,11 +12,22 @@ public sealed class AgentGuardrailException : Exception
     public const string AnswerStage = "answer";
     public const string EvidenceStage = "evidence";
 
+    /// <summary>A Foundry guardrail's block.</summary>
     public AgentGuardrailException(string agentName, string stage, Exception? innerException = null)
-        : base(MessageFor(agentName, stage), innerException)
+        : base(string.Format(Constants.ErrorMessages.GuardrailBlocked, Diagnostics.AgentTelemetry.AgentNameForTelemetry(agentName), stage),
+            innerException)
     {
         AgentName = agentName;
         Stage = stage;
+    }
+
+    /// <summary>The input shield's block, with what found it.</summary>
+    public AgentGuardrailException(string agentName, string stage, string reason)
+        : base(string.Format(Constants.ErrorMessages.InputBlocked, reason, Diagnostics.AgentTelemetry.AgentNameForTelemetry(agentName)))
+    {
+        AgentName = agentName;
+        Stage = stage;
+        Reason = reason;
     }
 
     public string AgentName { get; }
@@ -23,15 +35,6 @@ public sealed class AgentGuardrailException : Exception
     /// <summary><see cref="PromptStage"/>, <see cref="AnswerStage"/> or <see cref="EvidenceStage"/>.</summary>
     public string Stage { get; }
 
-    /// <summary>
-    /// Names what blocked it: the evidence stage is the library's own Prompt Shields scan, not a Foundry guardrail. A test
-    /// copy is named after its agent, without its per-run suffix.
-    /// </summary>
-    private static string MessageFor(string agentName, string stage)
-    {
-        var agent = Diagnostics.AgentTelemetry.AgentNameForTelemetry(agentName);
-        return stage == EvidenceStage
-            ? string.Format(Constants.ErrorMessages.EvidenceBlocked, agent)
-            : string.Format(Constants.ErrorMessages.GuardrailBlocked, agent, stage);
-    }
+    /// <summary>What found it, when the input shield blocked it rather than a Foundry guardrail.</summary>
+    public string? Reason { get; }
 }

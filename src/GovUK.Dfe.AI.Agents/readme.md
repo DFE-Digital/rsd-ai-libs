@@ -273,8 +273,10 @@ A case file:
 - **`guardrailMayBlock`:** the case passes if a guardrail blocks it, e.g. instructions planted in the evidence, and is
   checked as usual if not.
 - **`guardrailMustBlock`:** the case passes only if a guardrail blocks it, so the gate proves the guardrail catches the
-  attack, not just that the agent ignored it. Needs the guardrail's indirect attack shield on: evidence is sent inside
-  Foundry's `<documents>` delimiter, which is what that shield scans.
+  attack, not just that the agent ignored it. For evidence, or a model behind your own gateway, that takes the
+  Guardrails package's input checks (`ScanPrompts`, `ScanEvidence`, `CheckBlocklists`).
+- **Subfolders:** cases in subfolders are loaded too, named with their folder, e.g. `guardrail/jailbreak-prompt`, so
+  you can keep sections apart, such as `evaluation/` and `guardrail/`.
 - **Your own fields** are kept in `testCase.Extra`.
 
 ## Responsible AI

@@ -89,8 +89,28 @@ public sealed partial class GuardrailSettings
     public bool ScanEvidence { get; set; }
 
     /// <summary>
-    /// Optional: the Content Safety endpoint <see cref="ScanEvidence"/> calls. Unset: the Foundry resource's own,
-    /// https://&lt;resource&gt;.cognitiveservices.azure.com/.
+    /// Scans each run's question with Prompt Shields before it's sent, and blocks a jailbreak attempt. Turn it on when
+    /// agents use a model behind your own gateway (an API Management connection): Foundry's guardrail doesn't run there.
+    /// Needs <b>Cognitive Services User</b>, like <see cref="ScanEvidence"/>. Off by default.
+    /// </summary>
+    public bool ScanPrompts { get; set; }
+
+    /// <summary>
+    /// Checks each run's question and evidence against <see cref="Blocklists"/> in the app, with no call to Azure, and
+    /// blocks a match. Turn it on when agents use a model behind your own gateway, where Foundry's blocklists don't run.
+    /// Off by default.
+    /// </summary>
+    public bool CheckBlocklists { get; set; }
+
+    /// <summary>Whether the app checks its own input, so it needs an <c>IInputShield</c>.</summary>
+    internal bool ChecksInput => ScanPrompts || ScanEvidence || CheckBlocklists;
+
+    /// <summary>Whether input is sent to Prompt Shields, so it needs a Content Safety endpoint.</summary>
+    internal bool UsesPromptShields => ScanPrompts || ScanEvidence;
+
+    /// <summary>
+    /// Optional: the Content Safety endpoint <see cref="ScanPrompts"/> and <see cref="ScanEvidence"/> call. Unset: the
+    /// Foundry resource's own, https://&lt;resource&gt;.cognitiveservices.azure.com/.
     /// </summary>
     public string? ContentSafetyEndpoint { get; set; }
 
@@ -131,7 +151,9 @@ public sealed partial class GuardrailSettings
             (string.IsNullOrWhiteSpace(ResourceGroup), "ResourceGroup"),
             (AccountNameFor(foundryEndpoint) is null, "AccountName (Foundry:Endpoint doesn't name the resource, so set it here)"),
             (string.IsNullOrWhiteSpace(Name), "Name"),
-            (ScanEvidence && ContentSafetyEndpointFor(foundryEndpoint) is null, "ContentSafetyEndpoint (an https URL, needed for ScanEvidence)"),
+            (UsesPromptShields && ContentSafetyEndpointFor(foundryEndpoint) is null,
+                "ContentSafetyEndpoint (an https URL, needed for ScanPrompts and ScanEvidence)"),
+            (CheckBlocklists && Blocklists.Count == 0, "Blocklists (CheckBlocklists needs at least one)"),
             (Targets == 0 || (Targets & ~AllTargets) != 0, "Targets (Deployments, Agents, or both)"),
             (Deployments.Exists(string.IsNullOrWhiteSpace) || (Targets.HasFlag(GuardrailTargets.Deployments) && Deployments.Count == 0),
                 "Deployments"),

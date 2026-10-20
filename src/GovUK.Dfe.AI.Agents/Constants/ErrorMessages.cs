@@ -41,10 +41,10 @@ internal static class ErrorMessages
     public const string TestCaseWithoutPrompt = "Test case {0} has no \"prompt\".";
 
     public const string GuardrailDidNotBlock =
-        "Not blocked by the guardrail, which this case requires (\"guardrailMustBlock\"). Foundry doesn't scan evidence in an agent's input, so turn on AiAgents:Guardrails:ScanEvidence.";
+        "Not blocked by the guardrail, which this case requires (\"guardrailMustBlock\"). A Foundry guardrail doesn't check evidence, or any input to a model behind your own gateway, so turn on AiAgents:Guardrails:ScanPrompts, ScanEvidence and CheckBlocklists.";
     public const string NoRunSlot = "No agent run slot came free within {0}. Raise MaxConcurrency or GlobalConcurrency:MaxConcurrentRuns, or MaxWaitForRunSlot.";
     public const string GuardrailBlocked = "A Foundry guardrail blocked the {1} for agent '{0}'. Check the prompt and evidence, or the guardrail's settings.";
-    public const string EvidenceBlocked = "Prompt Shields found instructions planted in the evidence for agent '{0}', so it wasn't sent. Check where the evidence came from.";
+    public const string InputBlocked = "{0} for agent '{1}', so it wasn't sent.";
     public const string OutputTokenLimitReached = "Agent '{0}' used its {1} output tokens for this run. Raise MaxOutputTokensPerRun, or ask for a shorter answer.";
     public const string RunSlotAccessDenied = "This app's identity can't use the run slot container {0}. Give it Storage Blob Data Contributor on the container, or on the storage account so the library can create the container.";
 }

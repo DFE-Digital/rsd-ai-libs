@@ -74,11 +74,17 @@ public static class GuardrailsExtensions
             services.AddSingleton<IFoundryGuardrailsService, FoundryGuardrailsService>();
             services.AddHostedService<GuardrailStartupValidator>();
 
-            // A Foundry guardrail doesn't scan evidence in an agent's input, so Prompt Shields scans it before it's sent.
-            if (settings.ScanEvidence)
+            // A Foundry guardrail doesn't check evidence, nor any input to a model behind your own gateway, so the app
+            // checks its input itself before it's sent.
+            if (settings.ChecksInput)
             {
-                var endpoint = settings.ContentSafetyEndpointFor(context.Options.Foundry.Endpoint)!;
-                services.AddSingleton<IEvidenceShield>(_ => new PromptShieldEvidenceShield(endpoint, credential));
+                var endpoint = settings.UsesPromptShields ? settings.ContentSafetyEndpointFor(context.Options.Foundry.Endpoint) : null;
+                if (endpoint is not null)
+                {
+                    services.AddSingleton(_ => new PromptShieldsClient(endpoint, credential));
+                }
+
+                services.AddSingleton<IInputShield>(sp => new GuardrailInputShield(settings, sp.GetService<PromptShieldsClient>()));
             }
         }
 

@@ -3,10 +3,6 @@ using GovUK.Dfe.AI.Agents.Diagnostics.Interfaces;
 
 namespace GovUK.Dfe.AI.Agents.Diagnostics;
 
-/// <summary>
-/// <see cref="IAgentMetrics"/> for one app. Created by <c>AddAgents</c> with the app's name, the same one every library
-/// metric is tagged with, so an app can't give a different name or none.
-/// </summary>
 internal sealed class AgentMetrics : IAgentMetrics
 {
     private readonly string _applicationName;

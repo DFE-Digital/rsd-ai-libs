@@ -2,7 +2,6 @@ using GovUK.Dfe.AI.Agents.Services.Interfaces;
 using GovUK.Dfe.AI.Agents.ValueObjects;
 using Microsoft.Extensions.AI;
 using System.Net;
-using System.Runtime.CompilerServices;
 
 namespace GovUK.Dfe.AI.Agents.Evaluation.Clients;
 
@@ -19,7 +18,7 @@ namespace GovUK.Dfe.AI.Agents.Evaluation.Clients;
 /// <param name="runner">Gets or creates the judge agent, then runs it.</param>
 /// <param name="model">The judge model, e.g. "myconnection/gpt-5.1".</param>
 /// <param name="metrics">What the judge scores, e.g. "Groundedness": it names the agent, so it's clear in Foundry.</param>
-internal sealed class AgentJudgeChatClient(IAgentRunnerService runner, string model, IEnumerable<string> metrics) : IChatClient
+internal sealed class AgentJudgeChatClient(IAgentRunnerService runner, string model, IEnumerable<string> metrics) : JudgeChatClient
 {
     internal const string AgentNamePrefix = "answer-judge";
 
@@ -32,7 +31,7 @@ internal sealed class AgentJudgeChatClient(IAgentRunnerService runner, string mo
     /// <summary>Used only when an evaluator sends no system message.</summary>
     private const string DefaultInstructions = "You are an evaluator. Follow the instructions in the message.";
 
-    public async Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
+    public override async Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(messages);
 
@@ -50,25 +49,6 @@ internal sealed class AgentJudgeChatClient(IAgentRunnerService runner, string mo
             ModelId = result.Model,
             Usage = new UsageDetails { InputTokenCount = result.InputTokens, OutputTokenCount = result.OutputTokens, TotalTokenCount = result.TotalTokens },
         };
-    }
-
-    /// <summary>Returns the whole answer as one update: judges don't need streaming.</summary>
-    public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null,
-        [EnumeratorCancellation] CancellationToken cancellationToken = default)
-    {
-        var response = await GetResponseAsync(messages, options, cancellationToken).ConfigureAwait(false);
-        foreach (var update in response.ToChatResponseUpdates())
-        {
-            yield return update;
-        }
-    }
-
-    public object? GetService(Type serviceType, object? serviceKey = null)
-        => serviceKey is null && serviceType.IsInstanceOfType(this) ? this : null;
-
-    public void Dispose()
-    {
-        // The runner is shared and owned by the container.
     }
 
     private static string NameFor(IEnumerable<string> metrics)

@@ -17,12 +17,12 @@ Install core, plus only the add-ons you need.
 
 ## What you need
 
-| Need                        | Details                                                                                                   |
-| --------------------------- | --------------------------------------------------------------------------------------------------------- |
-| .NET 10                     | The packages target `net10.0`                                                                             |
-| An Azure AI Foundry project | With a model deployment, or a connection to one, e.g. `myconnection/gpt-5.1`                              |
-| An identity                 | The app's managed identity or a service principal, with **Foundry User** on the project ([roles](#roles)) |
-| Somewhere for telemetry     | Application Insights or any OpenTelemetry backend: startup fails unless token usage is recorded           |
+| Need                        | Details                                                                                                                                                                      |
+| --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| .NET 10                     | The packages target `net10.0`                                                                                                                                                |
+| An Azure AI Foundry project | With a model deployment, or a connection to one, e.g. `myconnection/gpt-5.1`                                                                                                 |
+| An identity                 | The app's managed identity or a service principal, with **Foundry User** on the project ([roles](https://github.com/DFE-Digital/rsd-ai-libs/blob/main/docs/access.md#roles)) |
+| Somewhere for telemetry     | Application Insights or any OpenTelemetry backend: startup fails unless token usage is recorded                                                                              |
 
 Each add-on's readme lists anything more it needs.
 
@@ -55,8 +55,8 @@ dotnet add package Azure.Monitor.OpenTelemetry.AspNetCore   # sends token usage 
 }
 ```
 
-- Give the identity the **Foundry User** role on the Foundry project ([all roles](#roles)).
-- Load `Authentication:ClientSecret` from Key Vault, or use [managed identities](#credentials).
+- Give the identity the **Foundry User** role on the Foundry project ([all roles](https://github.com/DFE-Digital/rsd-ai-libs/blob/main/docs/access.md#roles)).
+- Load `Authentication:ClientSecret` from Key Vault, or use [managed identities](#credentials-and-roles).
 - Set each prompt file to _Copy to output directory_.
 
 ### 3. Register
@@ -403,13 +403,13 @@ For fairness, give release-gate test cases a `group` (e.g. `"special-schools"`) 
 ## Limits and telemetry
 
 - **Limits:** output tokens, evidence, tool output, tool rounds, time and concurrency are capped, and rate limits (429)
-  are retried. Defaults suit gpt-5.1. See [Limits](https://github.com/DFE-Digital/rsd-ai-libs/blob/main/src/GovUK.Dfe.AI.Agents/docs/limits.md).
+  are retried. Defaults suit gpt-5.1. See [Limits](https://github.com/DFE-Digital/rsd-ai-libs/blob/main/docs/limits.md).
 - **Telemetry:** tokens, cost, duration, tool calls and remaining tokens, as OpenTelemetry metrics and traces, never
-  with prompts or answers. See [Telemetry](https://github.com/DFE-Digital/rsd-ai-libs/blob/main/src/GovUK.Dfe.AI.Agents/docs/telemetry.md).
+  with prompts or answers. See [Telemetry](https://github.com/DFE-Digital/rsd-ai-libs/blob/main/docs/telemetry.md).
 - **Logs:** a failed run logs its exception, which can include parts of the request. Limit log access and retention.
 - **Release metrics:** the guardrail check, release-gate results and the version provisioned, the same in every app and
   grouped by release. They show, per agent, whether it went live and if not, why. See
-  [Release metrics](https://github.com/DFE-Digital/rsd-ai-libs/blob/main/src/GovUK.Dfe.AI.Agents/docs/telemetry.md#release-metrics)
+  [Release metrics](https://github.com/DFE-Digital/rsd-ai-libs/blob/main/docs/telemetry.md#release-metrics)
   for the metrics and the standard queries.
 
 ### Your own metrics
@@ -428,47 +428,21 @@ metrics.Record(Pages, agent.Name, pageCount);
 using (metrics.BeginScope(new KeyValuePair<string, object?>("dfe.ai_agents.briefing.batch_id", batchId))) { ... }
 ```
 
-| Enforced | So that |
-| --- | --- |
-| On the library's meter (`AgentTelemetry.SourceName`) | Collecting the library's metrics collects yours |
-| Named `dfe.ai_agents.` then lower-case words joined by dots or underscores | Every app's metrics follow one naming standard |
+| Enforced                                                                                                                        | So that                                                                         |
+| ------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| On the library's meter (`AgentTelemetry.SourceName`)                                                                            | Collecting the library's metrics collects yours                                 |
+| Named `dfe.ai_agents.` then lower-case words joined by dots or underscores                                                      | Every app's metrics follow one naming standard                                  |
 | Tagged with `dfe.ai_agents.application` (`AiAgents:ApplicationName`) and `gen_ai.agent.name`, which no tag or scope can replace | Apps sharing a workspace never mix; every metric filters by app and agent alike |
-| A test copy recorded under its agent's name | Release-gate runs group with the agent |
-| One instrument per name | Defining a name twice doesn't create a conflicting duplicate |
+| A test copy recorded under its agent's name                                                                                     | Release-gate runs group with the agent                                          |
+| One instrument per name                                                                                                         | Defining a name twice doesn't create a conflicting duplicate                    |
 
 Keep tag values few, e.g. an outcome or a batch, never a user or a prompt: each new value is a new series to store.
 
-## Credentials
+## Credentials and roles
 
-`Authentication` is the default identity; any service can have its own block (`Foundry`, `GlobalConcurrency`,
-`ExternallyManagedAgents` and each add-on's section). For managed identities, set credentials in code:
-
-```csharp
-agents.UseCredential(new ManagedIdentityCredential())                     // default for every service
-      .UseCredentialFor(AzureCredentialTarget.Foundry, foundryCredential)   // one core service
-      .UseExternallyManagedAgentsCredential(centralCredential);           // the central agents' project
-```
-
-Add-ons have `UseMcpCredential(...)`, `UseAISearchCredential(...)` and `UseGuardrailsCredential(...)`. A service uses
-its code credential, else its own block, else the default. Load secrets from Key Vault, e.g.
-`AiAgents--Foundry--Authentication--ClientSecret`.
-
-### Roles
-
-Assign in Azure (Access control (IAM)) to each identity, e.g. the app's managed identity. Use the narrowest scope:
-**Foundry User on the project** is enough unless the app publishes evaluations to Foundry.
-
-| Role                           | Scope                                       | Needed by                                               | Why                                                          |
-| ------------------------------ | ------------------------------------------- | ------------------------------------------------------- | ------------------------------------------------------------ |
-| Foundry User                   | Foundry project                             | Every app, and a provisioning job                       | Run agents, create versions, call the Evaluation judge model |
-| Foundry User                   | Foundry resource (instead of the project)   | Apps with Evaluation `PublishToFoundry: true`           | Run Foundry evaluations, shown on the Evaluations page       |
-| Foundry User                   | The central Foundry project                 | Apps using `ExternallyManagedAgents` with an `Endpoint` | Run the central agents                                       |
-| Storage Blob Data Contributor  | Storage account, or just the container      | Apps using `GlobalConcurrency`                          | Hold run slots across instances                              |
-| Search Index Data Reader       | Search service                              | Apps using AISearch                                     | Read evidence from the indexes                               |
-| The MCP server's app role      | The server's app registration (its `Scope`) | Apps using Mcp                                          | Call the server's tools                                      |
-| Reader                         | Foundry resource (not the project)          | Apps using Guardrails                                   | Read the guardrail and deployments at startup                |
-| Cognitive Services User        | Foundry resource                            | Apps using Guardrails `ScanPrompts` or `ScanEvidence`   | Scan input with Prompt Shields                               |
-| Cognitive Services Contributor | Foundry resource                            | Only a job that calls `ApplyAsync`                      | Create the guardrail; not needed if Bicep or Terraform does  |
+`Authentication` is the default identity, or set one in code, e.g. `agents.UseCredential(new ManagedIdentityCredential())`.
+Any service can have its own. Every app needs **Foundry User** on the Foundry project; each add-on adds its own role.
+See [Access](https://github.com/DFE-Digital/rsd-ai-libs/blob/main/docs/access.md) for every package's credentials and roles.
 
 ## Options
 

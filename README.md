@@ -32,7 +32,17 @@ var evidence = await search.GetContextAsync("ofsted_index", $"URN {urn}", filter
 var result = await agents.RunAsync(BriefingAgents.Ofsted, "Summarise the latest inspection.", evidence, ct);
 ```
 
-Start with the [core readme](src/GovUK.Dfe.AI.Agents/readme.md): configuration, agents, runs and Azure roles.
+Start with the [core readme](src/GovUK.Dfe.AI.Agents/readme.md): configuration, agents and runs.
+
+## Docs
+
+Guides that cover every package:
+
+| Guide                          | What's in it                                                                                   |
+| ------------------------------ | ---------------------------------------------------------------------------------------------- |
+| [Access](docs/access.md)       | How each package signs in to Azure, and the roles each identity needs                          |
+| [Telemetry](docs/telemetry.md) | Every metric the packages record, and standard Application Insights queries to use in your app |
+| [Limits](docs/limits.md)       | The limits a run works within, set by the library and by Azure AI Foundry                      |
 
 ## UK Government AI Playbook
 

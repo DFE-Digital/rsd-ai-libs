@@ -208,6 +208,7 @@ public static class AgentsServiceCollectionExtensions
         services.AddSingleton(sp => new AgentSpecBuilder(sp.GetRequiredService<IPromptProvider>(),
             sp.GetServices<AgentToolBinding>(), sp.GetServices<IManagedAgentProvider>()));
         services.AddSingleton(sp => new AgentRunHooks(sp.GetServices<IAgentRunObserver>(), sp.GetService<IToolCallApprover>()));
+        services.AddSingleton<IAgentProvisioner, AgentProvisioner>();
         services.AddSingleton<IAgentService, AgentService>();
         services.AddSingleton<IAgentTestRunner>(sp => new AgentTestRunner(sp.GetRequiredService<IAgentService>(),
             sp.GetService<IAgentRunEvaluator>()));

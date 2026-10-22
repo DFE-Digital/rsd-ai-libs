@@ -16,9 +16,10 @@ using GovUK.Dfe.AI.Agents.Options;
 
 namespace GovUK.Dfe.AI.Agents.Services;
 
+/// <param name="provisioner">For <see cref="ProvisionAsync"/> only; running agents doesn't need it.</param>
 internal sealed class AgentService(IAgentRunnerService agentRunner, IAgentRuntimeService agentRuntime, AgentSpecBuilder specs,
-    AgentRunOptions? runOptions = null, Factories.Interfaces.IAgentFactory? agentFactory = null, ILogger<AgentService>? logger = null,
-    AgentRunHooks? hooks = null, Diagnostics.Interfaces.IAgentMetrics? metrics = null)
+    AgentRunOptions? runOptions = null, IAgentProvisioner? provisioner = null, ILogger<AgentService>? logger = null,
+    AgentRunHooks? hooks = null)
     : IAgentService
 {
     private readonly AgentRunHooks _hooks = hooks ?? AgentRunHooks.None;
@@ -196,38 +197,12 @@ internal sealed class AgentService(IAgentRunnerService agentRunner, IAgentRuntim
         return results;
     }
 
-    public async Task<IReadOnlyList<AgentReference>> ProvisionAsync(IReadOnlyCollection<AgentDefinition> definitions,
+    public Task<IReadOnlyList<AgentReference>> ProvisionAsync(IReadOnlyCollection<AgentDefinition> definitions,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(definitions);
-        var factory = agentFactory ?? throw new InvalidOperationException(Constants.ErrorMessages.ProvisioningNeedsFactory);
-
-        var provisioned = new List<AgentReference>(definitions.Count);
-
-        // One at a time: a provisioning job isn't latency-sensitive, and it keeps Foundry calls gentle.
-        foreach (var definition in definitions)
-        {
-            if (!definition.IsManagedAgent)
-            {
-                _logger.SkippingEphemeralAgent(definition.Name);
-                continue;
-            }
-
-            var spec = await _specs.BuildAsync(definition, cancellationToken).ConfigureAwait(false);
-            if (spec is null)
-            {
-                _logger.SkippingExternallyManagedAgent(definition.Name);
-                continue;
-            }
-
-            var agent = await factory.GetOrCreateAsync(spec, cancellationToken).ConfigureAwait(false);
-            _logger.ProvisionedAgent(agent.Name, agent.Version);
-            metrics?.Count(AgentTelemetry.AgentsProvisioned, agent.Name,
-                new KeyValuePair<string, object?>(AgentTelemetry.AgentVersionTag, agent.Version));
-            provisioned.Add(agent);
-        }
-
-        return provisioned;
+        return (provisioner ?? throw new InvalidOperationException(Constants.ErrorMessages.ProvisioningNeedsFactory))
+            .ProvisionAsync(definitions, cancellationToken);
     }
 
     /// <summary>

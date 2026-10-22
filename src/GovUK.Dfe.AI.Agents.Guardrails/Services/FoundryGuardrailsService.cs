@@ -9,12 +9,17 @@ using GovUK.Dfe.AI.Agents.Guardrails.Diagnostics;
 using GovUK.Dfe.AI.Agents.Guardrails.Options;
 using GovUK.Dfe.AI.Agents.Guardrails.Enums;
 using GovUK.Dfe.AI.Agents.Factories.Interfaces;
+using GovUK.Dfe.AI.Agents.Diagnostics;
+using GovUK.Dfe.AI.Agents.Diagnostics.Interfaces;
 
 namespace GovUK.Dfe.AI.Agents.Guardrails.Services;
 
 internal sealed class FoundryGuardrailsService(IGuardrailStore store, GuardrailSettings settings, ILogger<FoundryGuardrailsService> logger,
-    IAgentFactory? agentFactory = null) : IFoundryGuardrailsService
+    IAgentFactory? agentFactory = null, IAgentMetrics? metrics = null) : IFoundryGuardrailsService
 {
+    private static readonly AgentCounter Checks = new(GuardrailTelemetry.ChecksMetric,
+        "Checks that the Foundry guardrail is in place, once per agent the app runs, by guardrail, outcome and whether it was applied.");
+
     private bool OnDeployments => settings.Targets.HasFlag(GuardrailTargets.Deployments);
 
     private bool OnAgents => settings.Targets.HasFlag(GuardrailTargets.Agents);
@@ -41,7 +46,7 @@ internal sealed class FoundryGuardrailsService(IGuardrailStore store, GuardrailS
             throw AccessDenied("Cognitive Services Contributor", ex);
         }
 
-        return await CheckAsync(cancellationToken).ConfigureAwait(false);
+        return await CheckAsync(applied: true, cancellationToken).ConfigureAwait(false);
     }
 
     private async Task SaveBlocklistsAsync(CancellationToken cancellationToken)
@@ -82,7 +87,10 @@ internal sealed class FoundryGuardrailsService(IGuardrailStore store, GuardrailS
         }
     }
 
-    public async Task<GuardrailReport> CheckAsync(CancellationToken cancellationToken = default)
+    public Task<GuardrailReport> CheckAsync(CancellationToken cancellationToken = default) =>
+        CheckAsync(applied: false, cancellationToken);
+
+    private async Task<GuardrailReport> CheckAsync(bool applied, CancellationToken cancellationToken)
     {
         var required = GuardrailPolicy.From(settings);
         var problems = new List<string>();
@@ -123,7 +131,26 @@ internal sealed class FoundryGuardrailsService(IGuardrailStore store, GuardrailS
             problems.AddRange(await AgentProblemsAsync(cancellationToken).ConfigureAwait(false));
         }
 
-        return new GuardrailReport(required.Name, problems);
+        var report = new GuardrailReport(required.Name, problems);
+        RecordCheck(report, applied);
+        return report;
+    }
+
+    /// <summary>One count per agent the app runs, as the guardrail covers them all.</summary>
+    private void RecordCheck(GuardrailReport report, bool applied)
+    {
+        if (metrics is null)
+        {
+            return;
+        }
+
+        foreach (var agent in settings.AppAgents)
+        {
+            metrics.Count(Checks, agent,
+                new KeyValuePair<string, object?>(GuardrailTelemetry.NameTag, report.Guardrail),
+                new KeyValuePair<string, object?>(GuardrailTelemetry.OutcomeTag, AgentOutcomes.Of(report.Passed)),
+                new KeyValuePair<string, object?>(GuardrailTelemetry.AppliedTag, applied));
+        }
     }
 
     private async Task<List<string>> DeploymentProblemsAsync(string guardrail, CancellationToken cancellationToken)

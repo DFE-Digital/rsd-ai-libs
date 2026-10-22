@@ -1,4 +1,4 @@
-﻿using GovUK.Dfe.AI.Agents.ValueObjects;
+using GovUK.Dfe.AI.Agents.ValueObjects;
 
 namespace GovUK.Dfe.AI.Agents.Evaluation.QualityGates.Interfaces;
 
@@ -10,6 +10,13 @@ public interface IAgentReleaseGate
     /// gate: every case must pass and, with a judge, each metric must meet the minimum, its baseline and the group gap.
     /// Leftover test agents are deleted afterwards, even when this throws.
     /// </summary>
+    /// <remarks>Outside a <see cref="BeginRun"/>, it opens a run of its own for its metrics.</remarks>
     Task<IReadOnlyList<AgentGateResult>> EvaluateAsync(IReadOnlyCollection<AgentDefinition> definitions,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Starts a release: until it's disposed, every metric recorded with <c>IAgentMetrics</c> carries its id, so open it
+    /// before the guardrail check and dispose it after provisioning, and one query finds the whole release.
+    /// </summary>
+    IReleaseRun BeginRun();
 }

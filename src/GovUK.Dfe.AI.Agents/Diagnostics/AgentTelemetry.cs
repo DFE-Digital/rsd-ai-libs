@@ -32,6 +32,9 @@ public static class AgentTelemetry
     internal const string AgentIdTag = "gen_ai.agent.id";
     /// <summary>The tag giving the agent's Foundry version.</summary>
     public const string AgentVersionTag = "gen_ai.agent.version";
+
+    /// <summary>Each agent version <c>ProvisionAsync</c> created or reused, by <see cref="AgentVersionTag"/>.</summary>
+    public const string AgentsProvisionedMetric = "dfe.ai_agents.agents.provisioned";
     internal const string ResponseModelTag = "gen_ai.response.model";
     internal const string TokenModalityTag = "gen_ai.token.modality";
     internal const string InputTokensTag = "gen_ai.usage.input_tokens";
@@ -115,6 +118,10 @@ public static class AgentTelemetry
 
     internal static readonly Histogram<double> RunSlotWaitDuration = Meter.CreateHistogram<double>(
         "dfe.ai_agents.run_slot.wait.duration", "s", "Time agent runs waited for a free run slot.");
+
+    /// <summary>Recorded with <c>IAgentMetrics</c>, so it's tagged with the app and agent, and any release run's id.</summary>
+    internal static readonly AgentCounter AgentsProvisioned = new(AgentsProvisionedMetric,
+        "Agent versions created or reused in Foundry, by agent and version.");
 
     /// <summary>Prompts, answers and evidence a guardrail blocked, by stage: prompt, answer or evidence.</summary>
     internal static readonly Counter<long> GuardrailBlocks = Meter.CreateCounter<long>(

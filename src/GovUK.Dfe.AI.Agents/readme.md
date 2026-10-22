@@ -407,26 +407,36 @@ For fairness, give release-gate test cases a `group` (e.g. `"special-schools"`) 
 - **Telemetry:** tokens, cost, duration, tool calls and remaining tokens, as OpenTelemetry metrics and traces, never
   with prompts or answers. See [Telemetry](https://github.com/DFE-Digital/rsd-ai-libs/blob/main/src/GovUK.Dfe.AI.Agents/docs/telemetry.md).
 - **Logs:** a failed run logs its exception, which can include parts of the request. Limit log access and retention.
+- **Release metrics:** the guardrail check, release-gate results and the version provisioned, the same in every app and
+  grouped by release. They show, per agent, whether it went live and if not, why. See
+  [Release metrics](https://github.com/DFE-Digital/rsd-ai-libs/blob/main/src/GovUK.Dfe.AI.Agents/docs/telemetry.md#release-metrics)
+  for the metrics and the standard queries.
 
 ### Your own metrics
 
-Count your app's own events the way the library counts its own, so they sit beside its metrics and are never mixed
-with another app's. Define each counter once, and record it with `IAgentMetrics`, which `AddAgents` registers:
+Record your app's own events the way the library records its own, so they sit beside its metrics and are never mixed
+with another app's. Define each metric once, and record it with `IAgentMetrics`, which `AddAgents` registers:
 
 ```csharp
-public static readonly AgentCounter GuardrailChecks = new("dfe.ai_agents.release_gate.guardrail_checks",
-    "Agents whose Foundry guardrail was checked before their release checks, by outcome.");
+public static readonly AgentCounter Exports = new("dfe.ai_agents.briefing.exports", "Briefings exported, by format.");
+public static readonly AgentHistogram Pages = new("dfe.ai_agents.briefing.pages", "{page}", "Pages per exported briefing.");
 
-metrics.Count(GuardrailChecks, agent.Name, new KeyValuePair<string, object?>("dfe.ai_agents.release_gate.outcome", "passed"));
+metrics.Count(Exports, agent.Name, new KeyValuePair<string, object?>("dfe.ai_agents.briefing.format", "pdf"));
+metrics.Record(Pages, agent.Name, pageCount);
+
+// Tags everything recorded inside, including parallel work started inside, e.g. one batch's ID.
+using (metrics.BeginScope(new KeyValuePair<string, object?>("dfe.ai_agents.briefing.batch_id", batchId))) { ... }
 ```
 
 | Enforced | So that |
 | --- | --- |
 | On the library's meter (`AgentTelemetry.SourceName`) | Collecting the library's metrics collects yours |
 | Named `dfe.ai_agents.` then lower-case words joined by dots or underscores | Every app's metrics follow one naming standard |
-| Tagged with `dfe.ai_agents.application` (`AiAgents:ApplicationName`) and `gen_ai.agent.name`, which you can't replace | Apps sharing a workspace never mix; every metric filters by app and agent alike |
-| A test copy counted under its agent's name | Release-gate runs group with the agent |
+| Tagged with `dfe.ai_agents.application` (`AiAgents:ApplicationName`) and `gen_ai.agent.name`, which no tag or scope can replace | Apps sharing a workspace never mix; every metric filters by app and agent alike |
+| A test copy recorded under its agent's name | Release-gate runs group with the agent |
 | One instrument per name | Defining a name twice doesn't create a conflicting duplicate |
+
+Keep tag values few, e.g. an outcome or a batch, never a user or a prompt: each new value is a new series to store.
 
 ## Credentials
 

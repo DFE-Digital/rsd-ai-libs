@@ -1,43 +1,43 @@
-using System.Diagnostics.Metrics;
 using GovUK.Dfe.AI.Agents.Diagnostics;
+using GovUK.Dfe.AI.Agents.Diagnostics.Interfaces;
+using GovUK.Dfe.AI.Agents.Quality;
 
 namespace GovUK.Dfe.AI.Agents.Evaluation.QualityGates;
 
 /// <summary>
-///Provides telemetry instruments for recording release-gate metrics for AI agents.
-/// </summary> 
-internal static class ReleaseGateMetrics
+/// The release gate's metrics, recorded with <see cref="IAgentMetrics"/> to the library's standard: tagged with the app
+/// and agent, and with the open run's id. Names are in <see cref="ReleaseGateTelemetry"/>.
+/// </summary>
+internal sealed class ReleaseGateMetrics(IAgentMetrics metrics)
 {
-    public const string Passed = "passed";
-    public const string Failed = "failed";
-    public const string BlockedByGuardrail = "blocked_by_guardrail";
+    private static readonly AgentCounter TestCases = new(ReleaseGateTelemetry.TestCasesMetric,
+        "Release-gate test cases run, by agent, test case, group and outcome.", "{case}");
 
-    private const string AgentNameTag = "gen_ai.agent.name";
-    private const string EvaluationNameTag = "gen_ai.evaluation.name";
-    private const string OutcomeTag = "dfe.ai_agents.release_gate.outcome";
+    private static readonly AgentHistogram Scores = new(ReleaseGateTelemetry.ScoreMetric, "{score}",
+        "An agent's average judge score in a release-gate run, by metric.");
 
-    private static readonly Meter Meter = new(AgentTelemetry.SourceName);
+    private static readonly AgentCounter Agents = new(ReleaseGateTelemetry.AgentsMetric,
+        "Agents through the release gate, by outcome.");
 
-    internal static readonly Counter<long> TestCases = Meter.CreateCounter<long>(
-        "dfe.ai_agents.release_gate.test_cases", "{case}", "Release-gate test cases run, by agent and outcome.");
+    public void TestCase(string agentName, AgentTestResult result, string outcome) =>
+        metrics.Count(TestCases, agentName,
+            Tag(ReleaseGateTelemetry.TestCaseTag, result.CaseName),
+            Tag(ReleaseGateTelemetry.GroupTag, result.Group ?? string.Empty),
+            Tag(ReleaseGateTelemetry.OutcomeTag, outcome));
 
-    internal static readonly Histogram<double> Scores = Meter.CreateHistogram<double>(
-        "dfe.ai_agents.release_gate.score", "{score}", "An agent's average judge score in a release-gate run, by metric.");
-
-    internal static readonly Counter<long> Agents = Meter.CreateCounter<long>(
-        "dfe.ai_agents.release_gate.agents", "{agent}", "Agents through the release gate, by outcome.");
-
-    public static void RecordTestCase(string agentName, string outcome) =>
-        TestCases.Add(1, new(AgentNameTag, agentName), new(OutcomeTag, outcome));
-
-    public static void RecordScores(string agentName, IReadOnlyDictionary<string, double> averageScores)
+    public void AverageScores(string agentName, IReadOnlyDictionary<string, double> averageScores)
     {
         foreach (var (metric, score) in averageScores)
         {
-            Scores.Record(score, new(AgentNameTag, agentName), new(EvaluationNameTag, metric));
+            metrics.Record(Scores, agentName, score, Tag(ReleaseGateTelemetry.EvaluationNameTag, metric));
         }
     }
 
-    public static void RecordAgent(string agentName, bool passed) =>
-        Agents.Add(1, new(AgentNameTag, agentName), new(OutcomeTag, passed ? Passed : Failed));
+    public void Agent(string agentName, bool passed) =>
+        metrics.Count(Agents, agentName, Tag(ReleaseGateTelemetry.OutcomeTag, AgentOutcomes.Of(passed)));
+
+    /// <summary>Opens a run: every metric recorded with <see cref="IAgentMetrics"/> until it's disposed carries its id.</summary>
+    public IDisposable Run(string runId) => metrics.BeginScope(Tag(ReleaseGateTelemetry.RunIdTag, runId));
+
+    private static KeyValuePair<string, object?> Tag(string name, object? value) => new(name, value);
 }

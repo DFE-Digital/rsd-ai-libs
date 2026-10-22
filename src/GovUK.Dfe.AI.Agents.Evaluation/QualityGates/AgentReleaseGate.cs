@@ -1,3 +1,4 @@
+using GovUK.Dfe.AI.Agents.Diagnostics;
 using System.Diagnostics;
 using System.Text.Json;
 using GovUK.Dfe.AI.Agents.Enums;
@@ -23,17 +24,29 @@ internal sealed class AgentReleaseGate(
     ReleaseGateSettings settings,
     ReleaseGateJudge judge,
     ILogger<AgentReleaseGate> logger,
+    ReleaseGateMetrics metrics,
     IFoundryEvaluationPublisher? foundryEvaluations = null) : IAgentReleaseGate
 {
+    // The open run in this async flow, so EvaluateAsync inside a BeginRun uses it rather than opening another.
+    private static readonly AsyncLocal<string?> CurrentRun = new();
+
     private static readonly JsonSerializerOptions ReportJson = new(JsonSerializerDefaults.Web) { WriteIndented = true };
 
     private static readonly TimeSpan CleanupTimeout = TimeSpan.FromMinutes(1);
 
     private static readonly IReadOnlyDictionary<string, double> NoScores = new Dictionary<string, double>();
 
+    public IReleaseRun BeginRun()
+    {
+        var run = new ReleaseRun(Guid.CreateVersion7().ToString("N"), metrics);
+        logger.ReleaseRunStarted(run.Id);
+        return run;
+    }
+
     public async Task<IReadOnlyList<AgentGateResult>> EvaluateAsync(IReadOnlyCollection<AgentDefinition> definitions,
         CancellationToken cancellationToken = default)
     {
+        using var ownRun = CurrentRun.Value is null ? BeginRun() : null;
         LogJudge();
         var started = Stopwatch.GetTimestamp();
         try
@@ -105,7 +118,7 @@ internal sealed class AgentReleaseGate(
         if (result.BlockedByGuardrail)
         {
             logger.TestCaseBlockedByGuardrail(definition.Name, result.CaseName);
-            ReleaseGateMetrics.RecordTestCase(definition.Name, ReleaseGateMetrics.BlockedByGuardrail);
+            metrics.TestCase(definition.Name, result, AgentOutcomes.BlockedByGuardrail);
             return result with { Output = ReleaseGateMessages.BlockedByGuardrail };
         }
 
@@ -118,7 +131,7 @@ internal sealed class AgentReleaseGate(
             logger.TestCaseFailed(definition.Name, result.CaseName, string.Join("; ", result.Failures));
         }
 
-        ReleaseGateMetrics.RecordTestCase(definition.Name, result.Passed ? ReleaseGateMetrics.Passed : ReleaseGateMetrics.Failed);
+        metrics.TestCase(definition.Name, result, AgentOutcomes.Of(result.Passed));
         return result;
     }
 
@@ -143,7 +156,7 @@ internal sealed class AgentReleaseGate(
         // Failed test cases, and with a judge: each metric averaging below the minimum, not scored, more than the
         // tolerance below the baseline, or scoring one group of cases much worse than another.
         var problems = gated.FailuresAgainst(Gate(), baseline);
-        ReleaseGateMetrics.RecordAgent(agentName, problems.Count == 0);
+        metrics.Agent(agentName, problems.Count == 0);
         if (problems.Count == 0)
         {
             logger.AgentPassed(agentName, reportPath);
@@ -171,7 +184,7 @@ internal sealed class AgentReleaseGate(
             logger.AgentScores(agentName, ReleaseGateMessages.Scores(gated.AverageScores), refusals.Count);
         }
 
-        ReleaseGateMetrics.RecordScores(agentName, gated.AverageScores);
+        metrics.AverageScores(agentName, gated.AverageScores);
 
         var baseline = await LoadBaselineAsync(agentName, cancellationToken);
         return (gated, baseline is null ? null : WithoutScoresFor(baseline, refusals));
@@ -271,5 +284,27 @@ internal sealed class AgentReleaseGate(
 
         public AgentTestResult[] Results { get; } = new AgentTestResult[cases.Count];
     }
-}
 
+    /// <summary>A release run: its id on every metric until disposed, and the current run for <see cref="EvaluateAsync"/>.</summary>
+    private sealed class ReleaseRun : IReleaseRun
+    {
+        private readonly IDisposable _scope;
+        private readonly string? _outer;
+
+        public ReleaseRun(string id, ReleaseGateMetrics metrics)
+        {
+            Id = id;
+            _outer = CurrentRun.Value;
+            _scope = metrics.Run(id);
+            CurrentRun.Value = id;
+        }
+
+        public string Id { get; }
+
+        public void Dispose()
+        {
+            CurrentRun.Value = _outer;
+            _scope.Dispose();
+        }
+    }
+}

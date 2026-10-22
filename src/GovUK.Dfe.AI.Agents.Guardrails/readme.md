@@ -50,6 +50,9 @@ builder.Services.AddAgents(builder.Configuration, agents => agents
 - **Missing or weakened:** startup fails, saying what's wrong (`"RequireAtStartup": false` only warns).
 - **Resource Manager unreachable:** startup warns, so an outage doesn't stop new instances
   (`"FailWhenUnreachable": true` fails instead).
+- **Metric:** every check counts `dfe.ai_agents.guardrail.checks` once per agent the app runs, with its outcome and
+  whether `ApplyAsync` made it. It shows whether an agent's safety net was in place when it was released. See
+  [Release metrics](https://github.com/DFE-Digital/rsd-ai-libs/blob/main/src/GovUK.Dfe.AI.Agents/docs/telemetry.md#release-metrics).
 
 ## Models through a connection
 

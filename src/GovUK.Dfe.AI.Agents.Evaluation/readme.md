@@ -109,8 +109,24 @@ Recorded under `AgentTelemetry.SourceName`, so the core package's OpenTelemetry 
 | `dfe.ai_agents.evaluation.score`           | Each score, by agent, version and `gen_ai.evaluation.name`                               |
 | `dfe.ai_agents.evaluation.samples_dropped` | Sampled runs not scored because the judge fell behind. If this rises, lower `SampleRate` |
 | `dfe.ai_agents.release_gate.score`         | Each agent's average score per release-gate run, by `gen_ai.evaluation.name`             |
-| `dfe.ai_agents.release_gate.test_cases`    | Release-gate cases, by agent and outcome: `passed`, `failed`, `blocked_by_guardrail`     |
+| `dfe.ai_agents.release_gate.test_cases`    | Release-gate cases, by test case, group and outcome: `passed`, `failed`, `blocked_by_guardrail` |
 | `dfe.ai_agents.release_gate.agents`        | Agents through the release gate, by outcome: `passed` or `failed`                        |
+
+The release-gate metrics show which agents may go live and why the others can't. They carry the release's
+`dfe.ai_agents.release_gate.run_id`. To give the guardrail check and provisioning the same ID, do the whole release
+inside one run:
+
+```csharp
+using (var run = releaseGate.BeginRun())   // logs run.Id
+{
+    await guardrails.ApplyAsync(ct);
+    var results = await releaseGate.EvaluateAsync(BriefingAgents.All, ct);
+    // provision the agents that passed
+}
+```
+
+See [Release metrics](https://github.com/DFE-Digital/rsd-ai-libs/blob/main/src/GovUK.Dfe.AI.Agents/docs/telemetry.md#release-metrics)
+for the query that shows each release per agent.
 
 ## Good to know
 

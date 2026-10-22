@@ -68,6 +68,7 @@ public static class GuardrailsExtensions
                 return;
             }
 
+            settings.AppAgents = [.. context.Definitions.Select(static definition => definition.Name)];
             var services = context.Services;
             services.AddSingleton(settings);
             services.AddSingleton<IGuardrailStore>(_ => new ArmGuardrailStore(new ArmClient(credential), new ResourceIdentifier(settings.ResourceId!)));

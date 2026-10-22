@@ -69,6 +69,9 @@ public sealed partial class GuardrailSettings
     /// <summary>The agent versions this app runs as they are, which must carry the guardrail; worked out when the package is registered.</summary>
     internal IReadOnlyList<AgentInUse> Agents { get; set; } = [];
 
+    /// <summary>The agents this app runs, worked out when the package is registered: each check is counted for each.</summary>
+    internal IReadOnlyList<string> AppAgents { get; set; } = [];
+
     /// <summary>The lowest harm severity blocked, for hate, sexual, violence and self-harm, in prompts and answers.</summary>
     public GuardrailSeverity BlockFrom { get; set; } = GuardrailSeverity.Medium;
 

@@ -64,6 +64,7 @@ public static class ReleaseGateExtensions
             services.AddSingleton(settings);
             // Scores only when an evaluator is registered: AddQualityEvaluation() or your own.
             services.AddSingleton(sp => new ReleaseGateJudge(sp.GetService<IAgentRunEvaluator>() is null ? null : judgeModel));
+            services.AddSingleton<ReleaseGateMetrics>();
             services.AddSingleton<IAgentReleaseGate, AgentReleaseGate>();
 
             if (settings.PublishToFoundry)

@@ -55,6 +55,10 @@ internal static partial class ReleaseGateLog
     [LoggerMessage(EventId = 5014, Level = LogLevel.Information, Message = "Release checks finished in {Seconds:0.0} seconds")]
     public static partial void ReleaseChecksFinished(this ILogger logger, double seconds);
 
+    [LoggerMessage(EventId = 5018, Level = LogLevel.Information,
+        Message = "Release run {RunId} started; its metrics carry this id as dfe.ai_agents.release_gate.run_id")]
+    public static partial void ReleaseRunStarted(this ILogger logger, string runId);
+
     [LoggerMessage(EventId = 5015, Level = LogLevel.Warning,
         Message = "Couldn't check Foundry for leftover test agents; the next run will try again")]
     public static partial void LeftoverTestAgentsNotDeleted(this ILogger logger, Exception exception);

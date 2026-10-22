@@ -58,8 +58,10 @@ internal sealed class ReleaseGateTestHost : IDisposable
     public void AddCase(string agentName, string caseName = "case", string prompt = "What was the outcome?",
         string[]? mustMention = null, string[]? mustNotMention = null, string? group = null, bool guardrailMayBlock = false)
     {
-        var directory = Directory.CreateDirectory(Path.Combine(TestCasesDirectory, agentName));
-        File.WriteAllText(Path.Combine(directory.FullName, $"{caseName}.json"), JsonSerializer.Serialize(new
+        // A case name can include its folder, e.g. "guardrail/jailbreak-prompt".
+        var path = Path.Combine(TestCasesDirectory, agentName, $"{caseName}.json");
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllText(path, JsonSerializer.Serialize(new
         {
             prompt,
             evidence = "--- ofsted_index Evidence 1 ---\noutcome: Good",

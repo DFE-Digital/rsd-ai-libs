@@ -1,7 +1,11 @@
+using System.Collections.Concurrent;
+using System.Diagnostics.Metrics;
 using Azure.Core;
 using Azure.ResourceManager.CognitiveServices.Models;
 using Azure;
 using GovUK.Dfe.AI.Agents.Builders;
+using GovUK.Dfe.AI.Agents.Diagnostics;
+using GovUK.Dfe.AI.Agents.Guardrails.Diagnostics;
 using GovUK.Dfe.AI.Agents.Enums;
 using GovUK.Dfe.AI.Agents.Factories.Interfaces;
 using GovUK.Dfe.AI.Agents.Guardrails.Enums;
@@ -154,6 +158,44 @@ public sealed class GuardrailTests
 
         Assert.Equal(before + 1, _store.Writes);   // just the blocklist
         Assert.Contains(new GuardrailBlocklistEntry("Project Falcon", IsRegex: false), _store.Blocklists["case-references"]);
+    }
+
+    [Fact]
+    public async Task EachCheck_IsCountedForEveryAgentTheAppRuns_WithItsOutcome_AndWhetherItWasApplied()
+    {
+        // Agent names of this test's own, as other tests count on the same metric at the same time.
+        var settings = Settings();
+        settings.AppAgents = ["counted-ofsted-agent", "counted-trust-agent"];
+        _store.Deployments["gpt-5.1"] = null;
+        _store.Deployments["gpt-4o"] = null;
+        using var checks = new GuardrailChecks();
+        var guardrails = new FoundryGuardrailsService(_store, settings, NullLogger<FoundryGuardrailsService>.Instance,
+            metrics: new AgentMetrics("briefing-tool"));
+
+        await guardrails.CheckAsync(TestContext.Current.CancellationToken);
+        await guardrails.ApplyAsync(TestContext.Current.CancellationToken);
+
+        foreach (var agent in settings.AppAgents)
+        {
+            Assert.Equal(
+            [
+                ("briefing-tool", "briefing-guardrail", AgentOutcomes.Failed, false),   // before it was applied
+                ("briefing-tool", "briefing-guardrail", AgentOutcomes.Passed, true),
+            ], checks.For(agent));
+        }
+    }
+
+    [Fact]
+    public async Task WithoutMetrics_ACheckStillReports()
+    {
+        var settings = Settings();
+        settings.AppAgents = ["uncounted-agent"];
+        using var checks = new GuardrailChecks();
+
+        var report = await Guardrails(settings).CheckAsync(TestContext.Current.CancellationToken);
+
+        Assert.False(report.Passed);
+        Assert.Empty(checks.For("uncounted-agent"));
     }
 
     [Fact]
@@ -432,6 +474,36 @@ public sealed class GuardrailTests
         {
             Assert.Contains(problem, ex.Message, StringComparison.Ordinal);
         }
+    }
+
+    /// <summary>The guardrail checks counted, as (app, guardrail, outcome, applied), per agent.</summary>
+    private sealed class GuardrailChecks : IDisposable
+    {
+        private readonly MeterListener _listener = new();
+        private readonly ConcurrentQueue<IReadOnlyDictionary<string, object?>> _counted = new();
+
+        public GuardrailChecks()
+        {
+            _listener.InstrumentPublished = (instrument, listener) =>
+            {
+                if (instrument.Meter.Name == AgentTelemetry.SourceName && instrument.Name == GuardrailTelemetry.ChecksMetric)
+                {
+                    listener.EnableMeasurementEvents(instrument);
+                }
+            };
+            _listener.SetMeasurementEventCallback<long>((_, _, tags, _) =>
+                _counted.Enqueue(tags.ToArray().ToDictionary(tag => tag.Key, tag => tag.Value)));
+            _listener.Start();
+        }
+
+        public IReadOnlyList<(object?, object?, object?, object?)> For(string agentName) =>
+        [
+            .. _counted.Where(tags => Equals(tags[AgentTelemetry.AgentNameTag], agentName))
+                .Select(tags => (tags[AgentTelemetry.ApplicationTag], tags[GuardrailTelemetry.NameTag],
+                    tags[GuardrailTelemetry.OutcomeTag], tags[GuardrailTelemetry.AppliedTag])),
+        ];
+
+        public void Dispose() => _listener.Dispose();
     }
 
     /// <summary>Guardrails and deployments in memory, as Resource Manager would hold them.</summary>

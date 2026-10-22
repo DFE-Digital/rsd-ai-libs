@@ -1,3 +1,4 @@
+using GovUK.Dfe.AI.Agents.Diagnostics;
 using Azure.Core;
 using GovUK.Dfe.AI.Agents.Builders;
 using GovUK.Dfe.AI.Agents.Services.Interfaces;
@@ -796,6 +797,7 @@ public sealed partial class AgentPlatformEndToEndTests : IDisposable
         };
         using var provider = Build(services => services.AddSingleton(new AgentToolBinding("ofsted-agent", PerformanceTools())));
         var service = provider.GetRequiredService<IAgentService>();
+        using var provisioned = new Diagnostics.MetricListener(AgentTelemetry.AgentsProvisionedMetric);
 
         var first = await service.ProvisionAsync(definitions, cancellationToken);
         var second = await service.ProvisionAsync(definitions, cancellationToken);
@@ -806,6 +808,9 @@ public sealed partial class AgentPlatformEndToEndTests : IDisposable
         Assert.Equal(["get_performance_data"], _foundry.Definition("ofsted-agent", "1").Tools.OfType<FunctionTool>().Select(t => t.FunctionName));
         Assert.Equal(["ofsted-agent"], _foundry.CreatedNames);   // ephemeral skipped, nothing run
         Assert.Empty(_responses.Calls);
+        // Each version provisioned is counted with its version; the ephemeral agent isn't provisioned, so isn't counted.
+        Assert.Equal(["1", "1"], provisioned.For("ofsted-agent").Select(tags => tags[AgentTelemetry.AgentVersionTag]));
+        Assert.Empty(provisioned.For("synthesis-agent"));
     }
 
     private ServiceProvider BuildConsumingApp(string[] allowedTools, bool bindTools = true)

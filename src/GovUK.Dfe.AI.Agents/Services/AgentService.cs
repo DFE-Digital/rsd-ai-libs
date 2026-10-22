@@ -18,7 +18,7 @@ namespace GovUK.Dfe.AI.Agents.Services;
 
 internal sealed class AgentService(IAgentRunnerService agentRunner, IAgentRuntimeService agentRuntime, AgentSpecBuilder specs,
     AgentRunOptions? runOptions = null, Factories.Interfaces.IAgentFactory? agentFactory = null, ILogger<AgentService>? logger = null,
-    AgentRunHooks? hooks = null)
+    AgentRunHooks? hooks = null, Diagnostics.Interfaces.IAgentMetrics? metrics = null)
     : IAgentService
 {
     private readonly AgentRunHooks _hooks = hooks ?? AgentRunHooks.None;
@@ -222,6 +222,8 @@ internal sealed class AgentService(IAgentRunnerService agentRunner, IAgentRuntim
 
             var agent = await factory.GetOrCreateAsync(spec, cancellationToken).ConfigureAwait(false);
             _logger.ProvisionedAgent(agent.Name, agent.Version);
+            metrics?.Count(AgentTelemetry.AgentsProvisioned, agent.Name,
+                new KeyValuePair<string, object?>(AgentTelemetry.AgentVersionTag, agent.Version));
             provisioned.Add(agent);
         }
 

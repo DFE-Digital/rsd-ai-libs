@@ -1,5 +1,3 @@
-using System.Collections.Concurrent;
-using System.Diagnostics.Metrics;
 using GovUK.Dfe.AI.Agents.Diagnostics;
 using GovUK.Dfe.AI.Agents.Diagnostics.Interfaces;
 using Microsoft.Extensions.Configuration;
@@ -18,11 +16,11 @@ public sealed class AgentMetricsTests
     public void Tags_every_count_with_the_app_and_agent_and_its_own_tags()
     {
         var counter = Counter("tags");
-        using var counts = new CountListener(counter);
+        using var counts = new MetricListener(counter.Name);
 
         new AgentMetrics("briefing-tool").Count(counter, "ofsted-agent", new KeyValuePair<string, object?>("dfe.ai_agents.release_gate.outcome", "passed"));
 
-        var count = Assert.Single(counts.Recorded);
+        var count = Assert.Single(counts.Recorded).Tags;
         Assert.Equal("briefing-tool", count[AgentTelemetry.ApplicationTag]);
         Assert.Equal("ofsted-agent", count[AgentTelemetry.AgentNameTag]);
         Assert.Equal("passed", count["dfe.ai_agents.release_gate.outcome"]);
@@ -32,13 +30,13 @@ public sealed class AgentMetricsTests
     public void Keeps_each_apps_counts_apart_on_the_same_counter()
     {
         var counter = Counter("apps");
-        using var counts = new CountListener(counter);
+        using var counts = new MetricListener(counter.Name);
 
         new AgentMetrics("briefing-tool").Count(counter, "ofsted-agent");
         new AgentMetrics("rsd-common-ai-services").Count(counter, "ofsted-agent");
 
         Assert.Equal(["briefing-tool", "rsd-common-ai-services"],
-            counts.Recorded.Select(count => (string)count[AgentTelemetry.ApplicationTag]!).Order(StringComparer.Ordinal));
+            counts.Recorded.Select(count => (string)count.Tags[AgentTelemetry.ApplicationTag]!).Order(StringComparer.Ordinal));
     }
 
     [Theory]
@@ -47,7 +45,7 @@ public sealed class AgentMetricsTests
     public void Wont_let_a_tag_replace_the_app_or_agent(string reserved)
     {
         var counter = Counter("reserved");
-        using var counts = new CountListener(counter);
+        using var counts = new MetricListener(counter.Name);
 
         Assert.Throws<ArgumentException>(() =>
             new AgentMetrics("briefing-tool").Count(counter, "ofsted-agent", new KeyValuePair<string, object?>(reserved, "another-app")));
@@ -58,11 +56,11 @@ public sealed class AgentMetricsTests
     public void Counts_a_test_copy_under_its_agents_name_as_the_librarys_metrics_do()
     {
         var counter = Counter("copies");
-        using var counts = new CountListener(counter);
+        using var counts = new MetricListener(counter.Name);
 
         new AgentMetrics("briefing-tool").Count(counter, $"ofsted-agent-{Guid.NewGuid():N}");
 
-        Assert.Equal("ofsted-agent", Assert.Single(counts.Recorded)[AgentTelemetry.AgentNameTag]);
+        Assert.Equal("ofsted-agent", Assert.Single(counts.Recorded).Tags[AgentTelemetry.AgentNameTag]);
     }
 
     [Theory]
@@ -97,10 +95,74 @@ public sealed class AgentMetricsTests
         Assert.Same(Counter("twice").Instrument, Counter("twice").Instrument);
 
     [Fact]
+    public void A_scope_adds_its_tags_until_it_is_disposed_and_scopes_nest()
+    {
+        var counter = Counter("scopes");
+        using var counts = new MetricListener(counter.Name);
+        var metrics = new AgentMetrics("briefing-tool");
+
+        using (metrics.BeginScope(new KeyValuePair<string, object?>("dfe.ai_agents.release_gate.run_id", "run-1")))
+        {
+            using (metrics.BeginScope(new KeyValuePair<string, object?>("dfe.ai_agents.tests.step", "inner")))
+            {
+                metrics.Count(counter, "inner-agent");
+            }
+
+            metrics.Count(counter, "outer-agent");
+        }
+
+        metrics.Count(counter, "after-agent");
+
+        var inner = Assert.Single(counts.For("inner-agent"));
+        Assert.Equal(("run-1", "inner"), (inner["dfe.ai_agents.release_gate.run_id"], inner["dfe.ai_agents.tests.step"]));
+        var outer = Assert.Single(counts.For("outer-agent"));
+        Assert.Equal("run-1", outer["dfe.ai_agents.release_gate.run_id"]);
+        Assert.False(outer.ContainsKey("dfe.ai_agents.tests.step"));
+        Assert.False(Assert.Single(counts.For("after-agent")).ContainsKey("dfe.ai_agents.release_gate.run_id"));
+    }
+
+    [Fact]
+    public async Task A_scopes_tags_reach_work_started_inside_it_including_parallel_work()
+    {
+        var counter = Counter("parallel");
+        using var counts = new MetricListener(counter.Name);
+        var metrics = new AgentMetrics("briefing-tool");
+
+        using (metrics.BeginScope(new KeyValuePair<string, object?>("dfe.ai_agents.release_gate.run_id", "run-2")))
+        {
+            await Task.WhenAll(Enumerable.Range(1, 4).Select(i => Task.Run(() => metrics.Count(counter, $"parallel-agent-{i}"))));
+        }
+
+        Assert.Equal(4, counts.Recorded.Count(count => Equals(count.Tags["dfe.ai_agents.release_gate.run_id"], "run-2")));
+    }
+
+    [Theory]
+    [InlineData(AgentTelemetry.ApplicationTag)]
+    [InlineData(AgentTelemetry.AgentNameTag)]
+    public void A_scope_cant_replace_the_app_or_agent(string reserved) =>
+        Assert.Throws<ArgumentException>(() =>
+            new AgentMetrics("briefing-tool").BeginScope(new KeyValuePair<string, object?>(reserved, "another-app")));
+
+    [Fact]
+    public void Records_a_histograms_value_tagged_like_a_count()
+    {
+        var histogram = new AgentHistogram("dfe.ai_agents.tests.score", "{score}", "Recorded by a test.");
+        using var values = new MetricListener(histogram.Name);
+
+        new AgentMetrics("briefing-tool").Record(histogram, "scored-agent", 4.5,
+            new KeyValuePair<string, object?>("gen_ai.evaluation.name", "Relevance"));
+
+        var value = Assert.Single(values.Recorded);
+        Assert.Equal(4.5, value.Value);
+        Assert.Equal(("briefing-tool", "scored-agent", "Relevance"),
+            (value.Tags[AgentTelemetry.ApplicationTag], value.Tags[AgentTelemetry.AgentNameTag], value.Tags["gen_ai.evaluation.name"]));
+    }
+
+    [Fact]
     public void AddAgents_tags_counts_with_AiAgents_ApplicationName()
     {
         var counter = Counter("registered");
-        using var counts = new CountListener(counter);
+        using var counts = new MetricListener(counter.Name);
         var settings = new Dictionary<string, string?>
         {
             ["AiAgents:ApplicationName"] = "briefing-tool",
@@ -116,31 +178,6 @@ public sealed class AgentMetricsTests
 
         provider.GetRequiredService<IAgentMetrics>().Count(counter, "ofsted-agent");
 
-        Assert.Equal("briefing-tool", Assert.Single(counts.Recorded)[AgentTelemetry.ApplicationTag]);
-    }
-
-    /// <summary>The counts recorded on one counter, each as its tags.</summary>
-    private sealed class CountListener : IDisposable
-    {
-        private readonly MeterListener _listener = new();
-        private readonly ConcurrentQueue<IReadOnlyDictionary<string, object?>> _recorded = new();
-
-        public CountListener(AgentCounter counter)
-        {
-            _listener.InstrumentPublished = (instrument, listener) =>
-            {
-                if (instrument.Meter.Name == AgentTelemetry.SourceName && instrument.Name == counter.Name)
-                {
-                    listener.EnableMeasurementEvents(instrument);
-                }
-            };
-            _listener.SetMeasurementEventCallback<long>((_, _, tags, _) =>
-                _recorded.Enqueue(tags.ToArray().ToDictionary(tag => tag.Key, tag => tag.Value)));
-            _listener.Start();
-        }
-
-        public IReadOnlyList<IReadOnlyDictionary<string, object?>> Recorded => [.. _recorded];
-
-        public void Dispose() => _listener.Dispose();
+        Assert.Equal("briefing-tool", Assert.Single(counts.Recorded).Tags[AgentTelemetry.ApplicationTag]);
     }
 }

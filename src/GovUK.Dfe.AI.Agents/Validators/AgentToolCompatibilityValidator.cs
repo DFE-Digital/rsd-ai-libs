@@ -5,7 +5,6 @@ using GovUK.Dfe.AI.Agents.ValueObjects;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
-using OpenAI.Responses;
 using GovUK.Dfe.AI.Agents.Tools.Interfaces;
 using GovUK.Dfe.AI.Agents.Providers;
 using GovUK.Dfe.AI.Agents.Options;

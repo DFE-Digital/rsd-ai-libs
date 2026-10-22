@@ -6,7 +6,6 @@ using GovUK.Dfe.AI.Agents.Tools;
 using Microsoft.Extensions.Logging;
 using NSubstitute.ExceptionExtensions;
 using NSubstitute;
-using OpenAI.Responses;
 using Xunit;
 
 namespace GovUK.Dfe.AI.Agents.Mcp.Tests;

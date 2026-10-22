@@ -1,6 +1,5 @@
 using Azure.Core;
 using GovUK.Dfe.AI.Agents.Builders;
-using GovUK.Dfe.AI.Agents.Concurrency;
 using GovUK.Dfe.AI.Agents.Context.Interfaces;
 using GovUK.Dfe.AI.Agents.Extensibility;
 using GovUK.Dfe.AI.Agents.Extensibility.Interfaces;

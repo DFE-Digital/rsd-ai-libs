@@ -1,7 +1,5 @@
 using GovUK.Dfe.AI.Agents.Factories.Interfaces;
-using GovUK.Dfe.AI.Agents.Factories;
 using GovUK.Dfe.AI.Agents.Options;
-using GovUK.Dfe.AI.Agents.Orchestration;
 using GovUK.Dfe.AI.Agents.Providers;
 using GovUK.Dfe.AI.Agents.Services.Interfaces;
 using GovUK.Dfe.AI.Agents.Services;

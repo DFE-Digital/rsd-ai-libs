@@ -15,6 +15,17 @@ Install core, plus only the add-ons you need.
 | [`GovUK.Dfe.AI.Agents.Evaluation`](https://github.com/DFE-Digital/rsd-ai-libs/blob/main/src/GovUK.Dfe.AI.Agents.Evaluation/readme.md) | A judge model that scores answers                        | `.AddQualityEvaluation()` |
 | [`GovUK.Dfe.AI.Agents.Guardrails`](https://github.com/DFE-Digital/rsd-ai-libs/blob/main/src/GovUK.Dfe.AI.Agents.Guardrails/readme.md) | Foundry guardrails on your models or agents              | `.AddGuardrails()`        |
 
+## What you need
+
+| Need                        | Details                                                                                                   |
+| --------------------------- | --------------------------------------------------------------------------------------------------------- |
+| .NET 10                     | The packages target `net10.0`                                                                             |
+| An Azure AI Foundry project | With a model deployment, or a connection to one, e.g. `myconnection/gpt-5.1`                              |
+| An identity                 | The app's managed identity or a service principal, with **Foundry User** on the project ([roles](#roles)) |
+| Somewhere for telemetry     | Application Insights or any OpenTelemetry backend: startup fails unless token usage is recorded           |
+
+Each add-on's readme lists anything more it needs.
+
 ## Quick start
 
 ### 1. Install
@@ -251,9 +262,8 @@ if (failures.Count > 0)
 ```
 
 - Each failure is a readable line, e.g. `Groundedness: fell from 4.5 to 4.2, more than the tolerance 0.2`.
-- **Tolerance** absorbs the judge's run-to-run noise; **repeats** average scores over several runs.
-- Cases run on a temporary copy of the agent; pass `AgentTestTarget.Deployed` to test the live version.
-- Scores need the Evaluation add-on or your own `IAgentRunEvaluator`; without one, only the facts are checked.
+- Cases run on a temporary copy of the agent (`AgentTestTarget.Deployed` tests the live version). Without an evaluator,
+  only the facts are checked.
 - First release: pass no baseline, then save the passing report as `baseline.json`.
 
 A case file:
@@ -270,13 +280,10 @@ A case file:
 }
 ```
 
-- **`guardrailMayBlock`:** the case passes if a guardrail blocks it, e.g. instructions planted in the evidence, and is
-  checked as usual if not.
-- **`guardrailMustBlock`:** the case passes only if a guardrail blocks it, so the gate proves the guardrail catches the
-  attack, not just that the agent ignored it. For evidence, or a model behind your own gateway, that takes the
-  Guardrails package's input checks (`ScanPrompts`, `ScanEvidence`, `CheckBlocklists`).
-- **Subfolders:** cases in subfolders are loaded too, named with their folder, e.g. `guardrail/jailbreak-prompt`, so
-  you can keep sections apart, such as `evaluation/` and `guardrail/`.
+- **`guardrailMayBlock`:** passes if a guardrail blocks it, and is checked as usual if not.
+- **`guardrailMustBlock`:** passes only if a guardrail blocks it, proving the guardrail catches the attack. For
+  evidence, or a model behind your own gateway, that needs the Guardrails package's input checks.
+- **Subfolders** are loaded too, named with their folder, e.g. `guardrail/jailbreak-prompt`.
 - **Your own fields** are kept in `testCase.Extra`.
 
 ## Responsible AI
@@ -430,6 +437,7 @@ Assign in Azure (Access control (IAM)) to each identity, e.g. the app's managed 
 | Search Index Data Reader       | Search service                              | Apps using AISearch                                     | Read evidence from the indexes                               |
 | The MCP server's app role      | The server's app registration (its `Scope`) | Apps using Mcp                                          | Call the server's tools                                      |
 | Reader                         | Foundry resource (not the project)          | Apps using Guardrails                                   | Read the guardrail and deployments at startup                |
+| Cognitive Services User        | Foundry resource                            | Apps using Guardrails `ScanPrompts` or `ScanEvidence`   | Scan input with Prompt Shields                               |
 | Cognitive Services Contributor | Foundry resource                            | Only a job that calls `ApplyAsync`                      | Create the guardrail; not needed if Bicep or Terraform does  |
 
 ## Options

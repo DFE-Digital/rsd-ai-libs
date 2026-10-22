@@ -2,22 +2,9 @@ using GovUK.Dfe.AI.Agents.ValueObjects;
 
 namespace GovUK.Dfe.AI.Agents.Extensions;
 
-/// <summary>Helpers for agent names and results.</summary>
+/// <summary>Helpers for agent results.</summary>
 public static class AgentResultExtensions
 {
-    /// <summary>Turns "trust-agent" into "Trust": drops "-agent" and capitalises each word.</summary>
-    public static string ToDisplayName(this string agentName)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(agentName);
-
-        var trimmed = agentName.EndsWith("-agent", StringComparison.Ordinal)
-            ? agentName[..^"-agent".Length]
-            : agentName;
-
-        return string.Join(' ', trimmed.Split('-', StringSplitOptions.RemoveEmptyEntries)
-            .Select(word => char.ToUpperInvariant(word[0]) + word[1..]));
-    }
-
     /// <summary>
     /// Reads a structured answer (from an agent with an <see cref="AgentDefinition.OutputSchema"/>) as
     /// <typeparamref name="T"/>.

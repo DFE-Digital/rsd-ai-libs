@@ -1,4 +1,3 @@
-using Azure.AI.Projects.Agents;
 using Azure.Core;
 using GovUK.Dfe.AI.Agents.Clients.Interfaces;
 using GovUK.Dfe.AI.Agents.Concurrency.Interfaces;
@@ -9,7 +8,6 @@ using GovUK.Dfe.AI.Agents.Quality.Interfaces;
 using GovUK.Dfe.AI.Agents.Quality;
 using GovUK.Dfe.AI.Agents.Services.Interfaces;
 using GovUK.Dfe.AI.Agents.Tests.Integration.Fakes;
-using GovUK.Dfe.AI.Agents.Tools;
 using GovUK.Dfe.AI.Agents.Validators;
 using GovUK.Dfe.AI.Agents.ValueObjects;
 using Microsoft.Extensions.Configuration;
@@ -17,7 +15,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using NSubstitute;
-using OpenAI.Responses;
 using Xunit;
 
 namespace GovUK.Dfe.AI.Agents.Tests.Integration;

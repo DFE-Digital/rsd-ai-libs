@@ -3,7 +3,6 @@ using GovUK.Dfe.AI.Agents.Mcp.Clients;
 using GovUK.Dfe.AI.Agents.Mcp.Exceptions;
 using GovUK.Dfe.AI.Agents.Mcp.Options;
 using GovUK.Dfe.AI.Agents.Mcp.Sessions.Interfaces;
-using GovUK.Dfe.AI.Agents.Tools;
 using GovUK.Dfe.AI.Agents.ValueObjects;
 using Microsoft.Extensions.Logging.Abstractions;
 using ModelContextProtocol.Protocol;

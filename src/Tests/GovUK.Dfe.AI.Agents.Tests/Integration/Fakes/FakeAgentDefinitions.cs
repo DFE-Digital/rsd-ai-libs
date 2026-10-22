@@ -1,5 +1,4 @@
 using GovUK.Dfe.AI.Agents.Providers.Interfaces;
-using GovUK.Dfe.AI.Agents.Services.Interfaces;
 using GovUK.Dfe.AI.Agents.ValueObjects;
 
 namespace GovUK.Dfe.AI.Agents.Tests.Integration.Fakes;

@@ -1,4 +1,3 @@
-using GovUK.Dfe.AI.Agents.Mcp.Constants;
 using Azure.Core;
 
 namespace GovUK.Dfe.AI.Agents.Mcp.Options;
@@ -17,8 +16,6 @@ public sealed record McpServerConnectionOptions
     public IReadOnlyList<string>? AllowedToolNames { get; init; }
 
     public TimeSpan ToolListCacheDuration { get; init; } = TimeSpan.FromMinutes(5);
-
-    public string ProtocolVersion { get; init; } = "2025-11-25";
 
     /// <summary>Signs this app in to the server. Only the app calls it; Foundry never does.</summary>
     public required TokenCredential Credential { get; init; }

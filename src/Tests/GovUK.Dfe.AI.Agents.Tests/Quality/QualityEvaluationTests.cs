@@ -88,11 +88,11 @@ public sealed class QualityEvaluationTests
             [new AgentTestResult("c", "x", [], new Dictionary<string, double> { ["Groundedness"] = groundedness, ["Relevance"] = relevance })]);
 
         var baseline = Scored(4.5, 4.0);
-        var candidate = Scored(3.9, 4.0);
+        var gate = new ReleaseGate { Metrics = ["Groundedness", "Relevance"], MinimumScore = 4, Tolerance = 0.2 };
 
-        Assert.Equal(["Groundedness"], candidate.BelowMinimum(4));
-        Assert.Equal(["Groundedness"], candidate.RegressionsFrom(baseline, tolerance: 0.2));
-        Assert.Empty(Scored(4.4, 4.0).RegressionsFrom(baseline, tolerance: 0.2));
+        Assert.Equal(["Groundedness: averaged 3.9, below the minimum 4", "Groundedness: fell from 4.5 to 3.9, more than the tolerance 0.2"],
+            Scored(3.9, 4.0).FailuresAgainst(gate, baseline));
+        Assert.Empty(Scored(4.4, 4.0).FailuresAgainst(gate, baseline));
     }
 
     [Fact]
@@ -102,8 +102,7 @@ public sealed class QualityEvaluationTests
             [new AgentTestResult("c", "x", [], new Dictionary<string, double> { ["Groundedness"] = 4.5 })]);
         var unscored = new AgentEvaluationReport("ofsted-agent", [new AgentTestResult("c", "x", [], new Dictionary<string, double>())]);
 
-        Assert.Equal(["Groundedness"], unscored.BelowMinimum(3.5, "Groundedness"));
-        Assert.Equal(["Groundedness"], unscored.RegressionsFrom(baseline));
+        Assert.Equal(["Groundedness: not scored"], unscored.FailuresAgainst(new ReleaseGate { Metrics = ["Groundedness"] }, baseline));
     }
 
     [Fact]

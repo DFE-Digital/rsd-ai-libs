@@ -67,9 +67,6 @@ public sealed partial class AgentsOptions
         /// <summary>Keep this out of appsettings: supply it from Key Vault or an environment variable.</summary>
         public string? ClientSecret { get; set; }
 
-        /// <summary>Defaults to the Azure public cloud.</summary>
-        public Uri? AuthorityHost { get; set; }
-
         /// <summary>Redacts <see cref="ClientSecret"/> so it never appears in logs.</summary>
         public override string ToString() => $"{{ TenantId = {TenantId}, ClientId = {ClientId}, ClientSecret = [REDACTED] }}";
     }

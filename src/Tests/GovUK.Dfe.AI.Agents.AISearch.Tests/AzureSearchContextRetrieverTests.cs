@@ -4,7 +4,6 @@ using Azure;
 using GovUK.Dfe.AI.Agents.AISearch.Context;
 using GovUK.Dfe.AI.Agents.AISearch.Filters;
 using GovUK.Dfe.AI.Agents.AISearch.Options;
-using GovUK.Dfe.AI.Agents.Context;
 using GovUK.Dfe.AI.Agents.ValueObjects;
 using NSubstitute;
 using Xunit;

@@ -36,6 +36,9 @@ public sealed class McpToolClient : IMcpToolClient, IDisposable
 {
     internal const string HttpClientName = "GovUK.Dfe.AI.Agents.McpToolClient";
 
+    /// <summary>The MCP protocol version this client speaks.</summary>
+    internal const string ProtocolVersion = "2025-11-25";
+
     private const int MaxFunctionNameLength = 64;
 
     /// <summary>The longest a synchronous <see cref="Dispose"/> waits for the connection to close.</summary>
@@ -417,7 +420,7 @@ public sealed class McpToolClient : IMcpToolClient, IDisposable
 
         try
         {
-            var client = await McpClient.CreateAsync(transport, new McpClientOptions { ProtocolVersion = options.ProtocolVersion },
+            var client = await McpClient.CreateAsync(transport, new McpClientOptions { ProtocolVersion = ProtocolVersion },
                 cancellationToken: cancellationToken).ConfigureAwait(false);
 
             return new McpClientSession(client);

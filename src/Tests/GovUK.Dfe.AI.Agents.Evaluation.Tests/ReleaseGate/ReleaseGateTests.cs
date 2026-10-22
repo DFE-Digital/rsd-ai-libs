@@ -1,4 +1,3 @@
-using System.Globalization;
 using GovUK.Dfe.AI.Agents.Exceptions;
 using GovUK.Dfe.AI.Agents.ValueObjects;
 using Microsoft.Extensions.Logging;

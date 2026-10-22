@@ -6,7 +6,6 @@ using GovUK.Dfe.AI.Agents.Concurrency.Interfaces;
 using GovUK.Dfe.AI.Agents.Constants;
 using GovUK.Dfe.AI.Agents.Diagnostics;
 using GovUK.Dfe.AI.Agents.Exceptions;
-using GovUK.Dfe.AI.Agents.Extensions;
 using GovUK.Dfe.AI.Agents.Factories.Interfaces;
 using GovUK.Dfe.AI.Agents.Options;
 using GovUK.Dfe.AI.Agents.Safety.Interfaces;

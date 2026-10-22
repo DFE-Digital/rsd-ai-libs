@@ -58,12 +58,4 @@ public sealed class AgentResultTests
         await factory.GetOrCreateAsync(spec with { OutputSchema = null }, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(3, foundry.Versions("ofsted-agent").Count);
     }
-
-    [Theory]
-    [InlineData("trust-agent", "Trust")]
-    [InlineData("rise-concerns-agent", "Rise Concerns")]
-    [InlineData("web-search-agent", "Web Search")]
-    [InlineData("no-suffix", "No Suffix")]
-    public void ToDisplayName_FormatsKebabCaseAgentNames(string agentName, string expected)
-        => Assert.Equal(expected, agentName.ToDisplayName());
 }

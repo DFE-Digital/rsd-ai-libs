@@ -9,7 +9,6 @@ using GovUK.Dfe.AI.Agents.Mcp.Services.Interfaces;
 using GovUK.Dfe.AI.Agents.Mcp.Validators;
 using GovUK.Dfe.AI.Agents.Extensibility;
 using GovUK.Dfe.AI.Agents.Extensibility.Interfaces;
-using GovUK.Dfe.AI.Agents.Tools;
 using Azure.Core;
 using Azure.Identity;
 using GovUK.Dfe.AI.Agents.Mcp.Constants;
@@ -137,8 +136,7 @@ public static class McpServersExtensions
         var missing = new[] { ("TenantId", principal.TenantId), ("ClientId", principal.ClientId), ("ClientSecret", principal.ClientSecret) }
             .Where(static setting => string.IsNullOrWhiteSpace(setting.Item2)).Select(setting => $"{path}:{setting.Item1}").ToList();
         problems.AddRange(missing);
-        return missing.Count > 0 ? null : new ClientSecretCredential(principal.TenantId, principal.ClientId, principal.ClientSecret,
-            new ClientSecretCredentialOptions { AuthorityHost = principal.AuthorityHost ?? AzureAuthorityHosts.AzurePublicCloud });
+        return missing.Count > 0 ? null : new ClientSecretCredential(principal.TenantId, principal.ClientId, principal.ClientSecret);
     }
 
     private sealed class McpPackage : IAgentsPackage

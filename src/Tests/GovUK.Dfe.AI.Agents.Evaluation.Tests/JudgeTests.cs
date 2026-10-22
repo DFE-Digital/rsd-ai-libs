@@ -6,7 +6,6 @@ using GovUK.Dfe.AI.Agents.Builders;
 using GovUK.Dfe.AI.Agents.Evaluation.Clients;
 using GovUK.Dfe.AI.Agents.Evaluation.QualityGates;
 using GovUK.Dfe.AI.Agents.Quality.Interfaces;
-using GovUK.Dfe.AI.Agents.Quality;
 using GovUK.Dfe.AI.Agents.Services.Interfaces;
 using GovUK.Dfe.AI.Agents.Tests.Integration.Fakes;
 using GovUK.Dfe.AI.Agents.ValueObjects;

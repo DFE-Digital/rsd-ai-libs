@@ -25,8 +25,8 @@ builder.Services.AddAgents(builder.Configuration, agents => agents
     .AddAISearch());
 ```
 
-The identity needs **Search Index Data Reader**. For a separate identity, add `AISearch:Authentication` or call
-`agents.UseAISearchCredential(credential)`.
+**You need** an Azure AI Search service, and **Search Index Data Reader** on it for the app's identity. For a separate
+identity, add `AISearch:Authentication` or call `agents.UseAISearchCredential(credential)`.
 
 ### Search without agents
 

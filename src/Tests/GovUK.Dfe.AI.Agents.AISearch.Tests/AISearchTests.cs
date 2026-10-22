@@ -1,9 +1,7 @@
 using Azure.Core;
-using Azure.Identity;
 using GovUK.Dfe.AI.Agents.AISearch.Context;
 using GovUK.Dfe.AI.Agents.AISearch.Options;
 using GovUK.Dfe.AI.Agents.Context.Interfaces;
-using GovUK.Dfe.AI.Agents.Context;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;

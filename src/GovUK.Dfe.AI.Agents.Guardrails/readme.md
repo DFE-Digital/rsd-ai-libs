@@ -32,15 +32,19 @@ builder.Services.AddAgents(builder.Configuration, agents => agents
     .AddGuardrails());
 ```
 
+**You need** these roles, all on the Foundry **resource** (not the project), where guardrails live:
+
+| Identity                                   | Role                           | For                                                       |
+| ------------------------------------------ | ------------------------------ | --------------------------------------------------------- |
+| Every app                                  | Reader                         | Checking the guardrail at startup                         |
+| A provisioning job                         | Cognitive Services Contributor | `ApplyAsync`; not needed if Bicep or Terraform creates it |
+| Apps using `ScanPrompts` or `ScanEvidence` | Cognitive Services User        | Scanning input with Prompt Shields                        |
+
 ## Apply once, check everywhere
 
-| Where              | What to do                                                                                                                                                               | Role on the Foundry resource                                 |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------ |
-| A provisioning job | Call `await guardrails.ApplyAsync(ct)` (`IFoundryGuardrailsService`). This creates or updates the guardrail and assigns it to each deployment, writing only what differs | Cognitive Services Contributor (Reader when nothing differs) |
-| Every app          | Nothing. At startup, the app checks each deployment has the guardrail and that it hasn't been weakened                                                                   | Reader                                                       |
-
-- **Scope:** both roles are on the Foundry **resource**, not the project: guardrails and deployments belong to the
-  resource. Agents still need only Foundry User on the project.
+- **A provisioning job** calls `await guardrails.ApplyAsync(ct)` (`IFoundryGuardrailsService`). It creates or updates
+  the guardrail and assigns it to each deployment, writing only what differs.
+- **Every app** does nothing: at startup it checks each deployment has the guardrail, unweakened.
 - **Infrastructure as code instead:** create the guardrail in Bicep or Terraform and skip `ApplyAsync`; apps still check
   it, with only Reader.
 - **Missing or weakened:** startup fails, saying what's wrong (`"RequireAtStartup": false` only warns).
@@ -110,26 +114,18 @@ reports blocks with or without this package.
 
 ## Checking input in the app
 
-A Foundry guardrail doesn't cover everything an agent is sent:
+A Foundry guardrail doesn't scan evidence in an agent's input, and doesn't apply at all to a model behind your own
+gateway ([Bring your own model](https://learn.microsoft.com/azure/foundry/agents/how-to/ai-gateway)). So the app can
+check each run's input itself, after redaction and before anything is sent. A match blocks the run like a guardrail
+block, with the reason in `AgentGuardrailException.Reason`:
 
-- **Evidence** passed in an agent's input is never scanned for planted instructions: Foundry only scans documents in
-  Chat Completions requests and the output of its own tools (Azure AI Search, OpenAPI and others).
-- **A model behind your own gateway** (an API Management connection) gets no Foundry guardrail at all: Microsoft leaves
-  safety for those models to you
-  ([Bring your own model](https://learn.microsoft.com/azure/foundry/agents/how-to/ai-gateway)). The startup check can
-  confirm the guardrail is on an agent version while nothing enforces it.
+| Setting           | Checks                                             | How                                                                                                                   | Blocks with `Stage`    |
+| ----------------- | -------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- | ---------------------- |
+| `CheckBlocklists` | The question and the evidence against `Blocklists` | In the app, no call to Azure; first                                                                                   | `prompt` or `evidence` |
+| `ScanPrompts`     | The question, for jailbreak attempts               | [Prompt Shields](https://learn.microsoft.com/azure/ai-services/content-safety/concepts/jailbreak-detection), one call | `prompt`               |
+| `ScanEvidence`    | The evidence, for planted instructions             | Prompt Shields, one call per 9,000 characters, up to 4 at a time                                                      | `evidence`             |
 
-So the app can check each run's input itself, after redaction and before anything is sent. A match blocks the run like
-a guardrail block, with the reason in `AgentGuardrailException.Reason`:
-
-| Setting | Checks | How | Blocks with `Stage` |
-| --- | --- | --- | --- |
-| `CheckBlocklists` | The question and the evidence against `Blocklists` | In the app, no call to Azure; first | `prompt` or `evidence` |
-| `ScanPrompts` | The question, for jailbreak attempts | [Prompt Shields](https://learn.microsoft.com/azure/ai-services/content-safety/concepts/jailbreak-detection), one call | `prompt` |
-| `ScanEvidence` | The evidence, for planted instructions | Prompt Shields, one call per 9,000 characters, up to 4 at a time | `evidence` |
-
-- **Identity:** `ScanPrompts` and `ScanEvidence` need **Cognitive Services User** on the Foundry resource, at
-  `https://<resource>.cognitiveservices.azure.com/` (or `ContentSafetyEndpoint`).
+- **Endpoint:** `https://<resource>.cognitiveservices.azure.com/`, unless `ContentSafetyEndpoint` is set.
 - **Cost:** the two scans run side by side, about 100–200 ms for a typical run; blocklists cost nothing.
 - **Fails closed:** if input can't be scanned, e.g. because the role is missing, the run fails rather than sending it.
 - **Release gate:** test cases with `"guardrailMustBlock": true` prove each check works.

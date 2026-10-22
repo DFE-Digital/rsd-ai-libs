@@ -15,7 +15,6 @@ using GovUK.Dfe.AI.Agents.Guardrails.Validators;
 using GovUK.Dfe.AI.Agents.Tests.Integration.Fakes;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Logging;
 using NSubstitute;

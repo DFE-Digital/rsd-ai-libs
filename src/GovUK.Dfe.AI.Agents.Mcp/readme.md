@@ -28,7 +28,8 @@ builder.Services.AddAgents(builder.Configuration, agents => agents
     .AddMcpServers());
 ```
 
-Add an entry per server, then list the tools each agent may call:
+**You need** an MCP server over HTTPS that accepts Entra ID tokens, and its app role for the app's identity. Add an
+entry per server, then list the tools each agent may call:
 
 ```csharp
 public static readonly AgentDefinition Ofsted = new("ofsted-agent", "Ofsted")

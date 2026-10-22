@@ -1,7 +1,6 @@
 using System.Diagnostics.Metrics;
 using Azure.Core;
 using GovUK.Dfe.AI.Agents.Diagnostics;
-using GovUK.Dfe.AI.Agents.Evaluation.Clients;
 using GovUK.Dfe.AI.Agents.Evaluation.QualityGates;
 using GovUK.Dfe.AI.Agents.Extensibility.Interfaces;
 using GovUK.Dfe.AI.Agents.Quality.Interfaces;

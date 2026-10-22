@@ -1,4 +1,3 @@
-using GovUK.Dfe.AI.Agents.Guardrails.Constants;
 using Azure;
 using GovUK.Dfe.AI.Agents.Guardrails.Services.Interfaces;
 using GovUK.Dfe.AI.Agents.Guardrails.Policies;

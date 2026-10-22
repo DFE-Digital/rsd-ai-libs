@@ -29,6 +29,5 @@ public sealed partial class AgentsOptions
            ?? (ExternallyManagedAgents.Authentication is { } own ? Create(own) : foundryCredential);
 
     private static ClientSecretCredential Create(ServicePrincipalSettings principal)
-        => new(principal.TenantId, principal.ClientId, principal.ClientSecret,
-            new ClientSecretCredentialOptions { AuthorityHost = principal.AuthorityHost ?? AzureAuthorityHosts.AzurePublicCloud });
+        => new(principal.TenantId, principal.ClientId, principal.ClientSecret);
 }

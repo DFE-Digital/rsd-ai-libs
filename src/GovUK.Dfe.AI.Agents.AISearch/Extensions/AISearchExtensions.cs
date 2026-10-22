@@ -105,8 +105,7 @@ public static class AISearchExtensions
             throw new InvalidOperationException(string.Format(ErrorMessages.SearchCredentialMissing, string.Join(", ", missing)));
         }
 
-        return new ClientSecretCredential(principal!.TenantId, principal.ClientId, principal.ClientSecret,
-            new ClientSecretCredentialOptions { AuthorityHost = principal.AuthorityHost ?? AzureAuthorityHosts.AzurePublicCloud });
+        return new ClientSecretCredential(principal!.TenantId, principal.ClientId, principal.ClientSecret);
     }
 
     private sealed class AISearchPackage : IAgentsPackage

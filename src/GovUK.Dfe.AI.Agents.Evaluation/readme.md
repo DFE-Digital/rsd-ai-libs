@@ -34,7 +34,8 @@ builder.Services.AddAgents(builder.Configuration, agents => agents
 | `JudgeModel` | `Foundry:DefaultModel` | The model that scores answers. On a connection, it must be the same one as `Foundry:DefaultModel` |
 | `SampleRate` | `0.05`                 | Share of live runs scored, from 0 to 1. `0` scores only release-gate tests                        |
 
-The section is optional. A `JudgeModel` on another connection, or a `SampleRate` outside 0 to 1, fails startup.
+**You need** nothing beyond core: the judge uses the same Foundry project and identity. The section is optional. A
+`JudgeModel` on another connection, or a `SampleRate` outside 0 to 1, fails startup.
 
 ## What gets scored
 

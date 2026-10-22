@@ -1,9 +1,7 @@
-using Azure.AI.Projects.Agents;
 using Azure.Core;
 using GovUK.Dfe.AI.Agents.Builders;
 using GovUK.Dfe.AI.Agents.Services.Interfaces;
 using GovUK.Dfe.AI.Agents.Context;
-using GovUK.Dfe.AI.Agents.Factories;
 using GovUK.Dfe.AI.Agents.Factories.Interfaces;
 using GovUK.Dfe.AI.Agents.Prompts.Interfaces;
 using GovUK.Dfe.AI.Agents.Tests.Integration.Fakes;

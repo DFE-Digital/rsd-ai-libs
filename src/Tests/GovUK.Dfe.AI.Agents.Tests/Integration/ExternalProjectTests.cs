@@ -1,4 +1,3 @@
-using Azure.AI.Projects.Agents;
 using Azure.Core;
 using Azure.Identity;
 using GovUK.Dfe.AI.Agents.Builders;

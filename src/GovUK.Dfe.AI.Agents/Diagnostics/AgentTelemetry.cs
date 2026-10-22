@@ -27,9 +27,11 @@ public static class AgentTelemetry
 
     internal const string OperationNameTag = "gen_ai.operation.name";
     internal const string ProviderNameTag = "gen_ai.provider.name";
-    internal const string AgentNameTag = "gen_ai.agent.name";
+    /// <summary>The tag naming the agent, on every agent span and measurement.</summary>
+    public const string AgentNameTag = "gen_ai.agent.name";
     internal const string AgentIdTag = "gen_ai.agent.id";
-    internal const string AgentVersionTag = "gen_ai.agent.version";
+    /// <summary>The tag giving the agent's Foundry version.</summary>
+    public const string AgentVersionTag = "gen_ai.agent.version";
     internal const string ResponseModelTag = "gen_ai.response.model";
     internal const string TokenModalityTag = "gen_ai.token.modality";
     internal const string InputTokensTag = "gen_ai.usage.input_tokens";

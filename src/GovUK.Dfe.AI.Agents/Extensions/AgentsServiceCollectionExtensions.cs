@@ -8,6 +8,8 @@ using GovUK.Dfe.AI.Agents.Clients;
 using GovUK.Dfe.AI.Agents.Concurrency.Interfaces;
 using GovUK.Dfe.AI.Agents.Concurrency;
 using GovUK.Dfe.AI.Agents.Constants;
+using GovUK.Dfe.AI.Agents.Diagnostics;
+using GovUK.Dfe.AI.Agents.Diagnostics.Interfaces;
 using GovUK.Dfe.AI.Agents.Enums;
 using GovUK.Dfe.AI.Agents.Factories.Interfaces;
 using GovUK.Dfe.AI.Agents.Factories;
@@ -191,6 +193,8 @@ public static class AgentsServiceCollectionExtensions
         services.AddSingleton(optionsFactory);
         services.TryAddSingleton(new AgentRunOptions());
 
+        // An app's own metrics are tagged with the same name as the library's, so apps sharing a workspace never mix.
+        services.TryAddSingleton<IAgentMetrics>(sp => new AgentMetrics(sp.GetRequiredService<AgentRunOptions>().ApplicationName));
         services.AddHostedService<TokenUsageTelemetryValidator>();
         services.AddHostedService<AgentToolCompatibilityValidator>();
         services.AddSingleton(sp => sp.GetRequiredService<AIProjectClient>().AgentAdministrationClient);

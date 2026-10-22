@@ -408,6 +408,26 @@ For fairness, give release-gate test cases a `group` (e.g. `"special-schools"`) 
   with prompts or answers. See [Telemetry](https://github.com/DFE-Digital/rsd-ai-libs/blob/main/src/GovUK.Dfe.AI.Agents/docs/telemetry.md).
 - **Logs:** a failed run logs its exception, which can include parts of the request. Limit log access and retention.
 
+### Your own metrics
+
+Count your app's own events the way the library counts its own, so they sit beside its metrics and are never mixed
+with another app's. Define each counter once, and record it with `IAgentMetrics`, which `AddAgents` registers:
+
+```csharp
+public static readonly AgentCounter GuardrailChecks = new("dfe.ai_agents.release_gate.guardrail_checks",
+    "Agents whose Foundry guardrail was checked before their release checks, by outcome.");
+
+metrics.Count(GuardrailChecks, agent.Name, new KeyValuePair<string, object?>("dfe.ai_agents.release_gate.outcome", "passed"));
+```
+
+| Enforced | So that |
+| --- | --- |
+| On the library's meter (`AgentTelemetry.SourceName`) | Collecting the library's metrics collects yours |
+| Named `dfe.ai_agents.` then lower-case words joined by dots or underscores | Every app's metrics follow one naming standard |
+| Tagged with `dfe.ai_agents.application` (`AiAgents:ApplicationName`) and `gen_ai.agent.name`, which you can't replace | Apps sharing a workspace never mix; every metric filters by app and agent alike |
+| A test copy counted under its agent's name | Release-gate runs group with the agent |
+| One instrument per name | Defining a name twice doesn't create a conflicting duplicate |
+
 ## Credentials
 
 `Authentication` is the default identity; any service can have its own block (`Foundry`, `GlobalConcurrency`,

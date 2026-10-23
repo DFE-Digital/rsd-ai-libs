@@ -63,9 +63,10 @@ internal sealed class ReleaseGateTestHost : IDisposable
     public void JudgeScores(double score) =>
         Judge.EvaluateAsync(default!, default).ReturnsForAnyArgs(JudgeMetrics.All.ToDictionary(metric => metric, _ => score));
 
+    /// <param name="blocking">Whether a guardrail may, or must, block the case: its <c>guardrailMayBlock</c> or <c>guardrailMustBlock</c>.</param>
     public void AddCase(string agentName, string caseName = "case", string prompt = "What was the outcome?",
-        string[]? mustMention = null, string[]? mustNotMention = null, string? group = null, bool guardrailMayBlock = false,
-        bool guardrailMustBlock = false)
+        string[]? mustMention = null, string[]? mustNotMention = null, string? group = null,
+        GuardrailBlocking blocking = GuardrailBlocking.None)
     {
         // A case name can include its folder, e.g. "guardrail/jailbreak-prompt".
         var path = Path.Combine(TestCasesDirectory, agentName, $"{caseName}.json");
@@ -77,17 +78,17 @@ internal sealed class ReleaseGateTestHost : IDisposable
             mustMention = mustMention ?? [],
             mustNotMention = mustNotMention ?? [],
             group,
-            guardrailMayBlock,
-            guardrailMustBlock,
+            guardrailMayBlock = blocking == GuardrailBlocking.May,
+            guardrailMustBlock = blocking == GuardrailBlocking.Must,
         }));
     }
 
     public void AddCaseForEveryAgent(string caseName = "case", string prompt = "What was the outcome?",
-        string[]? mustMention = null, string? group = null, bool guardrailMayBlock = false)
+        string[]? mustMention = null, string? group = null, GuardrailBlocking blocking = GuardrailBlocking.None)
     {
         foreach (var agent in Agents)
         {
-            AddCase(agent.Name, caseName, prompt, mustMention, group: group, guardrailMayBlock: guardrailMayBlock);
+            AddCase(agent.Name, caseName, prompt, mustMention, group: group, blocking: blocking);
         }
     }
 

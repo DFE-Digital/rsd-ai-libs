@@ -79,7 +79,7 @@ public sealed class ReleaseGateTests : IDisposable
     [Fact]
     public async Task A_block_the_case_allows_passes_and_is_logged_as_the_guardrail_doing_its_job()
     {
-        _host.AddCaseForEveryAgent(caseName: "injected-instruction", guardrailMayBlock: true);
+        _host.AddCaseForEveryAgent(caseName: "injected-instruction", blocking: GuardrailBlocking.May);
         _host.AgentService.Configure().RunAsync(default!, default!, default, Arg.Any<CancellationToken>()).ThrowsAsyncForAnyArgs(call =>
             new AgentGuardrailException(call.Arg<AgentDefinition>().Name, AgentGuardrailException.PromptStage));
 

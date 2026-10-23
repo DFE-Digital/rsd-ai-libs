@@ -47,7 +47,7 @@ public sealed class ReleaseCheckTests : IDisposable
     [Fact]
     public async Task Reports_each_failure_in_its_section_by_the_cases_folder()
     {
-        _host.AddCase("ofsted-agent", caseName: "guardrail/jailbreak", guardrailMustBlock: true);
+        _host.AddCase("ofsted-agent", caseName: "guardrail/jailbreak", blocking: GuardrailBlocking.Must);
         _host.AddCase("ofsted-agent", caseName: "evaluation/outcome", mustMention: ["Outstanding"]);
 
         var result = (await _host.Build().CheckReleaseAsync([ReleaseGateTestHost.Agents[0]], Token))[0];
@@ -144,8 +144,8 @@ public sealed class ReleaseCheckTests : IDisposable
     [Fact]
     public async Task Fails_cases_that_break_the_conventions_each_in_its_section()
     {
-        _host.AddCase("ofsted-agent", caseName: "guardrail/planted-instruction", guardrailMayBlock: true);
-        _host.AddCase("ofsted-agent", caseName: "evaluation/outcome", guardrailMayBlock: true);
+        _host.AddCase("ofsted-agent", caseName: "guardrail/planted-instruction", blocking: GuardrailBlocking.May);
+        _host.AddCase("ofsted-agent", caseName: "evaluation/outcome", blocking: GuardrailBlocking.May);
         _host.AddCase("ofsted-agent", caseName: "outcome");
 
         var result = (await _host.Build().CheckReleaseAsync([ReleaseGateTestHost.Agents[0]], Token))[0];

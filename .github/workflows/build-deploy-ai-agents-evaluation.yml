@@ -1,0 +1,31 @@
+name: CI & Pack GovUK.Dfe.AI.Agents.Evaluation
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - "src/GovUK.Dfe.AI.Agents.Evaluation/**"
+  pull_request:
+    branches: [ main ]
+    paths:
+      - "src/GovUK.Dfe.AI.Agents.Evaluation/**"
+
+jobs:
+  build-and-test:
+    uses: ./.github/workflows/build-test-template.yml
+    with:
+      project_name: GovUK.Dfe.AI.Agents.Evaluation
+      project_path: src/GovUK.Dfe.AI.Agents.Evaluation
+
+  pack-and-release:
+    needs: build-and-test
+    if: needs.build-and-test.result == 'success'
+    permissions:
+      contents: write
+      packages: write
+    uses: ./.github/workflows/pack-template.yml
+    with:
+      project_name: GovUK.Dfe.AI.Agents.Evaluation
+      project_path: src/GovUK.Dfe.AI.Agents.Evaluation/GovUK.Dfe.AI.Agents.Evaluation.csproj
+    secrets:
+      NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}

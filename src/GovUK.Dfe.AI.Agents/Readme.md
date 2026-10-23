@@ -122,16 +122,16 @@ fenced as data so it can't act as an instruction.
 
 `AddAgents` and every add-on's `Add…()` are in `Microsoft.Extensions.DependencyInjection`. The types you'll use most:
 
-| `using GovUK.Dfe.AI.Agents…`             | For                                                                                                      |
-| ---------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| `.ValueObjects`                          | `AgentDefinition`, `AgentOutputSchema`, `AgentResult`, `AgentEvidence`, `AgentStreamUpdate`, `AgentSpec` |
-| `.Services.Interfaces`                   | `IAgentService` (and the lower-level `IAgentRunnerService`, `IAgentRuntimeService`)                      |
-| `.Extensions`                            | `ReadOutputAs<T>()`, `ToTokenUsageSummary()`                                                             |
-| `.Tools` / `.Tools.Interfaces`           | `AgentTool` / `IAgentToolProvider`, `IToolCallApprover`                                                  |
-| `.Privacy`                               | `PatternRedactor`, `IAgentInputRedactor`                                                                 |
-| `.Release` / `.Release.Interfaces`       | `AgentTestCase`, `AgentEvaluationReport`, `ReleaseSections` / `IAgentTestRunner`                         |
-| `.Quality.Interfaces`                    | `IAgentRunEvaluator`, which scores answers, live and in the release gate                                 |
-| `.Context` / `.Extensibility.Interfaces` | `AgentContext`, `IContextRetriever` / `IAgentRunObserver`, `IAgentsPackage`, `IGuardrailCheck`           |
+| `using GovUK.Dfe.AI.Agents…`                     | For                                                                                                      |
+| ------------------------------------------------ | -------------------------------------------------------------------------------------------------------- |
+| `.ValueObjects`                                  | `AgentDefinition`, `AgentOutputSchema`, `AgentResult`, `AgentEvidence`, `AgentStreamUpdate`, `AgentSpec` |
+| `.Services.Interfaces`                           | `IAgentService` (and the lower-level `IAgentRunnerService`, `IAgentRuntimeService`)                      |
+| `.Extensions`                                    | `ReadOutputAs<T>()`, `ToTokenUsageSummary()`                                                             |
+| `.Tools` / `.Tools.Interfaces`                   | `AgentTool` / `IAgentToolProvider`, `IToolCallApprover`                                                  |
+| `.Privacy`                                       | `PatternRedactor`, `IAgentInputRedactor`                                                                 |
+| `.ReleaseTesting` / `.ReleaseTesting.Interfaces` | `AgentTestCase`, `AgentEvaluationReport`, `ReleaseSections` / `IAgentTestRunner`                         |
+| `.Quality.Interfaces`                            | `IAgentRunEvaluator`, which scores answers, live and in the release gate                                 |
+| `.Context` / `.Extensibility.Interfaces`         | `AgentContext`, `IContextRetriever` / `IAgentRunObserver`, `IAgentsPackage`, `IGuardrailCheck`           |
 
 ## What happens in a run
 
@@ -269,7 +269,7 @@ Test cases are JSON files under `TestCases/<agent>/`, in one of two folders:
 }
 ```
 
-- **Check your files in a unit test** (`GovUK.Dfe.AI.Agents.Release`), so a wrong one fails the build, not a release:
+- **Check your files in a unit test** (`GovUK.Dfe.AI.Agents.ReleaseTesting`), so a wrong one fails the build, not a release:
 
   ```csharp
   var cases = await AgentTestCase.LoadAsync("TestCases/ofsted-agent");

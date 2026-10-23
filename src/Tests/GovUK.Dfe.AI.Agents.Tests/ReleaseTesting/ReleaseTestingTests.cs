@@ -6,9 +6,10 @@ using GovUK.Dfe.AI.Agents.ValueObjects;
 using NSubstitute.ExceptionExtensions;
 using NSubstitute;
 using Xunit;
-using GovUK.Dfe.AI.Agents.Release;
+using GovUK.Dfe.AI.Agents.Models;
+using GovUK.Dfe.AI.Agents.Quality;
 
-namespace GovUK.Dfe.AI.Agents.Tests.Release;
+namespace GovUK.Dfe.AI.Agents.Tests.ReleaseTesting;
 
 /// <summary>
 /// Testing agents for release: loading test cases, running them, and judging the report against the gate. The release

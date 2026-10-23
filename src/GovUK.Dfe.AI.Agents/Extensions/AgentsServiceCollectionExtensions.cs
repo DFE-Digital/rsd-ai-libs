@@ -33,8 +33,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using GovUK.Dfe.AI.Agents.Release;
-using GovUK.Dfe.AI.Agents.Release.Interfaces;
+using GovUK.Dfe.AI.Agents.Quality;
 
 // In Microsoft.Extensions.DependencyInjection, as Microsoft recommends for libraries' Add... methods, so apps can
 // call them without extra usings.

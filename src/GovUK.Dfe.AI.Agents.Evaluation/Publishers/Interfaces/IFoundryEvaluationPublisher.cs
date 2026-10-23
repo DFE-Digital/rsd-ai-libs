@@ -1,4 +1,5 @@
-using GovUK.Dfe.AI.Agents.Release;
+using GovUK.Dfe.AI.Agents.Models;
+using GovUK.Dfe.AI.Agents.Quality;
 
 namespace GovUK.Dfe.AI.Agents.Evaluation.Publishers.Interfaces;
 

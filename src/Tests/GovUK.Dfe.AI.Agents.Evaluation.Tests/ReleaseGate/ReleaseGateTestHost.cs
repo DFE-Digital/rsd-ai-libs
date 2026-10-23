@@ -12,7 +12,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using NSubstitute;
 using NSubstitute.Extensions;
-using GovUK.Dfe.AI.Agents.Release;
+using GovUK.Dfe.AI.Agents.Quality;
+using GovUK.Dfe.AI.Agents.Models;
 
 namespace GovUK.Dfe.AI.Agents.Evaluation.Tests.ReleaseGate;
 

@@ -6,7 +6,8 @@ using GovUK.Dfe.AI.Agents.Evaluation.Publishers.Interfaces;
 using GovUK.Dfe.AI.Agents.Evaluation.QualityGates;
 using Microsoft.Extensions.Logging;
 using OpenAI.Evals;
-using GovUK.Dfe.AI.Agents.Release;
+using GovUK.Dfe.AI.Agents.Models;
+using GovUK.Dfe.AI.Agents.Quality;
 
 namespace GovUK.Dfe.AI.Agents.Evaluation.Publishers;
 

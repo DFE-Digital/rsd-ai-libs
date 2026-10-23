@@ -1,6 +1,6 @@
 using GovUK.Dfe.AI.Agents.Diagnostics;
 using GovUK.Dfe.AI.Agents.Diagnostics.Interfaces;
-using GovUK.Dfe.AI.Agents.Release;
+using GovUK.Dfe.AI.Agents.Models;
 
 namespace GovUK.Dfe.AI.Agents.Evaluation.Metrics;
 

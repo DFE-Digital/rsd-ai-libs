@@ -14,8 +14,8 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using NSubstitute;
 using Xunit;
-using GovUK.Dfe.AI.Agents.Release;
-using GovUK.Dfe.AI.Agents.Release.Interfaces;
+using GovUK.Dfe.AI.Agents.Quality;
+using GovUK.Dfe.AI.Agents.Quality.Interfaces;
 
 namespace GovUK.Dfe.AI.Agents.Tests.Integration;
 

@@ -11,10 +11,12 @@ using GovUK.Dfe.AI.Agents.ValueObjects;
 using Microsoft.Extensions.Logging;
 using GovUK.Dfe.AI.Agents.Evaluation.Exceptions;
 using GovUK.Dfe.AI.Agents.Extensibility.Interfaces;
-using GovUK.Dfe.AI.Agents.Release;
-using GovUK.Dfe.AI.Agents.Release.Interfaces;
 using GovUK.Dfe.AI.Agents.Evaluation.Constants;
 using GovUK.Dfe.AI.Agents.Evaluation.Metrics;
+using GovUK.Dfe.AI.Agents.Models;
+using GovUK.Dfe.AI.Agents.Quality;
+using GovUK.Dfe.AI.Agents.Options;
+using GovUK.Dfe.AI.Agents.Quality.Interfaces;
 
 namespace GovUK.Dfe.AI.Agents.Evaluation.QualityGates;
 

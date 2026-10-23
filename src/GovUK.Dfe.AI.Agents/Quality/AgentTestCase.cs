@@ -1,7 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace GovUK.Dfe.AI.Agents.Release;
+namespace GovUK.Dfe.AI.Agents.Quality;
 
 /// <summary>A test for an agent: a prompt, optional evidence, and facts the answer must or mustn't contain (case-insensitive).</summary>
 public sealed record AgentTestCase(string Name, string Prompt)

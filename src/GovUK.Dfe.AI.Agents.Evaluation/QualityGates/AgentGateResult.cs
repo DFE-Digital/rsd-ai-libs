@@ -1,4 +1,4 @@
-using GovUK.Dfe.AI.Agents.Release;
+using GovUK.Dfe.AI.Agents.Options;
 
 namespace GovUK.Dfe.AI.Agents.Evaluation.QualityGates;
 

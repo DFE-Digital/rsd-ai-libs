@@ -1,12 +1,12 @@
 using System.Globalization;
 using GovUK.Dfe.AI.Agents.Enums;
 using GovUK.Dfe.AI.Agents.Exceptions;
+using GovUK.Dfe.AI.Agents.Models;
 using GovUK.Dfe.AI.Agents.Quality.Interfaces;
-using GovUK.Dfe.AI.Agents.Release.Interfaces;
 using GovUK.Dfe.AI.Agents.Services.Interfaces;
 using GovUK.Dfe.AI.Agents.ValueObjects;
 
-namespace GovUK.Dfe.AI.Agents.Release;
+namespace GovUK.Dfe.AI.Agents.Quality;
 
 internal sealed class AgentTestRunner(IAgentService agents, IAgentRunEvaluator? evaluator = null) : IAgentTestRunner
 {

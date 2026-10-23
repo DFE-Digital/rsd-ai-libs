@@ -1,5 +1,5 @@
 using GovUK.Dfe.AI.Agents.Evaluation.ValueObjects;
-using GovUK.Dfe.AI.Agents.Release;
+using GovUK.Dfe.AI.Agents.Quality;
 
 namespace GovUK.Dfe.AI.Agents.Evaluation.Options;
 
@@ -82,6 +82,6 @@ public sealed class ReleaseGateSettings
     private static bool IsZeroOrMore(double value) => value >= 0;
 
     /// <summary>Whether a test case expects a fixed refusal, so its scores are left out.</summary>
-    internal bool ExpectsRefusal(Release.AgentTestCase testCase) =>
+    internal bool ExpectsRefusal(AgentTestCase testCase) =>
         testCase.MustMention.Any(text => RefusalPhrases.Any(refusal => text.Contains(refusal, StringComparison.OrdinalIgnoreCase)));
 }

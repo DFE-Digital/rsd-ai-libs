@@ -84,7 +84,7 @@ One folder per agent under `TestCasesDirectory`, with the cases in two folders:
 | `evaluation/` | No guardrail flag | The answer has the right facts and scores. A block fails it as the guardrail's mistake |
 
 `CheckReleaseAsync` fails a case that breaks these rules. Check them in a unit test too, so a wrong file fails the build
-(`GovUK.Dfe.AI.Agents.Release`): `Assert.Empty(cases.SelectMany(ReleaseSections.Problems))`.
+(`GovUK.Dfe.AI.Agents.ReleaseTesting`): `Assert.Empty(cases.SelectMany(ReleaseSections.Problems))`.
 
 - **Refusals:** a case whose `mustMention` includes one of `RefusalPhrases` is checked by that sentence and not scored,
   as relevance marks any refusal as irrelevant.

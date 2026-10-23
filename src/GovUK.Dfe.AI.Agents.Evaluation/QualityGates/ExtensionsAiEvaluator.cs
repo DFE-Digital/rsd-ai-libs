@@ -13,6 +13,11 @@ namespace GovUK.Dfe.AI.Agents.Evaluation.QualityGates;
 /// <see cref="RelevanceEvaluator"/>, judged by the model in <paramref name="chatConfiguration"/>. The run's evidence
 /// is the grounding context. A metric left unscored, by a failed judge call or an unreadable reply, is logged with the reason.
 /// </summary>
+/// <remarks>
+/// The judge's question is the agent's instructions as well as its prompt: Microsoft's evaluators read only the user's
+/// message, so without them an answer that does exactly what the agent was told, e.g. one section of a briefing, is
+/// scored against the prompt alone and looks irrelevant.
+/// </remarks>
 public sealed class ExtensionsAiEvaluator(IEvaluator evaluator, ChatConfiguration chatConfiguration,
     ILogger<ExtensionsAiEvaluator>? logger = null) : IAgentRunEvaluator
 {
@@ -22,7 +27,7 @@ public sealed class ExtensionsAiEvaluator(IEvaluator evaluator, ChatConfiguratio
     {
         ArgumentNullException.ThrowIfNull(run);
 
-        ChatMessage[] messages = [new(ChatRole.User, run.Prompt)];
+        ChatMessage[] messages = [new(ChatRole.User, QuestionFor(run))];
         var response = new ChatResponse(new ChatMessage(ChatRole.Assistant, run.Output));
         EvaluationContext[] context = run.Evidence is null ? [] : [new GroundednessEvaluatorContext(run.Evidence)];
 
@@ -54,4 +59,10 @@ public sealed class ExtensionsAiEvaluator(IEvaluator evaluator, ChatConfiguratio
 
         return reasons.Count > 0 ? string.Join(" | ", reasons) : metric.Reason ?? "the evaluator gave no reason";
     }
+
+    /// <summary>What the agent was asked: its instructions, when known, then the prompt.</summary>
+    internal static string QuestionFor(CompletedAgentRun run)
+        => string.IsNullOrWhiteSpace(run.Instructions)
+            ? run.Prompt
+            : $"The assistant's instructions:\n{run.Instructions}\n\nThe request:\n{run.Prompt}";
 }

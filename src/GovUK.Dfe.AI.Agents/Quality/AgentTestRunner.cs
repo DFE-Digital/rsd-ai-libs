@@ -8,7 +8,9 @@ using GovUK.Dfe.AI.Agents.ValueObjects;
 
 namespace GovUK.Dfe.AI.Agents.Quality;
 
-internal sealed class AgentTestRunner(IAgentService agents, IAgentRunEvaluator? evaluator = null) : IAgentTestRunner
+/// <param name="specs">Gives the evaluator each agent's instructions, so it scores the answer against the agent's task.</param>
+internal sealed class AgentTestRunner(IAgentService agents, IAgentRunEvaluator? evaluator = null, Builders.AgentSpecBuilder? specs = null)
+    : IAgentTestRunner
 {
     private static readonly IReadOnlyDictionary<string, double> NoScores = new Dictionary<string, double>();
 
@@ -94,7 +96,7 @@ internal sealed class AgentTestRunner(IAgentService agents, IAgentRunEvaluator? 
 
         var scores = evaluator is null
             ? NoScores
-            : await evaluator.EvaluateAsync(new CompletedAgentRun { AgentName = definition.Name, RunId = result.RunId, CompletedAt = result.CompletedAt, AgentVersion = result.AgentVersion, Model = result.Model, Prompt = testCase.Prompt, Evidence = testCase.Evidence, Output = output }, cancellationToken).ConfigureAwait(false);
+            : await evaluator.EvaluateAsync(new CompletedAgentRun { AgentName = definition.Name, RunId = result.RunId, CompletedAt = result.CompletedAt, AgentVersion = result.AgentVersion, Model = result.Model, Instructions = specs?.InstructionsFor(definition), Prompt = testCase.Prompt, Evidence = testCase.Evidence, Output = output }, cancellationToken).ConfigureAwait(false);
 
         return new AgentTestResult(testCase.Name, output, failures, scores) { Group = testCase.Group };
     }

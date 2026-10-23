@@ -25,6 +25,27 @@ internal sealed class AgentSpecBuilder(IPromptProvider promptProvider, IEnumerab
     public IManagedAgentProvider? CustomProviderFor(AgentDefinition definition)
         => _customProviders.GetValueOrDefault(definition.Name);
 
+    /// <summary>
+    /// The agent's instructions, as its prompt files give them, for evaluators. Null for an agent from a custom provider,
+    /// whose instructions are its own, or when its prompt file can't be read: scoring never fails a run.
+    /// </summary>
+    public string? InstructionsFor(AgentDefinition definition)
+    {
+        if (_customProviders.ContainsKey(definition.Name))
+        {
+            return null;
+        }
+
+        try
+        {
+            return promptProvider.GetSystemPrompt(definition.SystemPromptKey);
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or IOException)
+        {
+            return null;
+        }
+    }
+
     /// <returns>The spec, or <see langword="null"/> for an externally managed agent.</returns>
     public async Task<AgentSpec?> BuildAsync(AgentDefinition definition, CancellationToken cancellationToken)
     {

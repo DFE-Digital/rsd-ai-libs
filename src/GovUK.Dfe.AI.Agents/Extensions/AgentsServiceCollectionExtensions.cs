@@ -211,7 +211,7 @@ public static class AgentsServiceCollectionExtensions
         services.AddSingleton<IAgentProvisioner, AgentProvisioner>();
         services.AddSingleton<IAgentService, AgentService>();
         services.AddSingleton<IAgentTestRunner>(sp => new AgentTestRunner(sp.GetRequiredService<IAgentService>(),
-            sp.GetService<IAgentRunEvaluator>()));
+            sp.GetService<IAgentRunEvaluator>(), sp.GetRequiredService<AgentSpecBuilder>()));
 
         return services;
     }

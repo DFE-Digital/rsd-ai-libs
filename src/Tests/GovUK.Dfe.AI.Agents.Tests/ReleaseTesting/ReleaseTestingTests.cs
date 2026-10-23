@@ -53,6 +53,22 @@ public sealed class ReleaseTestingTests
     }
 
     [Fact]
+    public async Task TestRunner_GivesTheEvaluatorTheAgentsInstructions_FromItsPromptFile()
+    {
+        var prompts = Substitute.For<GovUK.Dfe.AI.Agents.Prompts.Interfaces.IPromptProvider>();
+        prompts.GetSystemPrompt("Ofsted").Returns("Summarise the latest inspection.");
+        CompletedAgentRun? scored = null;
+        var evaluator = Substitute.For<IAgentRunEvaluator>();
+        evaluator.EvaluateAsync(Arg.Do<CompletedAgentRun>(run => scored = run), Arg.Any<CancellationToken>())
+            .Returns(new Dictionary<string, double>());
+
+        await new AgentTestRunner(Answers("Rated good in 2024."), evaluator, new GovUK.Dfe.AI.Agents.Builders.AgentSpecBuilder(prompts))
+            .RunAsync(Ofsted, [GoodSchool], cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Equal(("Summarise the latest inspection.", "Summarise URN 100000."), (scored!.Instructions, scored.Prompt));
+    }
+
+    [Fact]
     public async Task TestRunner_CanTestTheDeployedVersion()
     {
         var agents = Answers("Rated Good in 2024.");

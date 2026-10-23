@@ -18,6 +18,12 @@ public sealed record CompletedAgentRun
     /// <summary>The model that answered.</summary>
     public string? Model { get; init; }
 
+    /// <summary>
+    /// The agent's instructions (its system prompt), as its prompt files give them, so an evaluator can judge the answer
+    /// against the agent's task, not just the prompt. Null when unknown, e.g. for an externally managed agent.
+    /// </summary>
+    public string? Instructions { get; init; }
+
     /// <summary>The prompt the agent was given, after any redaction.</summary>
     public required string Prompt { get; init; }
 

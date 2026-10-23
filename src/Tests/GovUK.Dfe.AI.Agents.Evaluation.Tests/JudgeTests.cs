@@ -67,6 +67,48 @@ public sealed class JudgeTests
     }
 
     [Fact]
+    public async Task TheJudgeIsGivenTheAgentsInstructions_SoAnAnswerDoingItsJobIsntScoredAgainstThePromptAlone()
+    {
+        // Microsoft's evaluators read only the user's message: a system message never reaches the judge.
+        var judge = new RecordingJudge();
+        var run = Sample with { Instructions = "List the trust's concerns as a table.", Prompt = "Analyse Example Learning Trust." };
+
+        await new ExtensionsAiEvaluator(new RelevanceEvaluator(), new ChatConfiguration(judge))
+            .EvaluateAsync(run, cancellationToken: TestContext.Current.CancellationToken);
+
+        var sent = string.Join("\n", judge.Messages.Select(message => message.Text));
+        Assert.Contains("List the trust's concerns as a table.", sent, StringComparison.Ordinal);
+        Assert.Contains("Analyse Example Learning Trust.", sent, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void WithoutInstructions_TheJudgesQuestionIsThePrompt()
+        => Assert.Equal(Sample.Prompt, ExtensionsAiEvaluator.QuestionFor(Sample));
+
+    /// <summary>A judge that records what it's sent and gives a score of 4.</summary>
+    private sealed class RecordingJudge : IChatClient
+    {
+        public List<ChatMessage> Messages { get; } = [];
+
+        public Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null,
+            CancellationToken cancellationToken = default)
+        {
+            Messages.AddRange(messages);
+            return Task.FromResult(new ChatResponse(new ChatMessage(ChatRole.Assistant, "<S0>x</S0><S1>y</S1><S2>4</S2>")));
+        }
+
+        public IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null,
+            CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+        public object? GetService(Type serviceType, object? serviceKey = null) => null;
+
+        public void Dispose()
+        {
+            // Nothing to release.
+        }
+    }
+
+    [Fact]
     public async Task ExtensionsAiEvaluator_PassesTheRunAsAChat_WithTheEvidenceAsGroundingContext_AndReturnsNumericScores()
     {
         var evaluator = Substitute.For<IEvaluator>();

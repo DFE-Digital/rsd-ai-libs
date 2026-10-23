@@ -6,12 +6,15 @@ using GovUK.Dfe.AI.Agents.Evaluation.Options;
 using GovUK.Dfe.AI.Agents.Evaluation.Publishers.Interfaces;
 using GovUK.Dfe.AI.Agents.Evaluation.QualityGates.Interfaces;
 using GovUK.Dfe.AI.Agents.Evaluation.ValueObjects;
-using GovUK.Dfe.AI.Agents.Quality;
-using GovUK.Dfe.AI.Agents.Quality.Interfaces;
 using GovUK.Dfe.AI.Agents.Services.Interfaces;
 using GovUK.Dfe.AI.Agents.ValueObjects;
 using Microsoft.Extensions.Logging;
 using GovUK.Dfe.AI.Agents.Evaluation.Exceptions;
+using GovUK.Dfe.AI.Agents.Extensibility.Interfaces;
+using GovUK.Dfe.AI.Agents.Release;
+using GovUK.Dfe.AI.Agents.Release.Interfaces;
+using GovUK.Dfe.AI.Agents.Evaluation.Constants;
+using GovUK.Dfe.AI.Agents.Evaluation.Metrics;
 
 namespace GovUK.Dfe.AI.Agents.Evaluation.QualityGates;
 
@@ -25,6 +28,7 @@ internal sealed class AgentReleaseGate(
     ReleaseGateJudge judge,
     ILogger<AgentReleaseGate> logger,
     ReleaseGateMetrics metrics,
+    IEnumerable<IGuardrailCheck> guardrailChecks,
     IFoundryEvaluationPublisher? foundryEvaluations = null) : IAgentReleaseGate
 {
     // The open run in this async flow, so EvaluateAsync inside a BeginRun uses it rather than opening another.
@@ -43,8 +47,109 @@ internal sealed class AgentReleaseGate(
         return run;
     }
 
-    public async Task<IReadOnlyList<AgentGateResult>> EvaluateAsync(IReadOnlyCollection<AgentDefinition> definitions,
+    public async Task<IReadOnlyList<AgentGateResult>> CheckReleaseAsync(IReadOnlyCollection<AgentDefinition> definitions,
         CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(definitions);
+        using var ownRun = CurrentRun.Value is null ? BeginRun() : null;
+
+        // Nothing is tested without its guardrail: the results would show only how the agents behave unprotected.
+        var guardrailProblems = await CheckGuardrailsAsync(cancellationToken);
+        var results = guardrailProblems.Count == 0
+            ? await EvaluateAsync(definitions, followConventions: true, cancellationToken)
+            : [.. definitions.Select(definition => NotEvaluated(definition.Name, guardrailProblems))];
+
+        LogDecision(results);
+        return results;
+    }
+
+    /// <summary>Every guardrail check's problems; one that can't run is a problem too, so a release never skips it.</summary>
+    private async Task<IReadOnlyList<string>> CheckGuardrailsAsync(CancellationToken cancellationToken)
+    {
+        var checks = guardrailChecks.ToList();
+        if (checks.Count == 0)
+        {
+            return settings.RequireGuardrail ? [ReleaseGateMessages.NoGuardrailCheck] : [];
+        }
+
+        var problems = new List<string>();
+        foreach (var check in checks)
+        {
+            logger.CheckingGuardrail(check.Name);
+            IReadOnlyList<string> found;
+            try
+            {
+                found = await check.CheckAsync(cancellationToken);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                logger.GuardrailNotChecked(ex, check.Name);
+                found = [ReleaseGateMessages.GuardrailNotChecked(check.Name, ex.GetBaseException().Message)];
+            }
+
+            if (found.Count == 0)
+            {
+                logger.GuardrailInPlace(check.Name);
+            }
+            else
+            {
+                logger.GuardrailNotInPlace(check.Name, string.Join("; ", found));
+            }
+
+            problems.AddRange(found);
+        }
+
+        return problems;
+    }
+
+    private AgentGateResult NotEvaluated(string agentName, IReadOnlyList<string> guardrailProblems)
+    {
+        metrics.Agent(agentName, passed: false);
+        return new AgentGateResult(agentName, guardrailProblems, []) { Evaluated = false };
+    }
+
+    /// <summary>Each agent's sections, then, when any failed, one error for the release and one for each reason.</summary>
+    private void LogDecision(IReadOnlyList<AgentGateResult> results)
+    {
+        foreach (var result in results)
+        {
+            var guardrail = ReleaseGateMessages.SectionResult(result.GuardrailProblems.Count);
+            var evaluation = ReleaseGateMessages.SectionResult(result.EvaluationProblems.Count, result.Evaluated);
+            if (result.Passed)
+            {
+                logger.AgentSectionsPassed(result.AgentName, guardrail, evaluation);
+            }
+            else
+            {
+                logger.AgentSectionsFailed(result.AgentName, guardrail, evaluation);
+            }
+        }
+
+        var failed = results.Where(static result => !result.Passed).ToList();
+        if (failed.Count == 0)
+        {
+            logger.ReleasePassed(results.Count);
+            return;
+        }
+
+        // CheckReleaseAsync opens a run when its caller hasn't, so there's always one.
+        var runId = CurrentRun.Value ?? string.Empty;
+        logger.ReleaseBlocked(failed.Count, results.Count, runId);
+        var reasons = failed.SelectMany(static result => result.ProblemsBySection()
+            .Select(item => (result.AgentName, item.Section, Problem: item.Problem.ReplaceLineEndings(" "))));
+        foreach (var (agentName, section, problem) in reasons)
+        {
+            logger.ReleaseBlockedBy(runId, agentName, section, problem);
+        }
+    }
+
+    public Task<IReadOnlyList<AgentGateResult>> EvaluateAsync(IReadOnlyCollection<AgentDefinition> definitions,
+        CancellationToken cancellationToken = default) =>
+        EvaluateAsync(definitions, followConventions: false, cancellationToken);
+
+    /// <param name="followConventions">Fails a case that breaks <see cref="ReleaseSections.Problems"/>, in its section.</param>
+    private async Task<IReadOnlyList<AgentGateResult>> EvaluateAsync(IReadOnlyCollection<AgentDefinition> definitions,
+        bool followConventions, CancellationToken cancellationToken)
     {
         using var ownRun = CurrentRun.Value is null ? BeginRun() : null;
         LogJudge();
@@ -62,7 +167,7 @@ internal sealed class AgentReleaseGate(
             var results = new List<AgentGateResult>(suites.Count);
             foreach (var suite in suites)
             {
-                results.Add(await ConcludeAsync(suite, cancellationToken));
+                results.Add(await ConcludeAsync(suite, followConventions, cancellationToken));
             }
 
             var seconds = Stopwatch.GetElapsedTime(started).TotalSeconds;
@@ -135,13 +240,13 @@ internal sealed class AgentReleaseGate(
         return result;
     }
 
-    private async Task<AgentGateResult> ConcludeAsync(TestSuite suite, CancellationToken cancellationToken)
+    private async Task<AgentGateResult> ConcludeAsync(TestSuite suite, bool followConventions, CancellationToken cancellationToken)
     {
         var agentName = suite.Definition.Name;
         if (suite.Cases.Count == 0)
         {
             logger.NoTestCases(agentName, suite.Directory);
-            return new AgentGateResult(agentName, [ReleaseGateMessages.NoTestCases(suite.Directory)]);
+            return new AgentGateResult(agentName, [], [ReleaseGateMessages.NoTestCases(suite.Directory)]);
         }
 
         var report = new AgentEvaluationReport(agentName, suite.Results);
@@ -153,20 +258,26 @@ internal sealed class AgentReleaseGate(
 
         var (gated, baseline) = judge.HasJudge ? await ScoredAsync(suite, report, cancellationToken) : (report, null);
 
-        // Failed test cases, and with a judge: each metric averaging below the minimum, not scored, more than the
-        // tolerance below the baseline, or scoring one group of cases much worse than another.
-        var problems = gated.FailuresAgainst(Gate(), baseline);
-        metrics.Agent(agentName, problems.Count == 0);
-        if (problems.Count == 0)
+        // Failed test cases by section, and with a judge: each metric averaging below the minimum, not scored, more than
+        // the tolerance below the baseline, or scoring one group of cases much worse than another.
+        var broken = followConventions
+            ? suite.Cases.SelectMany(c => ReleaseSections.Problems(c).Select(problem => (Guardrail: ReleaseSections.IsGuardrailCase(c.Name), Problem: problem))).ToList()
+            : [];
+        var result = new AgentGateResult(agentName,
+            [.. broken.Where(static b => b.Guardrail).Select(static b => b.Problem), .. gated.CaseFailures(ReleaseSections.Guardrail)],
+            [.. broken.Where(static b => !b.Guardrail).Select(static b => b.Problem), .. gated.CaseFailures(ReleaseSections.Evaluation),
+                .. gated.ScoreFailuresAgainst(Gate(), baseline)]);
+        metrics.Agent(agentName, result.Passed);
+        if (result.Passed)
         {
             logger.AgentPassed(agentName, reportPath);
         }
         else
         {
-            logger.AgentFailed(agentName, problems.Count, reportPath);
+            logger.AgentFailed(agentName, result.Problems.Count, reportPath);
         }
 
-        return new AgentGateResult(agentName, problems);
+        return result;
     }
 
     /// <summary>

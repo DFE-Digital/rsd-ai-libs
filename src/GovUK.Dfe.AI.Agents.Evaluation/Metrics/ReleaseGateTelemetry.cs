@@ -1,9 +1,7 @@
-namespace GovUK.Dfe.AI.Agents.Evaluation.QualityGates;
+namespace GovUK.Dfe.AI.Agents.Evaluation.Metrics;
 
 /// <summary>
-/// The release gate's metric and tag names, for queries and tests. Every metric is also tagged with the app
-/// (<c>dfe.ai_agents.application</c>) and agent (<c>gen_ai.agent.name</c>), and with the run's
-/// <see cref="RunIdTag"/>, so one run's results can be found together.
+/// The release gate's metrics, recorded with <see cref="IAgentMetrics"/> to the library's standard: tagged with the app
 /// </summary>
 public static class ReleaseGateTelemetry
 {

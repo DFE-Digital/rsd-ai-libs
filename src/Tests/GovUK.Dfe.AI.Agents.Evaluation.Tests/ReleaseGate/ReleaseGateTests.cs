@@ -75,18 +75,18 @@ public sealed class ReleaseGateTests : IDisposable
         await _host.AgentService.ReceivedWithAnyArgs(ReleaseGateTestHost.Agents.Length * 2 * 2).RunAsync(default!, default!, default, Arg.Any<CancellationToken>());
     }
 
-    [Theory]
-    [InlineData(true, true)]
-    [InlineData(false, false)]
-    public async Task A_guardrail_block_passes_only_a_case_that_allows_it(bool allowed, bool passes)
+    // Which blocks pass is the test runner's; a block by mistake is in ReleaseCheckTests, with its section.
+    [Fact]
+    public async Task A_block_the_case_allows_passes_and_is_logged_as_the_guardrail_doing_its_job()
     {
-        _host.AddCaseForEveryAgent(caseName: "injected-instruction", guardrailMayBlock: allowed);
+        _host.AddCaseForEveryAgent(caseName: "injected-instruction", guardrailMayBlock: true);
         _host.AgentService.Configure().RunAsync(default!, default!, default, Arg.Any<CancellationToken>()).ThrowsAsyncForAnyArgs(call =>
             new AgentGuardrailException(call.Arg<AgentDefinition>().Name, AgentGuardrailException.PromptStage));
 
         var results = await _host.Build().EvaluateAsync(ReleaseGateTestHost.Agents, Token);
 
-        Assert.All(results, r => Assert.Equal(passes, r.Passed));
+        Assert.All(results, r => Assert.True(r.Passed));
+        Assert.Contains((LogLevel.Information, "ofsted-agent / injected-instruction: blocked by the guardrail, as this case allows"), _host.Logs);
     }
 
     [Fact]

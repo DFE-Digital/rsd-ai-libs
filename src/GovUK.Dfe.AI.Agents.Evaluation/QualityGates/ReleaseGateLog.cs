@@ -56,8 +56,41 @@ internal static partial class ReleaseGateLog
     public static partial void ReleaseChecksFinished(this ILogger logger, double seconds);
 
     [LoggerMessage(EventId = 5018, Level = LogLevel.Information,
-        Message = "Release run {RunId} started; its metrics carry this id as dfe.ai_agents.release_gate.run_id")]
-    public static partial void ReleaseRunStarted(this ILogger logger, string runId);
+        Message = "Release run {ReleaseRunId} started; its metrics carry this id as dfe.ai_agents.release_gate.run_id")]
+    public static partial void ReleaseRunStarted(this ILogger logger, string releaseRunId);
+
+    [LoggerMessage(EventId = 5019, Level = LogLevel.Information, Message = "Checking the {Guardrail}")]
+    public static partial void CheckingGuardrail(this ILogger logger, string guardrail);
+
+    [LoggerMessage(EventId = 5020, Level = LogLevel.Information, Message = "The {Guardrail} is in place")]
+    public static partial void GuardrailInPlace(this ILogger logger, string guardrail);
+
+    [LoggerMessage(EventId = 5021, Level = LogLevel.Warning,
+        Message = "The {Guardrail} isn't in place, so no agent is tested: {Problems}")]
+    public static partial void GuardrailNotInPlace(this ILogger logger, string guardrail, string problems);
+
+    [LoggerMessage(EventId = 5022, Level = LogLevel.Warning, Message = "The {Guardrail} couldn't be checked")]
+    public static partial void GuardrailNotChecked(this ILogger logger, Exception exception, string guardrail);
+
+    [LoggerMessage(EventId = 5023, Level = LogLevel.Information, Message = "{AgentName}: guardrail {Guardrail}, evaluation {Evaluation}")]
+    public static partial void AgentSectionsPassed(this ILogger logger, string agentName, string guardrail, string evaluation);
+
+    [LoggerMessage(EventId = 5024, Level = LogLevel.Warning, Message = "{AgentName}: guardrail {Guardrail}, evaluation {Evaluation}")]
+    public static partial void AgentSectionsFailed(this ILogger logger, string agentName, string guardrail, string evaluation);
+
+    [LoggerMessage(EventId = 5025, Level = LogLevel.Information, Message = "All {Agents} agents passed their release checks")]
+    public static partial void ReleasePassed(this ILogger logger, int agents);
+
+    // Errors, so they reach Application Insights at any log level. Each reason is its own error, its parts in fields
+    // (customDimensions) the standard queries filter on, so rewording a message never breaks a query.
+    [LoggerMessage(EventId = 5026, Level = LogLevel.Error,
+        Message = "Agent release blocked by gate: {FailedAgents} of {Agents} agents failed (release run {ReleaseRunId})")]
+    public static partial void ReleaseBlocked(this ILogger logger, int failedAgents, int agents, string releaseRunId);
+
+    [LoggerMessage(EventId = 5027, Level = LogLevel.Error,
+        Message = "Release {ReleaseRunId} blocked: {AgentName} [{ReleaseSection}] {ReleaseProblem}")]
+    public static partial void ReleaseBlockedBy(this ILogger logger, string releaseRunId, string agentName, string releaseSection,
+        string releaseProblem);
 
     [LoggerMessage(EventId = 5015, Level = LogLevel.Warning,
         Message = "Couldn't check Foundry for leftover test agents; the next run will try again")]

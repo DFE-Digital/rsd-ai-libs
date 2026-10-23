@@ -1,4 +1,5 @@
 using GovUK.Dfe.AI.Agents.Evaluation.ValueObjects;
+using GovUK.Dfe.AI.Agents.Release;
 
 namespace GovUK.Dfe.AI.Agents.Evaluation.Options;
 
@@ -48,6 +49,12 @@ public sealed class ReleaseGateSettings
     public List<string> RefusalPhrases { get; set; } = [];
 
     /// <summary>
+    /// <c>CheckReleaseAsync</c> fails every agent unless a guardrail is checked first, e.g. with <c>AddGuardrails()</c>.
+    /// On by default: agents released without a guardrail are unprotected. Turn it off only where none is wanted.
+    /// </summary>
+    public bool RequireGuardrail { get; set; } = true;
+
+    /// <summary>
     /// Also sends each release's answers to a Foundry cloud evaluation, scored by Foundry's built-in groundedness and
     /// relevance evaluators with the judge model, so results show on the Foundry project's Evaluations page. It doesn't
     /// affect the release decision. Off by default: it sends test prompts, evidence and answers to Foundry.
@@ -75,6 +82,6 @@ public sealed class ReleaseGateSettings
     private static bool IsZeroOrMore(double value) => value >= 0;
 
     /// <summary>Whether a test case expects a fixed refusal, so its scores are left out.</summary>
-    internal bool ExpectsRefusal(Quality.AgentTestCase testCase) =>
+    internal bool ExpectsRefusal(Release.AgentTestCase testCase) =>
         testCase.MustMention.Any(text => RefusalPhrases.Any(refusal => text.Contains(refusal, StringComparison.OrdinalIgnoreCase)));
 }

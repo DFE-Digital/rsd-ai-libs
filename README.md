@@ -7,11 +7,11 @@ citations, cost and concurrency limits, and token and cost telemetry. Nothing is
 
 | Package                          | What it does                                  | Docs                                                   |
 | -------------------------------- | --------------------------------------------- | ------------------------------------------------------ |
-| `GovUK.Dfe.AI.Agents`            | Core: define, version and run agents          | [readme](src/GovUK.Dfe.AI.Agents/readme.md)            |
-| `GovUK.Dfe.AI.Agents.Mcp`        | Tools from your own MCP servers               | [readme](src/GovUK.Dfe.AI.Agents.Mcp/readme.md)        |
-| `GovUK.Dfe.AI.Agents.AISearch`   | Evidence from Azure AI Search, with citations | [readme](src/GovUK.Dfe.AI.Agents.AISearch/readme.md)   |
-| `GovUK.Dfe.AI.Agents.Evaluation` | A judge model that scores answers             | [readme](src/GovUK.Dfe.AI.Agents.Evaluation/readme.md) |
-| `GovUK.Dfe.AI.Agents.Guardrails` | Foundry guardrails on your models or agents   | [readme](src/GovUK.Dfe.AI.Agents.Guardrails/readme.md) |
+| `GovUK.Dfe.AI.Agents`            | Core: define, version and run agents          | [readme](src/GovUK.Dfe.AI.Agents/Readme.md)            |
+| `GovUK.Dfe.AI.Agents.Mcp`        | Tools from your own MCP servers               | [readme](src/GovUK.Dfe.AI.Agents.Mcp/Readme.md)        |
+| `GovUK.Dfe.AI.Agents.AISearch`   | Evidence from Azure AI Search, with citations | [readme](src/GovUK.Dfe.AI.Agents.AISearch/Readme.md)   |
+| `GovUK.Dfe.AI.Agents.Evaluation` | A judge model that scores answers             | [readme](src/GovUK.Dfe.AI.Agents.Evaluation/Readme.md) |
+| `GovUK.Dfe.AI.Agents.Guardrails` | Foundry guardrails on your models or agents   | [readme](src/GovUK.Dfe.AI.Agents.Guardrails/Readme.md) |
 
 Install core plus only the add-ons you need. Each package is released, and can be upgraded, on its own.
 
@@ -32,17 +32,19 @@ var evidence = await search.GetContextAsync("ofsted_index", $"URN {urn}", filter
 var result = await agents.RunAsync(BriefingAgents.Ofsted, "Summarise the latest inspection.", evidence, ct);
 ```
 
-Start with the [core readme](src/GovUK.Dfe.AI.Agents/readme.md): configuration, agents and runs.
+Start with the [core readme](src/GovUK.Dfe.AI.Agents/Readme.md): configuration, agents and runs.
 
 ## Docs
 
 Guides that cover every package:
 
-| Guide                          | What's in it                                                                                   |
-| ------------------------------ | ---------------------------------------------------------------------------------------------- |
-| [Access](docs/access.md)       | How each package signs in to Azure, and the roles each identity needs                          |
-| [Telemetry](docs/telemetry.md) | Every metric the packages record, and standard Application Insights queries to use in your app |
-| [Limits](docs/limits.md)       | The limits a run works within, set by the library and by Azure AI Foundry                      |
+| Guide                                   | What's in it                                                                                   |
+| --------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| [Access](docs/Access.md)                | How each package signs in to Azure, and the roles each identity needs                          |
+| [Telemetry](docs/Telemetry.md)          | Every metric the packages record, and standard Application Insights queries to use in your app |
+| [Limits](docs/Limits.md)                | The limits a run works within, set by the library and by Azure AI Foundry                      |
+| [Settings](docs/Settings.md)            | Every `AiAgents` setting in the core package, with its default                                 |
+| [Responsible AI](docs/ResponsibleAI.md) | How the library supports the UK Government AI Playbook                                         |
 
 ## UK Government AI Playbook
 
@@ -62,7 +64,7 @@ what stays with the service team:
 | 8–10. Commercial, skills, policy | Quota and concurrency limits; readmes                                                                                                     | Contracts, training, DfE AI governance                                                 |
 
 Bias: give release-gate test cases a `group` and set `MaxGroupGap`, so the gate fails when one group is served worse.
-See [Responsible AI](src/GovUK.Dfe.AI.Agents/readme.md#responsible-ai).
+See [Responsible AI](docs/ResponsibleAI.md).
 
 ## Build and test
 
@@ -71,20 +73,6 @@ Requires the .NET 10 SDK. Tests use an in-memory Foundry, so they need no Azure 
 ```sh
 dotnet build GovUK.Dfe.AI.Agents.slnx
 dotnet test GovUK.Dfe.AI.Agents.slnx
-```
-
-### Live checks before a release
-
-`LiveFoundryTests` run against a dev Foundry project (skipped otherwise). They check that Foundry keeps each agent
-version's guardrail, and that a jailbreak is reported as a guardrail block. If a gateway blocks it instead, the failure
-shows the status and code to add to `Foundry:GatewayGuardrailErrors`.
-
-```sh
-az login
-export AiAgents__Foundry__Endpoint="https://<resource>.services.ai.azure.com/api/projects/<project>"
-export AiAgents__Foundry__DefaultModel="<connection>/gpt-5.1"
-export AiAgents__Foundry__Guardrail="<guardrail>"
-dotnet test src/Tests/GovUK.Dfe.AI.Agents.Tests --filter "FullyQualifiedName~LiveFoundryTests"
 ```
 
 ## Releasing
@@ -146,7 +134,7 @@ Apps can upgrade any package on its own because the packages follow Microsoft's
 
    Set `CoreMinimumVersion` in the `.csproj` to the core version you build on.
 3. Copy an add-on workflow to `.github/workflows/build-deploy-ai-agents-{name}.yml`, changing the name and paths.
-4. Add a `readme.md` (it's packed into the package), and add the package to the tables here and in the core readme.
+4. Add a `Readme.md` (it's packed into the package), and add the package to the tables here and in the core readme.
 
 ## Contributing
 

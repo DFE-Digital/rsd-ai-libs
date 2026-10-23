@@ -12,6 +12,8 @@ using Microsoft.Extensions.AI.Evaluation;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using GovUK.Dfe.AI.Agents.Release.Interfaces;
+using GovUK.Dfe.AI.Agents.Evaluation.Metrics;
 
 // In Microsoft.Extensions.DependencyInjection, as Microsoft recommends for libraries' Add... methods, so apps can
 // call them without extra usings.

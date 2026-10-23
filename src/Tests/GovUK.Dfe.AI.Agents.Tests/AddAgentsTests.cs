@@ -16,6 +16,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using NSubstitute;
 using Xunit;
+using GovUK.Dfe.AI.Agents.Release.Interfaces;
 
 namespace GovUK.Dfe.AI.Agents.Tests;
 

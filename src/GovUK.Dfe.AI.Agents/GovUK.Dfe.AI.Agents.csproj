@@ -4,7 +4,7 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
 	  <Nullable>enable</Nullable>
-	  <PackageReadmeFile>readme.md</PackageReadmeFile>
+	  <PackageReadmeFile>Readme.md</PackageReadmeFile>
 	  <Title>GovUK.Dfe.AI.Agents</Title>
 	  <Description>Run Azure AI Foundry agents from .NET: versions, parallel and sequential runs, fenced evidence, checked answers, cost and concurrency limits, and token telemetry. Add-ons: .Mcp, .AISearch, .Evaluation, .Guardrails.</Description>
 	  <Authors>DFE-Digital</Authors>
@@ -14,7 +14,7 @@
   </PropertyGroup>
 
 	  <ItemGroup>
-		<None Include="readme.md" Pack="true" PackagePath="\" />
+		<None Include="Readme.md" Pack="true" PackagePath="\" />
 		<InternalsVisibleTo Include="GovUK.Dfe.AI.Agents.Tests" />
 		<InternalsVisibleTo Include="GovUK.Dfe.AI.Agents.Mcp.Tests" />
 		<InternalsVisibleTo Include="GovUK.Dfe.AI.Agents.AISearch.Tests" />
@@ -41,7 +41,7 @@
 	</ItemGroup>
 
 	  <ItemGroup>
-	    <None Update="readme.md">
+	    <None Update="Readme.md">
 	      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 	    </None>
 	  </ItemGroup>

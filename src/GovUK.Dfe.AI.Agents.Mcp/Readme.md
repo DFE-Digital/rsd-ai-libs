@@ -1,6 +1,6 @@
 # GovUK.Dfe.AI.Agents.Mcp
 
-Gives your [GovUK.Dfe.AI.Agents](https://github.com/DFE-Digital/rsd-ai-libs/blob/main/src/GovUK.Dfe.AI.Agents/readme.md)
+Gives your [GovUK.Dfe.AI.Agents](https://github.com/DFE-Digital/rsd-ai-libs/blob/main/src/GovUK.Dfe.AI.Agents/Readme.md)
 agents tools from your own MCP servers. Tools run in your app with your credential; Foundry sees only each tool's
 name, description and input schema.
 

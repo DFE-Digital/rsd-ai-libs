@@ -73,6 +73,7 @@ public static class GuardrailsExtensions
             services.AddSingleton(settings);
             services.AddSingleton<IGuardrailStore>(_ => new ArmGuardrailStore(new ArmClient(credential), new ResourceIdentifier(settings.ResourceId!)));
             services.AddSingleton<IFoundryGuardrailsService, FoundryGuardrailsService>();
+            services.AddSingleton<IGuardrailCheck, FoundryGuardrailCheck>();
             services.AddHostedService<GuardrailStartupValidator>();
 
             // A Foundry guardrail doesn't check evidence, nor any input to a model behind your own gateway, so the app

@@ -1,8 +1,8 @@
 using GovUK.Dfe.AI.Agents.Diagnostics;
 using GovUK.Dfe.AI.Agents.Diagnostics.Interfaces;
-using GovUK.Dfe.AI.Agents.Quality;
+using GovUK.Dfe.AI.Agents.Release;
 
-namespace GovUK.Dfe.AI.Agents.Evaluation.QualityGates;
+namespace GovUK.Dfe.AI.Agents.Evaluation.Metrics;
 
 /// <summary>
 /// The release gate's metrics, recorded with <see cref="IAgentMetrics"/> to the library's standard: tagged with the app

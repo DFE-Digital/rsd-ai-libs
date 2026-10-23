@@ -1,7 +1,7 @@
 using GovUK.Dfe.AI.Agents.Enums;
 using GovUK.Dfe.AI.Agents.ValueObjects;
 
-namespace GovUK.Dfe.AI.Agents.Quality.Interfaces;
+namespace GovUK.Dfe.AI.Agents.Release.Interfaces;
 
 /// <summary>Runs test cases against an agent, for a release gate in CI.</summary>
 public interface IAgentTestRunner

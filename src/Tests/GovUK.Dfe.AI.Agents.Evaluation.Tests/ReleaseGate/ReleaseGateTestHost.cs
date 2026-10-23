@@ -3,7 +3,7 @@ using Azure.Core;
 using GovUK.Dfe.AI.Agents.Evaluation.Options;
 using GovUK.Dfe.AI.Agents.Evaluation.QualityGates.Interfaces;
 using GovUK.Dfe.AI.Agents.Evaluation.ValueObjects;
-using GovUK.Dfe.AI.Agents.Quality;
+using GovUK.Dfe.AI.Agents.Extensibility.Interfaces;
 using GovUK.Dfe.AI.Agents.Quality.Interfaces;
 using GovUK.Dfe.AI.Agents.Services.Interfaces;
 using GovUK.Dfe.AI.Agents.ValueObjects;
@@ -12,6 +12,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using NSubstitute;
 using NSubstitute.Extensions;
+using GovUK.Dfe.AI.Agents.Release;
 
 namespace GovUK.Dfe.AI.Agents.Evaluation.Tests.ReleaseGate;
 
@@ -40,7 +41,13 @@ internal sealed class ReleaseGateTestHost : IDisposable
 
     public FakeFoundryEvaluations FoundryEvaluations { get; } = new();
 
+    /// <summary>The guardrail checks <c>CheckReleaseAsync</c> runs first, as <c>AddGuardrails()</c> registers one.</summary>
+    public List<IGuardrailCheck> GuardrailChecks { get; } = [];
+
     public List<(LogLevel Level, string Message)> Logs { get; } = [];
+
+    /// <summary>Each log's fields, by name, as Application Insights keeps them in <c>customDimensions</c>.</summary>
+    public List<(LogLevel Level, IReadOnlyDictionary<string, object?> Fields)> LogFields { get; } = [];
 
     public string ReportsDirectory => Path.Combine(_root, "reports");
 
@@ -56,7 +63,8 @@ internal sealed class ReleaseGateTestHost : IDisposable
         Judge.EvaluateAsync(default!, default).ReturnsForAnyArgs(JudgeMetrics.All.ToDictionary(metric => metric, _ => score));
 
     public void AddCase(string agentName, string caseName = "case", string prompt = "What was the outcome?",
-        string[]? mustMention = null, string[]? mustNotMention = null, string? group = null, bool guardrailMayBlock = false)
+        string[]? mustMention = null, string[]? mustNotMention = null, string? group = null, bool guardrailMayBlock = false,
+        bool guardrailMustBlock = false)
     {
         // A case name can include its folder, e.g. "guardrail/jailbreak-prompt".
         var path = Path.Combine(TestCasesDirectory, agentName, $"{caseName}.json");
@@ -69,6 +77,7 @@ internal sealed class ReleaseGateTestHost : IDisposable
             mustNotMention = mustNotMention ?? [],
             group,
             guardrailMayBlock,
+            guardrailMustBlock,
         }));
     }
 
@@ -121,7 +130,7 @@ internal sealed class ReleaseGateTestHost : IDisposable
         }
 
         var services = new ServiceCollection();
-        services.AddLogging(logging => logging.AddProvider(new ListLoggerProvider(Logs)));
+        services.AddLogging(logging => logging.AddProvider(new ListLoggerProvider(Logs, LogFields)));
         services.AddAgents(new ConfigurationBuilder().AddInMemoryCollection(values).Build(), agents =>
         {
             agents.UseCredential(Substitute.For<TokenCredential>()).AddReleaseGate(configure);
@@ -133,6 +142,7 @@ internal sealed class ReleaseGateTestHost : IDisposable
         services.AddSingleton(AgentService);
         services.AddSingleton(Runtime);
         services.AddSingleton(FoundryEvaluations.Client());
+        GuardrailChecks.ForEach(check => services.AddSingleton(check));
 
         _provider = services.BuildServiceProvider();
         return _provider.GetRequiredService<IAgentReleaseGate>();
@@ -145,9 +155,10 @@ internal sealed class ReleaseGateTestHost : IDisposable
         Directory.Delete(_root, recursive: true);
     }
 
-    private sealed class ListLoggerProvider(List<(LogLevel, string)> logs) : ILoggerProvider
+    private sealed class ListLoggerProvider(List<(LogLevel, string)> logs, List<(LogLevel, IReadOnlyDictionary<string, object?>)> fields)
+        : ILoggerProvider
     {
-        public ILogger CreateLogger(string categoryName) => new ListLogger(logs);
+        public ILogger CreateLogger(string categoryName) => new ListLogger(logs, fields);
 
         public void Dispose()
         {
@@ -155,7 +166,8 @@ internal sealed class ReleaseGateTestHost : IDisposable
         }
     }
 
-    private sealed class ListLogger(List<(LogLevel, string)> logs) : ILogger
+    private sealed class ListLogger(List<(LogLevel, string)> logs, List<(LogLevel, IReadOnlyDictionary<string, object?>)> fields)
+        : ILogger
     {
         public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
 
@@ -167,6 +179,10 @@ internal sealed class ReleaseGateTestHost : IDisposable
             lock (logs)
             {
                 logs.Add((logLevel, formatter(state, exception)));
+                if (state is IEnumerable<KeyValuePair<string, object?>> values)
+                {
+                    fields.Add((logLevel, values.ToDictionary(static field => field.Key, static field => field.Value)));
+                }
             }
         }
     }

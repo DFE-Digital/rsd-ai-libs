@@ -4,9 +4,9 @@ using System.Text.Json;
 using GovUK.Dfe.AI.Agents.Evaluation.Options;
 using GovUK.Dfe.AI.Agents.Evaluation.Publishers.Interfaces;
 using GovUK.Dfe.AI.Agents.Evaluation.QualityGates;
-using GovUK.Dfe.AI.Agents.Quality;
 using Microsoft.Extensions.Logging;
 using OpenAI.Evals;
+using GovUK.Dfe.AI.Agents.Release;
 
 namespace GovUK.Dfe.AI.Agents.Evaluation.Publishers;
 

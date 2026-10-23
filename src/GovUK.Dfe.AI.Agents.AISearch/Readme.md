@@ -1,6 +1,6 @@
 # GovUK.Dfe.AI.Agents.AISearch
 
-Gives your [GovUK.Dfe.AI.Agents](https://github.com/DFE-Digital/rsd-ai-libs/blob/main/src/GovUK.Dfe.AI.Agents/readme.md)
+Gives your [GovUK.Dfe.AI.Agents](https://github.com/DFE-Digital/rsd-ai-libs/blob/main/src/GovUK.Dfe.AI.Agents/Readme.md)
 agents evidence from Azure AI Search. Results are numbered, and each citation in an answer becomes a link to its result,
 or the result's text.
 

@@ -42,10 +42,12 @@ internal static class ErrorMessages
 
     public const string GuardrailDidNotBlock =
         "Not blocked by the guardrail, which this case requires (\"guardrailMustBlock\"). A Foundry guardrail doesn't check evidence, or any input to a model behind your own gateway, so turn on AiAgents:Guardrails:ScanPrompts, ScanEvidence and CheckBlocklists.";
+    public const string GuardrailBlockedInError =
+        "Blocked by the guardrail, which this case doesn't allow (set \"guardrailMayBlock\" if it should): {0}";
     public const string NoRunSlot = "No agent run slot came free within {0}. Raise MaxConcurrency or GlobalConcurrency:MaxConcurrentRuns, or MaxWaitForRunSlot.";
     public const string GuardrailBlocked = "A Foundry guardrail blocked the {1} for agent '{0}'. Check the prompt and evidence, or the guardrail's settings.";
     public const string InputBlocked = "{0} for agent '{1}', so it wasn't sent.";
-    public const string InvalidMetricName = "Metric name '{0}' must start with 'dfe.ai_agents.' and be lower-case words joined by dots or underscores, like the library's own, e.g. 'dfe.ai_agents.release_gate.guardrail_checks'.";
+    public const string InvalidMetricName = "Metric name '{0}' must start with 'dfe.ai_agents.' and be lower-case words joined by dots or underscores, like the library's own, e.g. 'dfe.ai_agents.briefing.exports'.";
     public const string ReservedMetricTag = "Tag '{0}' is set by the library itself, from AiAgents:ApplicationName and the agent, so it can't be given.";
     public const string OutputTokenLimitReached = "Agent '{0}' used its {1} output tokens for this run. Raise MaxOutputTokensPerRun, or ask for a shorter answer.";
     public const string RunSlotAccessDenied = "This app's identity can't use the run slot container {0}. Give it Storage Blob Data Contributor on the container, or on the storage account so the library can create the container.";

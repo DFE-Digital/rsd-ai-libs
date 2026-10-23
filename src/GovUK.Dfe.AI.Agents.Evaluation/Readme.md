@@ -1,7 +1,7 @@
 # GovUK.Dfe.AI.Agents.Evaluation
 
 A judge model scores your
-[GovUK.Dfe.AI.Agents](https://github.com/DFE-Digital/rsd-ai-libs/blob/main/src/GovUK.Dfe.AI.Agents/readme.md)
+[GovUK.Dfe.AI.Agents](https://github.com/DFE-Digital/rsd-ai-libs/blob/main/src/GovUK.Dfe.AI.Agents/Readme.md)
 agents' answers from 1 to 5 for:
 
 - **Groundedness:** is the answer supported by the evidence?
@@ -41,39 +41,57 @@ builder.Services.AddAgents(builder.Configuration, agents => agents
 
 - **Live runs:** a `SampleRate` share, in the background, so runs aren't slowed. If the judge falls behind, extra
   samples are dropped.
-- **Release gate:** every test case, with the gate below or core's
-  [`IAgentTestRunner`](https://github.com/DFE-Digital/rsd-ai-libs/blob/main/src/GovUK.Dfe.AI.Agents/readme.md#release-gate).
+- **Release gate:** every test case (below).
 
 ## Release gate
 
-`AddReleaseGate()` tests agents before release, e.g. in a provisioning job or CI:
+The standard release check, the same in every app, so steps, logs, metrics and queries match across teams:
 
 ```csharp
 builder.Services.AddAgents(builder.Configuration, agents => agents
     .AddAgents(BriefingAgents.All)
-    .AddQualityEvaluation()
+    .AddGuardrails()                 // the guardrail the check requires
+    .AddQualityEvaluation()          // optional: judge scores
     .AddReleaseGate(gate => gate.RefusalPhrases.Add("outside what I can answer")));
 
-var results = await services.GetRequiredService<IAgentReleaseGate>().EvaluateAsync(BriefingAgents.All, ct);
-if (results.Any(r => !r.Passed)) { /* don't provision; each r.Problems line says why */ }
+var releaseGate = services.GetRequiredService<IAgentReleaseGate>();
+using var run = releaseGate.BeginRun();     // one id on the release's metrics, provisioning's included
+var results = await releaseGate.CheckReleaseAsync(BriefingAgents.All, ct);
+if (results.All(r => r.Passed)) { /* provision or deploy, inside the run */ }
 ```
 
-```json
-"Evaluation": {
-  "ReleaseGate": { "MinimumScore": 3.5, "Tolerance": 0.2, "MaxGroupGap": 0.5, "Repeats": 1 }
-}
-```
+`CheckReleaseAsync`:
 
-- **Test cases:** one folder per agent under `TestCasesDirectory`, one JSON file per case. Each runs on a temporary
-  copy of the agent, `Repeats` times, `MaxParallelTestRuns` at a time.
-- **An agent fails** if a case fails, or a metric averages below `MinimumScore`, isn't scored, falls more than
-  `Tolerance` below its baseline (`BaselinesDirectory/<agent>.json`), or one case `group` trails another by more than
-  `MaxGroupGap`. Without an evaluator, only the cases' facts are checked.
-- **Refusals:** a case whose `mustMention` includes one of `RefusalPhrases` is checked by that sentence and not scored:
-  relevance marks any refusal as irrelevant, however correct.
-- **Reports:** `ReportsDirectory/<agent>.json`, with every answer, score and failure. Copy a passing one into
-  `BaselinesDirectory` to set the bar.
-- **Clean-up:** test agents are deleted afterwards, even when the gate throws.
+1. **Checks the guardrail.** If it's missing, weakened or can't be checked, every agent fails and no case runs.
+   Without `AddGuardrails()`, the same, unless `RequireGuardrail` is `false`.
+2. **Runs every agent's test cases** on a temporary copy, `Repeats` times, `MaxParallelTestRuns` at a time, and
+   reports each problem in its section: `GuardrailProblems` or `EvaluationProblems`.
+3. **Logs the result:** each agent's sections and, when any fails, an error for each reason with the fields
+   `ReleaseRunId`, `AgentName`, `ReleaseSection` and `ReleaseProblem`, which the
+   [standard queries](https://github.com/DFE-Digital/rsd-ai-libs/blob/main/docs/Telemetry.md#releases) filter on.
+   `AgentGateResult.ProblemLines()` gives the same reasons as `- {agent} [{section}]: {problem}` lines for a console.
+
+An agent fails if a case fails, or with a judge, a metric averages below `MinimumScore`, isn't scored, falls more than
+`Tolerance` below its baseline, or one case `group` trails another by more than `MaxGroupGap`.
+
+### Test cases
+
+One folder per agent under `TestCasesDirectory`, with the cases in two folders:
+
+| Folder | Each case | Passes when |
+| --- | --- | --- |
+| `guardrail/` | Sets `"guardrailMustBlock": true`; no `group` | The guardrail blocks it |
+| `evaluation/` | No guardrail flag | The answer has the right facts and scores. A block fails it as the guardrail's mistake |
+
+`CheckReleaseAsync` fails a case that breaks these rules. Check them in a unit test too, so a wrong file fails the build
+(`GovUK.Dfe.AI.Agents.Release`): `Assert.Empty(cases.SelectMany(ReleaseSections.Problems))`.
+
+- **Refusals:** a case whose `mustMention` includes one of `RefusalPhrases` is checked by that sentence and not scored,
+  as relevance marks any refusal as irrelevant.
+- **Reports and baselines:** each run writes `ReportsDirectory/<agent>.json`. Copy a passing one into
+  `BaselinesDirectory` to set the bar for the next release.
+- **Clean-up:** test agents are deleted afterwards, even when the check throws.
+- **`EvaluateAsync`** runs the cases without the guardrail check, conventions or logs, for tools that only score agents.
 
 ### Results in Foundry
 
@@ -85,6 +103,8 @@ evaluation per agent (`<agent> release gate (<model>)`), one run per release.
 - It sends test prompts, evidence and answers to Foundry.
 - The identity needs **Foundry User** on the Foundry **resource**, not just the project. Without `PublishToFoundry`,
   Foundry User on the project is enough.
+
+Settings, under `AiAgents:Evaluation:ReleaseGate`, e.g. `{ "MinimumScore": 3.5, "Tolerance": 0.2, "MaxGroupGap": 0.5 }`:
 
 | Setting               | Default                 | Purpose                                                      |
 | --------------------- | ----------------------- | ------------------------------------------------------------ |
@@ -99,6 +119,7 @@ evaluation per agent (`<agent> release gate (<model>)`), one run per release.
 | `MaxParallelTestRuns` | `4`                     | Cases run at once                                            |
 | `RefusalPhrases`      | None                    | Fixed refusals whose cases aren't scored                     |
 | `PublishToFoundry`    | `false`                 | Also sends answers to a Foundry evaluation                   |
+| `RequireGuardrail`    | `true`                  | `CheckReleaseAsync` fails every agent without a guardrail check |
 
 ## Metrics
 
@@ -112,21 +133,9 @@ Recorded under `AgentTelemetry.SourceName`, so the core package's OpenTelemetry 
 | `dfe.ai_agents.release_gate.test_cases`    | Release-gate cases, by test case, group and outcome: `passed`, `failed`, `blocked_by_guardrail` |
 | `dfe.ai_agents.release_gate.agents`        | Agents through the release gate, by outcome: `passed` or `failed`                               |
 
-The release-gate metrics show which agents may go live and why the others can't. They carry the release's
-`dfe.ai_agents.release_gate.run_id`. To give the guardrail check and provisioning the same ID, do the whole release
-inside one run:
-
-```csharp
-using (var run = releaseGate.BeginRun())   // logs run.Id
-{
-    await guardrails.ApplyAsync(ct);
-    var results = await releaseGate.EvaluateAsync(BriefingAgents.All, ct);
-    // provision the agents that passed
-}
-```
-
-See [Release metrics](https://github.com/DFE-Digital/rsd-ai-libs/blob/main/docs/telemetry.md#release-metrics)
-for the query that shows each release per agent.
+The release-gate metrics carry the run's `dfe.ai_agents.release_gate.run_id`, as do the guardrail check and the versions
+provisioned inside `BeginRun()`. See [Release metrics](https://github.com/DFE-Digital/rsd-ai-libs/blob/main/docs/Telemetry.md#release-metrics)
+for what each answers and the query that shows each release per agent.
 
 ## Good to know
 

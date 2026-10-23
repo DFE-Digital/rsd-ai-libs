@@ -4,7 +4,7 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <PackageReadmeFile>readme.md</PackageReadmeFile>
+    <PackageReadmeFile>Readme.md</PackageReadmeFile>
     <Title>GovUK.Dfe.AI.Agents.AISearch</Title>
     <Description>Azure AI Search evidence for GovUK.Dfe.AI.Agents: per-index fields, relevance filtering and safe filters.</Description>
     <Authors>DFE-Digital</Authors>
@@ -12,7 +12,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <None Include="readme.md" Pack="true" PackagePath="\" />
+    <None Include="Readme.md" Pack="true" PackagePath="\" />
     <InternalsVisibleTo Include="GovUK.Dfe.AI.Agents.AISearch.Tests" />
   </ItemGroup>
 

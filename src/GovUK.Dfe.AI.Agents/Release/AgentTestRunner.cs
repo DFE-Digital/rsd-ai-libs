@@ -1,10 +1,12 @@
+using System.Globalization;
 using GovUK.Dfe.AI.Agents.Enums;
 using GovUK.Dfe.AI.Agents.Exceptions;
 using GovUK.Dfe.AI.Agents.Quality.Interfaces;
+using GovUK.Dfe.AI.Agents.Release.Interfaces;
 using GovUK.Dfe.AI.Agents.Services.Interfaces;
 using GovUK.Dfe.AI.Agents.ValueObjects;
 
-namespace GovUK.Dfe.AI.Agents.Quality;
+namespace GovUK.Dfe.AI.Agents.Release;
 
 internal sealed class AgentTestRunner(IAgentService agents, IAgentRunEvaluator? evaluator = null) : IAgentTestRunner
 {
@@ -54,6 +56,7 @@ internal sealed class AgentTestRunner(IAgentService agents, IAgentRunEvaluator? 
         {
             Group = first.Group,
             BlockedByGuardrail = runs.Exists(static run => run.BlockedByGuardrail),
+            BlockedByGuardrailInError = runs.Exists(static run => run.BlockedByGuardrailInError),
         };
     }
 
@@ -66,12 +69,18 @@ internal sealed class AgentTestRunner(IAgentService agents, IAgentRunEvaluator? 
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            // A guardrail block the case allows or requires is the right outcome: it passes, with nothing to score.
-            var blocked = (testCase.GuardrailMayBlock || testCase.GuardrailMustBlock) && IsGuardrailBlock(ex);
-            return new AgentTestResult(testCase.Name, null, blocked ? [] : [$"The run failed: {ex.GetBaseException().Message}"], NoScores)
+            // A guardrail block the case allows or requires is the right outcome: it passes, with nothing to score. A
+            // block on any other case is a false positive, reported as the guardrail's.
+            var guardrailBlock = IsGuardrailBlock(ex);
+            var blocked = guardrailBlock && (testCase.GuardrailMayBlock || testCase.GuardrailMustBlock);
+            var failure = guardrailBlock
+                ? string.Format(CultureInfo.InvariantCulture, Constants.ErrorMessages.GuardrailBlockedInError, ex.GetBaseException().Message)
+                : $"The run failed: {ex.GetBaseException().Message}";
+            return new AgentTestResult(testCase.Name, null, blocked ? [] : [failure], NoScores)
             {
                 Group = testCase.Group,
                 BlockedByGuardrail = blocked,
+                BlockedByGuardrailInError = guardrailBlock && !blocked,
             };
         }
 

@@ -51,9 +51,35 @@ agent goes live:
 
 - **One release, one ID:** everything recorded inside `IAgentReleaseGate.BeginRun()` carries
   `dfe.ai_agents.release_gate.run_id`, so one query shows a whole release. The ID is logged when the run starts.
-  `EvaluateAsync` called outside a run opens its own run.
+  `CheckReleaseAsync` or `EvaluateAsync` called outside a run opens its own.
 - **Outcomes:** `passed`, `failed` or `blocked_by_guardrail` (`AgentOutcomes`).
 - **Token and cost metrics don't carry the run ID.** A tag on every call would make too many series.
+
+## Your own metrics
+
+Record your app's own events the way the library records its own, so they sit beside its metrics and are never mixed
+with another app's. Define each metric once, and record it with `IAgentMetrics`, which `AddAgents` registers:
+
+```csharp
+public static readonly AgentCounter Exports = new("dfe.ai_agents.briefing.exports", "Briefings exported, by format.");
+public static readonly AgentHistogram Pages = new("dfe.ai_agents.briefing.pages", "{page}", "Pages per exported briefing.");
+
+metrics.Count(Exports, agent.Name, new KeyValuePair<string, object?>("dfe.ai_agents.briefing.format", "pdf"));
+metrics.Record(Pages, agent.Name, pageCount);
+
+// Tags everything recorded inside, including parallel work started inside, e.g. one batch's ID.
+using (metrics.BeginScope(new KeyValuePair<string, object?>("dfe.ai_agents.briefing.batch_id", batchId))) { ... }
+```
+
+| Enforced                                                                                                                        | So that                                                                         |
+| ------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| On the library's meter (`AgentTelemetry.SourceName`)                                                                            | Collecting the library's metrics collects yours                                 |
+| Named `dfe.ai_agents.` then lower-case words joined by dots or underscores                                                      | Every app's metrics follow one naming standard                                  |
+| Tagged with `dfe.ai_agents.application` (`AiAgents:ApplicationName`) and `gen_ai.agent.name`, which no tag or scope can replace | Apps sharing a workspace never mix; every metric filters by app and agent alike |
+| A test copy recorded under its agent's name                                                                                     | Release-gate runs group with the agent                                          |
+| One instrument per name                                                                                                         | Defining a name twice doesn't create a conflicting duplicate                    |
+
+Keep tag values few, e.g. an outcome or a batch, never a user or a prompt: each new value is a new series to store.
 
 ## Queries
 
@@ -62,7 +88,7 @@ The standard queries for every app that uses the library: paste one into Applica
 Insights resource each see their own.
 
 - **Give each app its own name:** set `AiAgents:ApplicationName` (e.g. `briefing-tool`), and the same value as its
-  OpenTelemetry service name (`AddService("briefing-tool")`, as in the [set-up](../src/GovUK.Dfe.AI.Agents/readme.md#3-register)). Apps that
+  OpenTelemetry service name (`AddService("briefing-tool")`, as in the [set-up](../src/GovUK.Dfe.AI.Agents/Readme.md#3-register)). Apps that
   share a name, or leave it unset and share an assembly name, see each other's data.
 - **Metrics** are filtered on `dfe.ai_agents.application`, which the library sets on every metric.
 - **Logs** (`traces`, `exceptions`) don't carry that tag, so log queries filter on `cloud_RoleName`, the service name.
@@ -263,22 +289,19 @@ customMetrics
 | order by started desc, agent asc
 ```
 
-Why a release failed: each failed test case and its reasons, from the warnings the release gate logs. Set `runId` from
-the query above, or from the log line `Release run <id> started`. Needs warnings sent to Application Insights:
+Why a release failed, one row per reason, marked `guardrail` or `evaluation`. Set `runId` from the query above, or
+from the log line `Release run <id> started`. Each reason is logged as an error with the fields `ReleaseRunId`,
+`AgentName`, `ReleaseSection` and `ReleaseProblem`, so the query never depends on a message's wording:
 
 ```kusto
 let app = "<ApplicationName>";
 let runId = "<run id>";
-let window = customMetrics      // metrics are sent in batches, so allow a few minutes either side
-    | where timestamp > ago(30d) and tostring(customDimensions["dfe.ai_agents.application"]) == app
-    | where tostring(customDimensions["dfe.ai_agents.release_gate.run_id"]) == runId
-    | summarize started = min(timestamp) - 5m, finished = max(timestamp) + 5m;
 traces
-| where timestamp between (toscalar(window | project started) .. toscalar(window | project finished))
-| where cloud_RoleName == app and severityLevel >= 2
-| parse message with agent " / " testCase ": failed: " reasons
-| project timestamp, agent, testCase, reason = coalesce(reasons, message)
-| order by timestamp asc
+| where timestamp > ago(30d) and cloud_RoleName == app
+| where tostring(customDimensions.ReleaseRunId) == runId and isnotempty(customDimensions.ReleaseSection)
+| project agent = tostring(customDimensions.AgentName), section = tostring(customDimensions.ReleaseSection),
+    reason = tostring(customDimensions.ReleaseProblem)
+| order by agent asc, section asc
 ```
 
 Tokens and cost of one release, per agent. Test copies count under their agent's name, and scoring under

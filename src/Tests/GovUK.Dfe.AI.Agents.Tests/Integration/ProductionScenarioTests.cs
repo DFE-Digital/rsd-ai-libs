@@ -4,8 +4,6 @@ using GovUK.Dfe.AI.Agents.Concurrency.Interfaces;
 using GovUK.Dfe.AI.Agents.Context;
 using GovUK.Dfe.AI.Agents.Extensions;
 using GovUK.Dfe.AI.Agents.Factories.Interfaces;
-using GovUK.Dfe.AI.Agents.Quality.Interfaces;
-using GovUK.Dfe.AI.Agents.Quality;
 using GovUK.Dfe.AI.Agents.Services.Interfaces;
 using GovUK.Dfe.AI.Agents.Tests.Integration.Fakes;
 using GovUK.Dfe.AI.Agents.Validators;
@@ -16,6 +14,8 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using NSubstitute;
 using Xunit;
+using GovUK.Dfe.AI.Agents.Release;
+using GovUK.Dfe.AI.Agents.Release.Interfaces;
 
 namespace GovUK.Dfe.AI.Agents.Tests.Integration;
 

@@ -7,16 +7,19 @@ using GovUK.Dfe.AI.Agents.ValueObjects;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
-namespace GovUK.Dfe.AI.Agents.Evaluation.QualityGates;
+namespace GovUK.Dfe.AI.Agents.Evaluation.Metrics;
 
 /// <summary>
-/// Scores a sample of live runs in the background and records <c>dfe.ai_agents.evaluation.score</c>. Runs never wait: samples
-/// go into a bounded queue, and are dropped when it's full.
+/// Monitors and evaluates the quality of agent runs by sampling, scoring, and recording evaluation metrics for
+/// observability.  
 /// </summary>
+/// <param name="evaluator">Evaluator used to score completed agent runs.</param>
+/// <param name="sampleRate">Fraction of completed runs to sample for evaluation, between 0.0 and 1.0.</param>
+/// <param name="applicationName">Application name used for tagging metrics.</param>
+/// <param name="logger">Logger for recording warnings and operational events.</param>
 internal sealed class AgentQualityMonitor(IAgentRunEvaluator evaluator, double sampleRate, string applicationName,
     ILogger<AgentQualityMonitor> logger) : BackgroundService, IAgentRunObserver
 {
-    // Core's meter name, so apps that already collect AgentTelemetry.SourceName get the scores with no extra setup.
     private static readonly Meter Meter = new(AgentTelemetry.SourceName);
 
     internal static readonly Histogram<double> EvaluationScore = Meter.CreateHistogram<double>(
@@ -26,7 +29,6 @@ internal sealed class AgentQualityMonitor(IAgentRunEvaluator evaluator, double s
         "dfe.ai_agents.evaluation.samples_dropped", "{run}", "Sampled runs not scored because the scoring queue was full.");
 
     private readonly Channel<CompletedAgentRun> _queue = Channel.CreateBounded<CompletedAgentRun>(
-        // Wait mode: TryWrite never waits, but returns false when full (DropWrite would report success and drop silently).
         new BoundedChannelOptions(100) { FullMode = BoundedChannelFullMode.Wait, SingleReader = true });
 
     public void OnRunCompleted(CompletedAgentRun run)

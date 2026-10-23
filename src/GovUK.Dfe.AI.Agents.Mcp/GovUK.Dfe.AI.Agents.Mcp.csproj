@@ -4,7 +4,7 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <PackageReadmeFile>readme.md</PackageReadmeFile>
+    <PackageReadmeFile>Readme.md</PackageReadmeFile>
     <Title>GovUK.Dfe.AI.Agents.Mcp</Title>
     <Description>Tools from your own MCP servers for GovUK.Dfe.AI.Agents: run in your app with your credential, deny by default, checked at startup.</Description>
     <Authors>DFE-Digital</Authors>
@@ -12,7 +12,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <None Include="readme.md" Pack="true" PackagePath="\" />
+    <None Include="Readme.md" Pack="true" PackagePath="\" />
     <InternalsVisibleTo Include="GovUK.Dfe.AI.Agents.Mcp.Tests" />
   </ItemGroup>
 

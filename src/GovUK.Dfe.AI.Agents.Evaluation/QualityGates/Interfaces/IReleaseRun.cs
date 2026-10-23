@@ -1,3 +1,5 @@
+using GovUK.Dfe.AI.Agents.Evaluation.Metrics;
+
 namespace GovUK.Dfe.AI.Agents.Evaluation.QualityGates.Interfaces;
 
 /// <summary>

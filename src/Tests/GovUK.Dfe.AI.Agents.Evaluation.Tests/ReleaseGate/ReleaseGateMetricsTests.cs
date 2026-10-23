@@ -1,7 +1,7 @@
 using System.Collections.Concurrent;
 using System.Diagnostics.Metrics;
 using GovUK.Dfe.AI.Agents.Diagnostics;
-using GovUK.Dfe.AI.Agents.Evaluation.QualityGates;
+using GovUK.Dfe.AI.Agents.Evaluation.Metrics;
 using GovUK.Dfe.AI.Agents.ValueObjects;
 using Xunit;
 
@@ -35,6 +35,8 @@ public sealed class ReleaseGateMetricsTests : IDisposable
             await gate.EvaluateAsync(agents, Token);
         }
 
+        // The id is logged as the run starts, so a release's console output leads to its metrics.
+        Assert.Contains(_host.Logs, log => log.Message.Contains(runId, StringComparison.Ordinal));
         var testCase = Assert.Single(testCases.For("run-tagged-agent"));
         Assert.Equal(runId, testCase[ReleaseGateTelemetry.RunIdTag]);
         Assert.Equal(("evaluation/outcome", "academy", AgentOutcomes.Passed),
@@ -59,18 +61,6 @@ public sealed class ReleaseGateMetricsTests : IDisposable
         Assert.Equal(2, runIds.Count);
         Assert.All(runIds, id => Assert.False(string.IsNullOrEmpty(id)));
         Assert.NotEqual(runIds[0], runIds[1]);
-    }
-
-    [Fact]
-    public void Each_run_has_its_own_id_and_logs_it_for_the_console()
-    {
-        var gate = _host.Build();
-
-        using var first = gate.BeginRun();
-        using var second = gate.BeginRun();
-
-        Assert.NotEqual(first.Id, second.Id);
-        Assert.Contains(_host.Logs, log => log.Message.Contains(first.Id, StringComparison.Ordinal));
     }
 
     /// <summary>The tags of what's recorded on one of the library's metrics.</summary>

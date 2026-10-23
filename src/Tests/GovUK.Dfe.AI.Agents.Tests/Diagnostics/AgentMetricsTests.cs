@@ -42,13 +42,15 @@ public sealed class AgentMetricsTests
     [Theory]
     [InlineData(AgentTelemetry.ApplicationTag)]
     [InlineData(AgentTelemetry.AgentNameTag)]
-    public void Wont_let_a_tag_replace_the_app_or_agent(string reserved)
+    public void Wont_let_a_tag_or_a_scope_replace_the_app_or_agent(string reserved)
     {
         var counter = Counter("reserved");
         using var counts = new MetricListener(counter.Name);
+        var metrics = new AgentMetrics("briefing-tool");
+        var tag = new KeyValuePair<string, object?>(reserved, "another-app");
 
-        Assert.Throws<ArgumentException>(() =>
-            new AgentMetrics("briefing-tool").Count(counter, "ofsted-agent", new KeyValuePair<string, object?>(reserved, "another-app")));
+        Assert.Throws<ArgumentException>(() => metrics.Count(counter, "ofsted-agent", tag));
+        Assert.Throws<ArgumentException>(() => metrics.BeginScope(tag));
         Assert.Empty(counts.Recorded);
     }
 
@@ -78,7 +80,7 @@ public sealed class AgentMetricsTests
     [InlineData("dfe.ai_agents.release-gate", false)]                // OpenTelemetry names use dots and underscores
     public void Names_a_counter_only_to_the_librarys_standard(string name, bool valid)
     {
-        var define = () => new AgentCounter(name, "Counted by a test.");
+        AgentCounter define() => new(name, "Counted by a test.");
 
         if (valid)
         {
@@ -86,7 +88,7 @@ public sealed class AgentMetricsTests
         }
         else
         {
-            Assert.Throws<ArgumentException>(define);
+            Assert.Throws<ArgumentException>((Func<AgentCounter>)define);
         }
     }
 
@@ -136,13 +138,6 @@ public sealed class AgentMetricsTests
         Assert.Equal(4, counts.Recorded.Count(count => Equals(count.Tags["dfe.ai_agents.release_gate.run_id"], "run-2")));
     }
 
-    [Theory]
-    [InlineData(AgentTelemetry.ApplicationTag)]
-    [InlineData(AgentTelemetry.AgentNameTag)]
-    public void A_scope_cant_replace_the_app_or_agent(string reserved) =>
-        Assert.Throws<ArgumentException>(() =>
-            new AgentMetrics("briefing-tool").BeginScope(new KeyValuePair<string, object?>(reserved, "another-app")));
-
     [Fact]
     public void Records_a_histograms_value_tagged_like_a_count()
     {
@@ -152,10 +147,10 @@ public sealed class AgentMetricsTests
         new AgentMetrics("briefing-tool").Record(histogram, "scored-agent", 4.5,
             new KeyValuePair<string, object?>("gen_ai.evaluation.name", "Relevance"));
 
-        var value = Assert.Single(values.Recorded);
-        Assert.Equal(4.5, value.Value);
+        var (Value, Tags) = Assert.Single(values.Recorded);
+        Assert.Equal(4.5, Value);
         Assert.Equal(("briefing-tool", "scored-agent", "Relevance"),
-            (value.Tags[AgentTelemetry.ApplicationTag], value.Tags[AgentTelemetry.AgentNameTag], value.Tags["gen_ai.evaluation.name"]));
+            (Tags[AgentTelemetry.ApplicationTag], Tags[AgentTelemetry.AgentNameTag], Tags["gen_ai.evaluation.name"]));
     }
 
     [Fact]

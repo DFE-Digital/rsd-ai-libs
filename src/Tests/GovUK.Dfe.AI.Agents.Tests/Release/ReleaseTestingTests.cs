@@ -1,17 +1,20 @@
 using System.Text.Json;
 using GovUK.Dfe.AI.Agents.Enums;
 using GovUK.Dfe.AI.Agents.Quality.Interfaces;
-using GovUK.Dfe.AI.Agents.Quality;
 using GovUK.Dfe.AI.Agents.Services.Interfaces;
 using GovUK.Dfe.AI.Agents.ValueObjects;
 using NSubstitute.ExceptionExtensions;
 using NSubstitute;
 using Xunit;
+using GovUK.Dfe.AI.Agents.Release;
 
-namespace GovUK.Dfe.AI.Agents.Tests.Quality;
+namespace GovUK.Dfe.AI.Agents.Tests.Release;
 
-/// <summary>The test-case release gate. Live-run scoring and the judge are in the .Evaluation tests.</summary>
-public sealed class QualityEvaluationTests
+/// <summary>
+/// Testing agents for release: loading test cases, running them, and judging the report against the gate. The release
+/// gate itself, and live-run scoring, are in the .Evaluation tests.
+/// </summary>
+public sealed class ReleaseTestingTests
 {
     private static readonly AgentDefinition Ofsted = new("ofsted-agent", "Ofsted");
 
@@ -171,8 +174,8 @@ public sealed class QualityEvaluationTests
 
     [Theory]
     [InlineData(true, true)]     // a block the case allows passes
-    [InlineData(false, false)]   // otherwise it's a failed run
-    public async Task AGuardrailBlock_PassesOnlyACaseThatAllowsIt(bool mayBlock, bool passes)
+    [InlineData(false, false)]   // otherwise it's the guardrail's mistake, a false positive
+    public async Task AGuardrailBlock_PassesOnlyACaseThatAllowsIt_AndIsMarkedAMistakeOtherwise(bool mayBlock, bool passes)
     {
         var agents = Substitute.For<IAgentService>();
         agents.RunAsync(Arg.Any<AgentDefinition>(), Arg.Any<string>(), Arg.Any<AgentEvidence?>(), Arg.Any<CancellationToken>())
@@ -185,6 +188,11 @@ public sealed class QualityEvaluationTests
 
         Assert.Equal(passes, result.Passed);
         Assert.Equal(mayBlock, result.BlockedByGuardrail);
+        Assert.Equal(!mayBlock, result.BlockedByGuardrailInError);
+        if (!passes)
+        {
+            Assert.StartsWith("Blocked by the guardrail, which this case doesn't allow", Assert.Single(result.Failures), StringComparison.Ordinal);
+        }
     }
 
     [Fact]

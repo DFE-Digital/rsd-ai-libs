@@ -24,7 +24,6 @@ using GovUK.Dfe.AI.Agents.Prompts;
 using GovUK.Dfe.AI.Agents.Providers.Interfaces;
 using GovUK.Dfe.AI.Agents.Providers;
 using GovUK.Dfe.AI.Agents.Quality.Interfaces;
-using GovUK.Dfe.AI.Agents.Quality;
 using GovUK.Dfe.AI.Agents.Services.Interfaces;
 using GovUK.Dfe.AI.Agents.Services;
 using GovUK.Dfe.AI.Agents.Tools;
@@ -34,6 +33,8 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using GovUK.Dfe.AI.Agents.Release;
+using GovUK.Dfe.AI.Agents.Release.Interfaces;
 
 // In Microsoft.Extensions.DependencyInjection, as Microsoft recommends for libraries' Add... methods, so apps can
 // call them without extra usings.

@@ -373,6 +373,18 @@ public sealed class GuardrailTests
         var services = Build(ValidGuardrail(), agents => agents.AddGuardrails().UseCredential(Substitute.For<TokenCredential>()));
 
         Assert.Single(services, service => service.ImplementationType == typeof(GuardrailStartupValidator));
+        Assert.Single(services, service => service.ImplementationType == typeof(FoundryGuardrailCheck));
+    }
+
+    [Fact]
+    public async Task TheReleaseGatesCheck_ReportsWhatTheGuardrailCheckFinds()
+    {
+        var check = new FoundryGuardrailCheck(Guardrails(), Settings());
+
+        var problems = await check.CheckAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal("Foundry guardrail briefing-guardrail", check.Name);
+        Assert.Contains("the guardrail 'briefing-guardrail' doesn't exist", problems);
     }
 
     [Theory]

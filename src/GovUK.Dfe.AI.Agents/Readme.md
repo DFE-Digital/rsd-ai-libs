@@ -366,5 +366,3 @@ agents.RunAsync(BriefingAgents.Ofsted, Arg.Any<string>(), Arg.Any<AgentEvidence?
 ```
 
 Tests that start the host set `"RequireTokenUsageTelemetry": false`.
-
-Not supported yet: built-in health checks.

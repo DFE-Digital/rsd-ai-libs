@@ -9,14 +9,14 @@ The limits a run works within: those set by GovUK.Dfe.AI.Agents, and those set b
 | ----------------------------------------------------------------- | ----------------------------------- | ------------------------------------- | --------------------------------------------------------- |
 | Output tokens per run (reasoning, tool rounds and retry included) | 64,000                              | `MaxOutputTokensPerRun`               | The run fails                                             |
 | Evidence per run                                                  | 200,000 characters (~50,000 tokens) | `MaxEvidenceCharacters`               | Cut, keeping the start, with a note to the model          |
-| Evidence per search (AISearch)                                    | 190,000 characters                  | `AISearch:MaxEvidenceCharacters`      | Most relevant results kept; the rest left out with a note |
+| Evidence per search (Azure AI Search)                                    | 190,000 characters                  | `AISearch:MaxEvidenceCharacters`      | Most relevant results kept; the rest left out with a note |
 | One tool output                                                   | 40,000 characters (~10,000 tokens)  | `MaxToolOutputCharacters`             | Cut, with a note to the model                             |
 | Tool-call rounds per run                                          | 10                                  | Fixed                                 | The run fails                                             |
 | Time per run                                                      | No limit                            | `RunTimeout`                          | `TimeoutException`                                        |
 | Runs at once                                                      | No limit                            | `MaxConcurrency`, `GlobalConcurrency` | Waits up to `MaxWaitForRunSlot`, then `TimeoutException`  |
-| Retries of a rate-limited (429) or failed call                    | 6, honouring `Retry-After`          | `MaxRetries`                          | The run fails; a rate limit says what to change           |
+| Retries of a rate-limited (429) or failed call                    | 6                                   | `MaxRetries`                          | The run fails; a rate limit says what to change           |
 
-English text is about 4 characters per token. The defaults suit **gpt-5.1** (272,000 input tokens): full evidence plus
+> English text is about 4 characters per token. The defaults suit **gpt-5.1** (272,000 input tokens): full evidence plus
 ten full tool outputs still leaves room. Lower them for smaller models, such as gpt-4o (128,000).
 
 ## Set by Foundry
@@ -27,7 +27,6 @@ Figures from Microsoft Learn, September 2026. They change, so check yours.
 | -------------------------- | ---------------------------------------------- | ----------------- |
 | gpt-5, gpt-5-mini, gpt-5.1 | 400,000 (input up to 272,000)                  | 128,000           |
 | gpt-4.1, gpt-4.1-mini      | 1,047,576, but 300,000 on standard deployments | 32,768            |
-| o3, o4-mini                | Input 200,000                                  | 100,000           |
 | gpt-4o, gpt-4o-mini        | Input 128,000                                  | 16,384            |
 
 - **The context window is shared** by instructions, prompt, evidence, tool outputs, earlier rounds, reasoning and answer.

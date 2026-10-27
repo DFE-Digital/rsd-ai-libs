@@ -34,5 +34,4 @@ Assign in Azure (**Access control (IAM)**) to each identity, e.g. the app's mana
 | Search Index Data Reader       | Search service                              | Apps using AISearch                                     | Read evidence from the indexes                               |
 | The MCP server's app role      | The server's app registration (its `Scope`) | Apps using Mcp                                          | Call the server's tools                                      |
 | Reader                         | Foundry resource (not the project)          | Apps using Guardrails                                   | Read the guardrail and deployments at startup                |
-| Cognitive Services User        | Foundry resource                            | Apps using Guardrails `ScanPrompts` or `ScanEvidence`   | Scan input with Prompt Shields                               |
-| Cognitive Services Contributor | Foundry resource                            | Only a job that calls `ApplyAsync`                      | Create the guardrail; not needed if Bicep or Terraform does  |
+| Cognitive Services Contributor | Foundry resource                            | Apps using Guardrails `ScanPrompts` or `ScanEvidence` and a job that calls `ApplyAsync` | Scan input with Prompt Shields and Create the guardrail; not needed if Bicep or Terraform does  |

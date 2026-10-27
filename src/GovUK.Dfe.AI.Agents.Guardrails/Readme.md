@@ -34,11 +34,10 @@ builder.Services.AddAgents(builder.Configuration, agents => agents
 
 **You need** these roles, all on the Foundry **resource** (not the project), where guardrails live:
 
-| Identity                                   | Role                           | For                                                       |
-| ------------------------------------------ | ------------------------------ | --------------------------------------------------------- |
-| Every app                                  | Reader                         | Checking the guardrail at startup                         |
-| A provisioning job                         | Cognitive Services Contributor | `ApplyAsync`; not needed if Bicep or Terraform creates it |
-| Apps using `ScanPrompts` or `ScanEvidence` | Cognitive Services User        | Scanning input with Prompt Shields                        |
+| Identity                                   | Role                           | For                                                                                          |
+| ------------------------------------------ | ------------------------------ | -------------------------------------------------------------------------------------------- |
+| Every app                                  | Reader                         | Checking the guardrail at startup                                                            |
+| A provisioning job                         | Cognitive Services Contributor | Scanning input with Prompt Shields;`ApplyAsync`; not needed if Bicep or Terraform creates it |
 
 ## Apply once, check everywhere
 
@@ -138,5 +137,5 @@ block, with the reason in `AgentGuardrailException.Reason`:
 
 ## Not included
 
-**PII filtering:** Foundry's PII filter needs a preview API, and this package uses GA APIs only. If you need it, turn it
-on in the Foundry portal; the startup check leaves it alone.
+**PII filtering:** Foundry's PII filter is in preview model, and this package uses GA APIs only. If you need it, turn it
+on in the Foundry portal; the startup check leaves it alone. Currently, managing with regular expressions by creating a blocklist. 

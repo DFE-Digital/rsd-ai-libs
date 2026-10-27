@@ -100,7 +100,7 @@ Insights resource each see their own.
 
 ### Cost and usage
 
-Tokens and cost per agent and model, per day:
+**Tokens and cost per agent and model, per day:**
 
 ```kusto
 let app = "<ApplicationName>";
@@ -116,7 +116,7 @@ customMetrics
 | order by day desc, cost desc
 ```
 
-Cost so far this month, per agent, to track against a budget:
+**Cost so far this month, per agent, to track against a budget:**
 
 ```kusto
 let app = "<ApplicationName>";
@@ -128,7 +128,7 @@ customMetrics
 | order by cost desc
 ```
 
-Parallel and sequential runs (e.g. one briefing) per hour: how many, and their average and highest cost:
+**Parallel and sequential runs (e.g. one briefing) per hour: how many, and their average and highest cost:**
 
 ```kusto
 let app = "<ApplicationName>";
@@ -148,8 +148,7 @@ customMetrics
 
 ### Reliability and speed
 
-Runs, failures and duration per agent, per day. `errors` lists why runs failed, e.g. `content_filter` or
-`System.TimeoutException`:
+**Runs, failures and duration per agent, per day. `errors` lists why runs failed, e.g. `content_filter` or `System.TimeoutException`:**
 
 ```kusto
 let app = "<ApplicationName>";
@@ -164,7 +163,7 @@ customMetrics
 | order by day desc, failed desc
 ```
 
-Model calls per hour, by model: how long Foundry takes, and how many calls failed:
+**Model calls per hour, by model: how long Foundry takes, and how many calls failed:**
 
 ```kusto
 let app = "<ApplicationName>";
@@ -177,7 +176,7 @@ customMetrics
 | order by hour desc, calls desc
 ```
 
-Streamed answers: seconds until users see the first text, per agent, per hour:
+**Streamed answers: seconds until users see the first text, per agent, per hour:**
 
 ```kusto
 let app = "<ApplicationName>";
@@ -189,8 +188,7 @@ customMetrics
 | order by hour desc
 ```
 
-Capacity per hour: waits for a run slot, and how close the deployment came to its token limit. Rising waits mean
-`MaxConcurrency` or `GlobalConcurrency` is too low; low remaining tokens mean the deployment's quota is:
+**Capacity per hour: waits for a run slot, and how close the deployment came to its token limit. Rising waits mean `MaxConcurrency` or `GlobalConcurrency` is too low; low remaining tokens mean the deployment's quota is:**
 
 ```kusto
 let app = "<ApplicationName>";
@@ -210,7 +208,7 @@ customMetrics
 
 ### Safety and oversight
 
-Guardrail blocks per agent, per day, by what was blocked (`prompt`, `answer` or `evidence`):
+**Guardrail blocks per agent, per day, by what was blocked (`prompt`, `answer` or `evidence`):**
 
 ```kusto
 let app = "<ApplicationName>";
@@ -223,7 +221,7 @@ customMetrics
 | order by day desc, blocks desc
 ```
 
-Tool calls a person approved or denied, per agent and tool:
+**Tool calls a person approved or denied, per agent and tool:**
 
 ```kusto
 let app = "<ApplicationName>";
@@ -238,8 +236,7 @@ customMetrics
 
 ### Quality
 
-Live answer scores (Evaluation's `SampleRate`) per agent, per day. A rising
-`dfe.ai_agents.evaluation.samples_dropped` means the judge can't keep up: lower `SampleRate`.
+Live answer scores (Evaluation's `SampleRate`) per agent, per day. A rising `dfe.ai_agents.evaluation.samples_dropped` means the judge can't keep up: lower `SampleRate`.
 
 ```kusto
 let app = "<ApplicationName>";
@@ -289,9 +286,7 @@ customMetrics
 | order by started desc, agent asc
 ```
 
-Why a release failed, one row per reason, marked `guardrail` or `evaluation`. Set `runId` from the query above, or
-from the log line `Release run <id> started`. Each reason is logged as an error with the fields `ReleaseRunId`,
-`AgentName`, `ReleaseSection` and `ReleaseProblem`, so the query never depends on a message's wording:
+Why a **release failed, one row per reason**, marked `guardrail` or `evaluation`. Set `runId` from the query above, or from the log line `Release run <id> started`. Each reason is logged as an error with the fields `ReleaseRunId`, `AgentName`, `ReleaseSection` and `ReleaseProblem`, so the query never depends on a message's wording:
 
 ```kusto
 let app = "<ApplicationName>";
@@ -304,10 +299,7 @@ traces
 | order by agent asc, section asc
 ```
 
-Tokens and cost of one release, per agent. Test copies count under their agent's name, and scoring under
-`answer-judge-*`. Token metrics don't carry the run ID, so this takes everything the app recorded while the run was
-going: run the gate as its own instance and filter on it (e.g. `cloud_RoleInstance == "release-gate"`) if the app also
-serves users meanwhile.
+**Tokens and cost of one release, per agent**. Test copies count under their agent's name, and scoring under `answer-judge-*`. Token metrics don't carry the run ID, so this takes everything the app recorded while the run was going: run the gate as its own instance and filter on it (e.g. `cloud_RoleInstance == "release-gate"`) if the app also serves users meanwhile.
 
 ```kusto
 let app = "<ApplicationName>";
@@ -328,7 +320,7 @@ customMetrics
 | order by cost desc
 ```
 
-Release scores per agent over time, to spot quality drifting between releases:
+**Release scores per agent over time, to spot quality drifting between releases:**
 
 ```kusto
 let app = "<ApplicationName>";

@@ -135,8 +135,3 @@ Apps can upgrade any package on its own because the packages follow Microsoft's
    Set `CoreMinimumVersion` in the `.csproj` to the core version you build on.
 3. Copy an add-on workflow to `.github/workflows/build-deploy-ai-agents-{name}.yml`, changing the name and paths.
 4. Add a `Readme.md` (it's packed into the package), and add the package to the tables here and in the core readme.
-
-## Contributing
-
-Branch from `main` and open a pull request. Keep the build free of warnings and SonarCloud issues, test new behaviour,
-and update the package readme when usage changes.

@@ -46,7 +46,7 @@ public sealed class ManagerApprover(IApprovalQueue queue) : IToolCallApprover   
 }
 ```
 
-A denied call doesn't run, and the agent is told why. Waiting counts towards `RunTimeout`. Startup fails if a tool needs
+> A denied call doesn't run, and the agent is told why. Waiting counts towards `RunTimeout`. Startup fails if a tool needs
 approval but there's no approver.
 
 ## Personal data is removed before the model sees it

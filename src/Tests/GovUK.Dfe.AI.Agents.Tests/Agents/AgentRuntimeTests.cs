@@ -4,8 +4,6 @@ using GovUK.Dfe.AI.Agents.Providers;
 using GovUK.Dfe.AI.Agents.Services.Interfaces;
 using GovUK.Dfe.AI.Agents.Services;
 using GovUK.Dfe.AI.Agents.ValueObjects;
-using Microsoft.Extensions.Logging.Abstractions;
-using NSubstitute.ExceptionExtensions;
 using NSubstitute;
 using Xunit;
 
@@ -74,21 +72,28 @@ public sealed class AgentRuntimeTests
     }
 
     [Fact]
-    public async Task Sweep_DeletesOrphans_AndAFailedSweepDoesntStopTheNext()
+    public async Task DeleteOrphanedEphemeralAgentsAsync_RefusesToRun_WithoutARunTimeout()
     {
-        var runtime = Substitute.For<IAgentRuntimeService>();
-        await new EphemeralAgentSweepService(runtime, TimeSpan.FromMinutes(30), NullLogger<EphemeralAgentSweepService>.Instance)
-            .SweepAsync(CancellationToken.None);
-        await runtime.Received(1).DeleteOrphanedEphemeralAgentsAsync(Arg.Any<TimeSpan?>(), Arg.Any<CancellationToken>());
+        var sut = new AgentRuntimeService(_agentFactory, _agentRunner);
 
-        runtime.DeleteOrphanedEphemeralAgentsAsync(Arg.Any<TimeSpan?>(), Arg.Any<CancellationToken>()).Throws(new InvalidOperationException("Foundry unavailable."));
-        runtime.ClearReceivedCalls();
-        using var service = new EphemeralAgentSweepService(runtime, TimeSpan.FromMilliseconds(50), NullLogger<EphemeralAgentSweepService>.Instance);
-        await service.StartAsync(CancellationToken.None);
-        await Task.Delay(400, cancellationToken: TestContext.Current.CancellationToken);
-        await service.StopAsync(CancellationToken.None);
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            sut.DeleteOrphanedEphemeralAgentsAsync(TimeSpan.FromHours(3), cancellationToken));
 
-        Assert.True(runtime.ReceivedCalls().Count() >= 2);
+        Assert.Contains("AiAgents:RunTimeout", ex.Message, StringComparison.Ordinal);
+        await _agentFactory.DidNotReceiveWithAnyArgs().DeleteStaleAgentsAsync(default!, default, cancellationToken);
+    }
+
+    [Theory]
+    [InlineData(30)]                // 30 minutes
+    [InlineData(180)]               // 3 hours
+    [InlineData(3.5)]               // the shortest allowed with a 2-minute RunTimeout: it, plus 90 seconds
+    public async Task DeleteOrphanedEphemeralAgentsAsync_DeletesAgentsOlderThanTheAgeTheAppChooses(double minutes)
+    {
+        var sut = new AgentRuntimeService(_agentFactory, _agentRunner, runOptions: new AgentRunOptions { RunTimeout = TimeSpan.FromMinutes(2) });
+
+        await sut.DeleteOrphanedEphemeralAgentsAsync(TimeSpan.FromMinutes(minutes), cancellationToken);
+
+        await _agentFactory.Received(1).DeleteStaleAgentsAsync(Arg.Any<Func<string, bool>>(), TimeSpan.FromMinutes(minutes), cancellationToken);
     }
 
     private sealed class TestManagedAgentProvider(IAgentFactory factory, IAgentRuntimeService runtime)

@@ -23,11 +23,15 @@ public interface IAgentRuntimeService
         string? evidence = null, Func<AgentResult, string?>? validateOutput = null, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Deletes this app's ephemeral agents left by crashes or failed deletes. Call it from your own schedule, or add
-    /// <c>agents.AddEphemeralAgentSweep()</c>. Only agents older than any run can be are deleted, never another app's;
-    /// safe on every instance at once.
+    /// Deletes this app's ephemeral agents left by crashes or failed deletes. Call it from your own schedule, e.g. a timer
+    /// or a job. Only this app's agents are deleted, never another app's; safe on every instance at once.
     /// </summary>
-    /// <param name="minimumAge">Only agents older than this; null (default) is the safe minimum, and less is refused.</param>
+    /// <param name="minimumAge">
+    /// Only agents older than this, e.g. 30 minutes. At least <c>RunTimeout</c> plus 90 seconds, as a run could still be
+    /// using a younger agent.
+    /// </param>
+    /// <exception cref="InvalidOperationException"><c>RunTimeout</c> isn't set, so no run is known to have finished.</exception>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="minimumAge"/> is shorter than <c>RunTimeout</c> plus 90 seconds.</exception>
     /// <returns>The names deleted.</returns>
-    Task<IReadOnlyList<string>> DeleteOrphanedEphemeralAgentsAsync(TimeSpan? minimumAge = null, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<string>> DeleteOrphanedEphemeralAgentsAsync(TimeSpan minimumAge, CancellationToken cancellationToken = default);
 }

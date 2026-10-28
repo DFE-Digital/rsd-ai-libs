@@ -103,21 +103,6 @@ public sealed class AgentsBuilder
         return this;
     }
 
-    /// <summary>Deletes unused ephemeral agents every <paramref name="interval"/> (default 30 minutes).</summary>
-    /// <exception cref="ArgumentOutOfRangeException">The interval isn't positive.</exception>
-    public AgentsBuilder AddEphemeralAgentSweep(TimeSpan? interval = null)
-    {
-        var every = interval ?? TimeSpan.FromMinutes(30);
-        if (every <= TimeSpan.Zero)
-        {
-            throw new ArgumentOutOfRangeException(nameof(interval), interval, "The interval must be positive.");
-        }
-
-        Services.AddHostedService(sp => new Services.EphemeralAgentSweepService(sp.GetRequiredService<IAgentRuntimeService>(),
-            every, sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<Services.EphemeralAgentSweepService>>()));
-        return this;
-    }
-
     /// <summary>The default credential for every service.</summary>
     public AgentsBuilder UseCredential(TokenCredential credential)
     {

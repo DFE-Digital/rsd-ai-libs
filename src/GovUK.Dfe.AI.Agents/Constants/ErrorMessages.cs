@@ -23,6 +23,7 @@ internal static class ErrorMessages
     public const string ToolNotAllowedForAgent = "The model called '{0}', which isn't in this agent's AllowedTools, so it wasn't run.";
     public const string DuplicateToolCallOutput = "More than one tool output was resolved for call '{0}'.";
     public const string AgentRunTimedOut = "Agent '{0}' did not finish within {1}.";
+    public const string OrphanCleanupNeedsRunTimeout = "Set AiAgents:RunTimeout before deleting orphaned agents: without it runs have no limit, so no agent is known to be finished with.";
     public const string ProvisioningNeedsFactory = "ProvisionAsync needs an IAgentFactory. Register the library with AddAgents.";
     public const string AgentToolsNotRunnable = "Agent '{0}' version {1} calls tools this app can't run: {2}. Configure the MCP server that allows them and list them in the agent's AllowedTools, or re-provision the agent.";
     public const string AiAgentsSettingsMissing = "AI agents can't start: these settings are missing or empty: {0}.";

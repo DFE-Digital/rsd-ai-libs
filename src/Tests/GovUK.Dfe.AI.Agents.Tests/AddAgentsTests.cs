@@ -217,6 +217,7 @@ public sealed class AddAgentsTests
     [InlineData("AiAgents:MaxEvidenceCharacters", "0", "AiAgents:MaxEvidenceCharacters")]
     [InlineData("AiAgents:AgentCacheDuration", "-1", "AiAgents:AgentCacheDuration (seconds, 0 or more)")]
     [InlineData("AiAgents:MaxConcurrency", "0", "AiAgents:MaxConcurrency")]
+    [InlineData("AiAgents:RunTimeout", "00:00:00", "AiAgents:RunTimeout (must be positive)")]
     [InlineData("AiAgents:LowRemainingTokensPercent", "150", "AiAgents:LowRemainingTokensPercent (from 0 to 100)")]
     [InlineData("AiAgents:MaxOutputTokensPerRun", "15", "AiAgents:MaxOutputTokensPerRun (must be at least 16)")]
     [InlineData("AiAgents:Pricing:Models:gpt-4o:CostPer1kTokensCachedInput", "-1", "AiAgents:Pricing:Models:gpt-4o (prices can't be negative)")]
@@ -260,22 +261,6 @@ public sealed class AddAgentsTests
         using var provider = Build(ValidSettings());
 
         Assert.Equal(TimeSpan.FromSeconds(60), provider.GetRequiredService<FoundryAgentFactoryOptions>().AgentCacheDuration);
-    }
-
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public void TheOrphanSweep_RunsOnlyWhenTheAppAddsIt(bool added)
-    {
-        using var provider = Build(ValidSettings(), agents =>
-        {
-            if (added)
-            {
-                agents.AddEphemeralAgentSweep();
-            }
-        });
-
-        Assert.Equal(added, provider.GetServices<Microsoft.Extensions.Hosting.IHostedService>().OfType<EphemeralAgentSweepService>().Any());
     }
 
     [Fact]

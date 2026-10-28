@@ -1,3 +1,4 @@
+using GovUK.Dfe.AI.Agents.Constants;
 using GovUK.Dfe.AI.Agents.Factories.Interfaces;
 using GovUK.Dfe.AI.Agents.ValueObjects;
 using Microsoft.Extensions.Logging;
@@ -15,11 +16,7 @@ internal sealed class AgentRuntimeService(IAgentFactory factory, IAgentRunnerSer
     private const int EphemeralSuffixLength = 32;
     private const int ApplicationHashLength = 8;
 
-    /// <summary>How long deleting an ephemeral agent may take once its run has finished (or been cancelled).</summary>
-    private static readonly TimeSpan EphemeralCleanupTimeout = TimeSpan.FromSeconds(30);
-
-    /// <summary>The longest a run is assumed to take when no <see cref="AgentRunOptions.RunTimeout"/> is set.</summary>
-    private static readonly TimeSpan AssumedMaximumRunTime = TimeSpan.FromHours(1);
+    private static readonly TimeSpan EphemeralCleanupTimeout = AgentRunOptions.EphemeralCleanupTimeout;
 
     private readonly AgentVersionPinningOptions _versionPinning = versionPinning ?? new AgentVersionPinningOptions();
     private readonly ILogger<AgentRuntimeService> _logger = logger ?? NullLogger<AgentRuntimeService>.Instance;
@@ -30,12 +27,6 @@ internal sealed class AgentRuntimeService(IAgentFactory factory, IAgentRunnerSer
     /// never deletes another application's agents mid-run.
     /// </summary>
     private string ApplicationHash => ApplicationHashOf(_runOptions.ApplicationName);
-
-    /// <summary>
-    /// The smallest <c>minimumAge</c> the orphan sweep accepts: longer than any run can take plus its
-    /// clean-up, so an agent that's still in use (on any instance) is never treated as orphaned.
-    /// </summary>
-    internal TimeSpan MinimumOrphanAge => (_runOptions.RunTimeout ?? AssumedMaximumRunTime) + EphemeralCleanupTimeout + TimeSpan.FromMinutes(5);
 
     public Task<AgentReference> ResolveAsync(string agentName, CancellationToken cancellationToken)
         => factory.ResolveAsync(agentName, _versionPinning.GetPinnedVersion(agentName), cancellationToken);
@@ -100,16 +91,18 @@ internal sealed class AgentRuntimeService(IAgentFactory factory, IAgentRunnerSer
         }
     }
 
-    public Task<IReadOnlyList<string>> DeleteOrphanedEphemeralAgentsAsync(TimeSpan? minimumAge = null, CancellationToken cancellationToken = default)
+    public Task<IReadOnlyList<string>> DeleteOrphanedEphemeralAgentsAsync(TimeSpan minimumAge, CancellationToken cancellationToken = default)
     {
         // Every instance may run this sweep at once: deletes of an agent another instance already removed succeed.
-        var age = minimumAge ?? MinimumOrphanAge;
-        ArgumentOutOfRangeException.ThrowIfLessThan(age, MinimumOrphanAge);
+        // A run (on any instance) can't still be using an agent older than its timeout, plus the agent's clean-up and a
+        // minute for the app's clock and Foundry's to differ.
+        var runTimeout = _runOptions.RunTimeout ?? throw new InvalidOperationException(ErrorMessages.OrphanCleanupNeedsRunTimeout);
+        ArgumentOutOfRangeException.ThrowIfLessThan(minimumAge, runTimeout + EphemeralCleanupTimeout + TimeSpan.FromMinutes(1));
 
         var ownPrefix = ApplicationHash;
         return factory.DeleteStaleAgentsAsync(
             name => IsEphemeralName(name) && name[^EphemeralSuffixLength..].StartsWith(ownPrefix, StringComparison.Ordinal),
-            age, cancellationToken);
+            minimumAge, cancellationToken);
     }
 
     internal static string ApplicationHashOf(string applicationName)

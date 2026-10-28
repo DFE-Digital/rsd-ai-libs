@@ -326,7 +326,15 @@ personal data removed before the model sees it, and every answer traceable. See
   }
   ```
 
-- **Temporary agents left by a crash:** `agents.AddEphemeralAgentSweep()` deletes this app's old ones every 30 minutes.
+- **Temporary agents left by a crash:** each is deleted after its run, but a crash can leave one in Foundry. Delete
+  this app's leftovers on your own schedule, e.g. a timer or a nightly job:
+
+  ```csharp
+  var deleted = await runtime.DeleteOrphanedEphemeralAgentsAsync(TimeSpan.FromMinutes(30), ct);   // IAgentRuntimeService
+  ```
+
+  It deletes only this app's temporary agents older than the age you choose, and is safe on every instance at once.
+  It needs `RunTimeout` set, and an age of at least `RunTimeout` plus 90 seconds; otherwise it's refused, as a run could still be using the agent.
 
 ## Limits and telemetry
 

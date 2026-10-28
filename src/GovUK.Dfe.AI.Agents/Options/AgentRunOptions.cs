@@ -18,6 +18,9 @@ internal sealed record AgentRunOptions
     /// <summary>Longest one run may take, tool rounds included; then it fails with <see cref="TimeoutException"/>. Null: no limit.</summary>
     public TimeSpan? RunTimeout { get; init; }
 
+    /// <summary>How long deleting a temporary agent may take once its run has finished (or been cancelled).</summary>
+    internal static readonly TimeSpan EphemeralCleanupTimeout = TimeSpan.FromSeconds(30);
+
 
     /// <summary>Runs at once on this instance, across every caller. Null: no limit.</summary>
     public int? MaxConcurrency { get; init; }

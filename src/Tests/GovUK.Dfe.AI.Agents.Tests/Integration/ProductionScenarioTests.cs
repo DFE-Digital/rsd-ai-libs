@@ -400,6 +400,7 @@ public sealed class ProductionScenarioTests : IDisposable
         Dictionary<string, string?> SettingsFor(string application)
         {
             var settings = Settings(application);
+            settings["AiAgents:RunTimeout"] = "00:05:00";
             settings["AiAgents:PromptFiles:SystemPrompts:WebSearch"] = PromptFile("You search the web.");
             return settings;
         }

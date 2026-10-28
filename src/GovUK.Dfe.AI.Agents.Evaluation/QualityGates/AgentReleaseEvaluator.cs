@@ -253,7 +253,7 @@ internal sealed class AgentReleaseEvaluator(
         try
         {
             using var timeout = new CancellationTokenSource(CleanupTimeout);
-            await agentRuntime.DeleteOrphanedEphemeralAgentsAsync(cancellationToken: timeout.Token);
+            await agentRuntime.DeleteOrphanedEphemeralAgentsAsync(settings.LeftoverTestAgentAge, timeout.Token);
         }
         catch (Exception ex)
         {

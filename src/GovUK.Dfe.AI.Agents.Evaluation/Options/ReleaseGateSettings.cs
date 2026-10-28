@@ -61,6 +61,20 @@ public sealed class ReleaseGateSettings
     /// </summary>
     public bool PublishToFoundry { get; set; }
 
+    /// <summary>
+    /// How old a test agent must be before the gate's clean-up deletes it: an hour, or longer when the app's
+    /// <c>RunTimeout</c> is, as the live app may share the gate's name and still be using a younger one.
+    /// </summary>
+    internal TimeSpan LeftoverTestAgentAge { get; private set; } = TimeSpan.FromHours(1);
+
+    internal void AllowForRunTimeout(TimeSpan? runTimeout)
+    {
+        if (runTimeout is { } timeout && timeout + TimeSpan.FromMinutes(2) > LeftoverTestAgentAge)
+        {
+            LeftoverTestAgentAge = timeout + TimeSpan.FromMinutes(2);
+        }
+    }
+
     internal IEnumerable<string> Problems()
     {
         (bool Invalid, string Problem)[] checks =

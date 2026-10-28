@@ -90,7 +90,7 @@ One folder per agent under `TestCasesDirectory`, with the cases in two folders:
   as relevance marks any refusal as irrelevant.
 - **Reports and baselines:** each run writes `ReportsDirectory/<agent>.json`. Copy a passing one into
   `BaselinesDirectory` to set the bar for the next release.
-- **Clean-up:** test agents are deleted afterwards, even when the check throws.
+- **Clean-up:** test agents are deleted afterwards, even when the check throws; ones left by a killed run go next time, if `RunTimeout` is set.
 - **`EvaluateAsync`** runs the cases without the guardrail check, conventions or logs, for tools that only score agents.
 
 ### Results in Foundry

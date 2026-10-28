@@ -1,5 +1,4 @@
 using System.ClientModel.Primitives;
-using GovUK.Dfe.AI.Agents.Concurrency.Interfaces;
 using GovUK.Dfe.AI.Agents.Clients.Interfaces;
 using GovUK.Dfe.AI.Agents.Exceptions;
 using GovUK.Dfe.AI.Agents.Extensions;
@@ -7,6 +6,7 @@ using GovUK.Dfe.AI.Agents.Factories.Interfaces;
 using GovUK.Dfe.AI.Agents.Options;
 using GovUK.Dfe.AI.Agents.Safety.Interfaces;
 using GovUK.Dfe.AI.Agents.Services;
+using GovUK.Dfe.AI.Agents.Tests.Concurrency.Fakes;
 using GovUK.Dfe.AI.Agents.ValueObjects;
 using NSubstitute;
 using OpenAI.Responses;
@@ -124,16 +124,14 @@ public sealed class FoundryAgentRunnerTests
         _agentFactory.GetOrCreateAsync(spec, cancellationToken).Returns(new AgentReference("agent-id", "my-agent"));
         _responsesClient.CreateResponseAsync("my-agent", Arg.Any<IReadOnlyList<ResponseItem>>(), Arg.Any<string?>(), Arg.Any<int?>(), cancellationToken)
             .Returns(CompletedResponse("resp-1", "Done."));
-        var slotFree = new TaskCompletionSource<IAsyncDisposable>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var limiter = Substitute.For<IAgentRunLimiter>();
-        limiter.AcquireAsync(cancellationToken).Returns(new ValueTask<IAsyncDisposable>(slotFree.Task));
+        var limiter = new FullRunLimiter();
         var shield = new FakeInputShield(block: null);
         var sut = new FoundryAgentRunnerService(_agentFactory, _responsesClient, runLimiter: limiter, inputShield: shield);
 
         var run = sut.RunFromSpecAsync(spec, "How many pupils?", cancellationToken: cancellationToken);
 
         Assert.Empty(shield.Checked);   // every slot taken: nothing sent yet
-        slotFree.SetResult(Substitute.For<IAsyncDisposable>());
+        limiter.FreeASlot();
         Assert.Equal("Done.", (await run).Output);
         Assert.Single(shield.Checked);
     }

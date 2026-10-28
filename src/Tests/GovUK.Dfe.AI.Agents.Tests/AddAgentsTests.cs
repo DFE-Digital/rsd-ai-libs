@@ -30,8 +30,8 @@ public sealed class AddAgentsTests
         ["AiAgents:Authentication:TenantId"] = "tenant-1",
         ["AiAgents:Authentication:ClientId"] = "client-1",
         ["AiAgents:Authentication:ClientSecret"] = "secret-1",
-        ["AiAgents:RunTimeout"] = "00:02:00",
-        ["AiAgents:MaxConcurrency"] = "4",
+        ["AiAgents:RunTimeout"] = "120",
+        ["AiAgents:MaxRunsPerInstance"] = "4",
         ["AiAgents:VersionPins:ofsted-agent"] = "3",
     };
 
@@ -44,7 +44,7 @@ public sealed class AddAgentsTests
 
     private static Dictionary<string, string?> WithGlobalConcurrency(Dictionary<string, string?> settings)
     {
-        settings["AiAgents:GlobalConcurrency:MaxConcurrentRuns"] = "20";
+        settings["AiAgents:GlobalConcurrency:MaxRunsAcrossInstances"] = "20";
         settings["AiAgents:GlobalConcurrency:BlobContainerUri"] = "https://account.blob.core.windows.net/run-slots";
         return settings;
     }
@@ -212,12 +212,12 @@ public sealed class AddAgentsTests
     }
 
     [Theory]
-    [InlineData("AiAgents:GlobalConcurrency:MaxConcurrentRuns", "20", "AiAgents:GlobalConcurrency:BlobContainerUri")]
-    [InlineData("AiAgents:GlobalConcurrency:BlobContainerUri", "https://account.blob.core.windows.net/run-slots", "AiAgents:GlobalConcurrency:MaxConcurrentRuns")]
+    [InlineData("AiAgents:GlobalConcurrency:MaxRunsAcrossInstances", "20", "AiAgents:GlobalConcurrency:BlobContainerUri")]
+    [InlineData("AiAgents:GlobalConcurrency:BlobContainerUri", "https://account.blob.core.windows.net/run-slots", "AiAgents:GlobalConcurrency:MaxRunsAcrossInstances")]
     [InlineData("AiAgents:MaxEvidenceCharacters", "0", "AiAgents:MaxEvidenceCharacters")]
     [InlineData("AiAgents:AgentCacheDuration", "-1", "AiAgents:AgentCacheDuration (seconds, 0 or more)")]
-    [InlineData("AiAgents:MaxConcurrency", "0", "AiAgents:MaxConcurrency")]
-    [InlineData("AiAgents:RunTimeout", "00:00:00", "AiAgents:RunTimeout (must be positive)")]
+    [InlineData("AiAgents:MaxRunsPerInstance", "0", "AiAgents:MaxRunsPerInstance")]
+    [InlineData("AiAgents:RunTimeout", "0", "AiAgents:RunTimeout (seconds, must be positive)")]
     [InlineData("AiAgents:LowRemainingTokensPercent", "150", "AiAgents:LowRemainingTokensPercent (from 0 to 100)")]
     [InlineData("AiAgents:MaxOutputTokensPerRun", "15", "AiAgents:MaxOutputTokensPerRun (must be at least 16)")]
     [InlineData("AiAgents:Pricing:Models:gpt-4o:CostPer1kTokensCachedInput", "-1", "AiAgents:Pricing:Models:gpt-4o (prices can't be negative)")]
@@ -264,6 +264,34 @@ public sealed class AddAgentsTests
     }
 
     [Fact]
+    public void RunTimeoutAndMaxWaitToStartRun_AreInSeconds()
+    {
+        var settings = ValidSettings();
+        settings["AiAgents:RunTimeout"] = "1800";
+        settings["AiAgents:MaxWaitToStartRun"] = "45";
+
+        using var provider = Build(settings);
+        var runOptions = provider.GetRequiredService<AgentRunOptions>();
+
+        Assert.Equal(TimeSpan.FromMinutes(30), runOptions.RunTimeout);
+        Assert.Equal(TimeSpan.FromSeconds(45), runOptions.MaxWaitToStartRun);
+    }
+
+    [Fact]
+    public void Defaults_ToAFiveMinuteRunTimeout_TenRunsAtOnce_AndATwoMinuteWaitForASlot()
+    {
+        var settings = ValidSettings();
+        settings.Remove("AiAgents:RunTimeout");
+        settings.Remove("AiAgents:MaxRunsPerInstance");
+
+        using var provider = Build(settings);
+        var runOptions = provider.GetRequiredService<AgentRunOptions>();
+
+        Assert.Equal((TimeSpan.FromMinutes(5), 10, TimeSpan.FromMinutes(2)),
+            (runOptions.RunTimeout, runOptions.MaxRunsPerInstance, runOptions.MaxWaitToStartRun));
+    }
+
+    [Fact]
     public void TheReleaseGate_IsAvailable_WithoutAnyEvaluator()
     {
         using var provider = Build(ValidSettings());
@@ -286,7 +314,7 @@ public sealed class AddAgentsTests
         var runOptions = provider.GetRequiredService<AgentRunOptions>();
         Assert.Equal("briefing-tool", runOptions.ApplicationName);
         Assert.Equal(TimeSpan.FromMinutes(2), runOptions.RunTimeout);
-        Assert.Equal(4, runOptions.MaxConcurrency);
+        Assert.Equal(4, runOptions.MaxRunsPerInstance);
         Assert.Equal("3", provider.GetRequiredService<AgentVersionPinningOptions>().GetPinnedVersion("ofsted-agent"));
     }
 

@@ -1,6 +1,7 @@
 using GovUK.Dfe.AI.Agents.Diagnostics;
 using Azure.Core;
 using GovUK.Dfe.AI.Agents.Builders;
+using GovUK.Dfe.AI.Agents.Options;
 using GovUK.Dfe.AI.Agents.Services.Interfaces;
 using GovUK.Dfe.AI.Agents.Context;
 using GovUK.Dfe.AI.Agents.Factories.Interfaces;
@@ -64,6 +65,14 @@ public sealed partial class AgentPlatformEndToEndTests : IDisposable
     /// Builds the app through <c>AddAgents</c>; <paramref name="settings"/> are extra <c>AiAgents</c> keys, and
     /// <paramref name="agents"/> adds to the builder.
     /// </summary>
+    // Settings take whole seconds, so a sub-second timeout is set directly.
+    private static Action<IServiceCollection> WithRunTimeout(TimeSpan timeout) => services =>
+    {
+        var registered = services.Last(descriptor => descriptor.ServiceType == typeof(AgentRunOptions));
+        services.Remove(registered);
+        services.AddSingleton((AgentRunOptions)registered.ImplementationInstance! with { RunTimeout = timeout });
+    };
+
     private ServiceProvider Build(Action<IServiceCollection>? configure = null, Dictionary<string, string>? settings = null,
         Action<AgentsBuilder>? agents = null)
     {
@@ -758,7 +767,7 @@ public sealed partial class AgentPlatformEndToEndTests : IDisposable
         WriteSystemPrompt("Review", "You review briefings for accuracy.");
         _responses.Hang("draft-agent");
         _responses.Reply("review-agent", FoundryResponses.Completed("r1", "Reviewed."));
-        using var provider = Build(settings: new() { ["RunTimeout"] = "00:00:00.200" });
+        using var provider = Build(configure: WithRunTimeout(TimeSpan.FromMilliseconds(200)));
 
         var results = await RunSequential(provider, new AgentDefinition("draft-agent", "Draft"), new AgentDefinition("review-agent", "Review"));
 
@@ -953,7 +962,7 @@ public sealed partial class AgentPlatformEndToEndTests : IDisposable
         _responses.Hang("ofsted-agent");
         _responses.Reply("trust-agent", FoundryResponses.Completed("r1", "Trust findings."));
 
-        using var provider = Build(settings: new() { ["RunTimeout"] = "00:00:00.200" });
+        using var provider = Build(configure: WithRunTimeout(TimeSpan.FromMilliseconds(200)));
         var results = await RunParallel(provider, new AgentDefinition("ofsted-agent", "Ofsted"), new AgentDefinition("trust-agent", "Trust"));
 
         Assert.Equal(FallbackText, results.Single(r => r.AgentName == "ofsted-agent").Output);

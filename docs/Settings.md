@@ -13,14 +13,14 @@ All under `AiAgents`, or in code with `agents.Configure(o => ...)`.
 | `Authentication`                  | None                | The default identity: `TenantId`, `ClientId` and `ClientSecret`, unless set in code                   |
 | `PromptFiles`                     | None                | `SystemPrompts` and `UserPrompts`: each prompt key and its file                                       |
 | `ApplicationName`                 | Entry assembly name | Telemetry tag, and scope of the temporary-agent sweep                                                 |
-| `RunTimeout`                      | None                | Longest time one run may take; needed by the orphan clean-up                                          |
+| `RunTimeout`                      | 300                 | Seconds one run may take, e.g. `1800`; needed by the orphan clean-up                                  |
 | `MaxOutputTokensPerRun`           | 64000               | Output tokens one run may use (minimum 16)                                                            |
 | `MaxEvidenceCharacters`           | 200000              | Longer evidence is cut, keeping the start                                                             |
 | `MaxToolOutputCharacters`         | 40000               | Longer tool output is cut                                                                             |
 | `FenceToolOutput`                 | `true`              | Fences tool output as data                                                                            |
-| `MaxConcurrency`                  | None                | Runs at once on one instance                                                                          |
-| `GlobalConcurrency`               | Off                 | `MaxConcurrentRuns` across instances, and the `BlobContainerUri` for slots                            |
-| `MaxWaitForRunSlot`               | 2 minutes           | Longest wait for a slot                                                                               |
+| `MaxRunsPerInstance`              | 10                  | Runs at once on one instance                                                                          |
+| `GlobalConcurrency`               | Off                 | `MaxRunsAcrossInstances` across instances, and the `BlobContainerUri` for slots                       |
+| `MaxWaitToStartRun`               | 120                 | Seconds a run waits for a slot                                                                        |
 | `AgentCacheDuration`              | 60                  | Seconds a resolved version is reused, e.g. `30`; `0` turns caching off                                |
 | `VersionPins`                     | None                | The version this environment runs, per agent                                                          |
 | `ProtectedVersions`               | None                | Versions pruning must keep, per agent                                                                 |

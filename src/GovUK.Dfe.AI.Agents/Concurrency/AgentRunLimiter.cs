@@ -8,9 +8,9 @@ using System.Security.Cryptography;
 namespace GovUK.Dfe.AI.Agents.Concurrency;
 
 /// <summary>
-/// Applies <see cref="AgentRunOptions.MaxConcurrency"/> across every caller on this instance, then the global
+/// Applies <see cref="AgentRunOptions.MaxRunsPerInstance"/> across every caller on this instance, then the global
 /// limit from an <see cref="IRunSlotStore"/> when one is registered. Waiting for both counts towards
-/// <see cref="AgentRunOptions.MaxWaitForRunSlot"/>.
+/// <see cref="AgentRunOptions.MaxWaitToStartRun"/>.
 /// </summary>
 internal sealed class AgentRunLimiter : IAgentRunLimiter, IDisposable
 {
@@ -28,9 +28,9 @@ internal sealed class AgentRunLimiter : IAgentRunLimiter, IDisposable
     {
         ArgumentNullException.ThrowIfNull(runOptions);
 
-        _local = runOptions.MaxConcurrency is int max ? new SemaphoreSlim(max, max) : null;
+        _local = runOptions.MaxRunsPerInstance is int max ? new SemaphoreSlim(max, max) : null;
         _global = globalSlots;
-        _maxWait = runOptions.MaxWaitForRunSlot;
+        _maxWait = runOptions.MaxWaitToStartRun;
         _applicationName = runOptions.ApplicationName;
     }
 

@@ -188,7 +188,7 @@ customMetrics
 | order by hour desc
 ```
 
-**Capacity per hour: waits for a run slot, and how close the deployment came to its token limit. Rising waits mean `MaxConcurrency` or `GlobalConcurrency` is too low; low remaining tokens mean the deployment's quota is:**
+**Capacity per hour: waits for a run slot, and how close the deployment came to its token limit. Rising waits mean `MaxRunsPerInstance` or `GlobalConcurrency` is too low; low remaining tokens mean the deployment's quota is:**
 
 ```kusto
 let app = "<ApplicationName>";

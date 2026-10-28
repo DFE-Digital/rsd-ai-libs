@@ -38,8 +38,10 @@ public sealed partial class AgentsOptions
 
     // ===== Each run =====
 
-    /// <summary>The longest one run may take, tool rounds included. Unset: no limit.</summary>
-    public TimeSpan? RunTimeout { get; set; }
+    /// <summary>Seconds one run may take, tool rounds included (default 300). The orphan clean-up needs it. Null: no limit.</summary>
+    public int? RunTimeout { get; set; } = DefaultRunTimeoutSeconds;
+
+    internal const int DefaultRunTimeoutSeconds = 300;
 
     /// <summary>What each model costs, so results and metrics report cost. Unset: tokens only.</summary>
     public PricingSettings Pricing { get; set; } = new();
@@ -67,14 +69,18 @@ public sealed partial class AgentsOptions
 
     // ===== Scaling =====
 
-    /// <summary>The most agent runs this instance makes at once, across every caller. Unset: no limit.</summary>
-    public int? MaxConcurrency { get; set; }
+    /// <summary>Most runs at once on this instance, across every caller (default 10). Null: no limit.</summary>
+    public int? MaxRunsPerInstance { get; set; } = DefaultMaxRunsPerInstance;
 
-    /// <summary>A limit on agent runs shared by every instance. Off unless <c>MaxConcurrentRuns</c> is set.</summary>
+    internal const int DefaultMaxRunsPerInstance = 10;
+
+    /// <summary>A limit on agent runs shared by every instance. Off unless <c>MaxRunsAcrossInstances</c> is set.</summary>
     public GlobalConcurrencySettings GlobalConcurrency { get; set; } = new();
 
-    /// <summary>How long a run waits for a free slot (per-instance or global) before failing with a <see cref="TimeoutException"/>.</summary>
-    public TimeSpan MaxWaitForRunSlot { get; set; } = TimeSpan.FromMinutes(2);
+    /// <summary>Seconds a run waits for a free slot before failing with a <see cref="TimeoutException"/> (default 120).</summary>
+    public int MaxWaitToStartRun { get; set; } = DefaultMaxWaitToStartRunSeconds;
+
+    internal const int DefaultMaxWaitToStartRunSeconds = 120;
 
     /// <summary>
     /// How many seconds a resolved agent version is reused before asking Foundry again, e.g. 30 or 60. 0 turns caching off.
@@ -128,13 +134,13 @@ public sealed partial class AgentsOptions
     internal AgentRunOptions ToRunOptions() => new()
     {
         ApplicationName = string.IsNullOrWhiteSpace(ApplicationName) ? Diagnostics.AgentTelemetry.DefaultApplicationName : ApplicationName,
-        RunTimeout = RunTimeout,
-        MaxConcurrency = MaxConcurrency,
+        RunTimeout = RunTimeout is { } seconds ? TimeSpan.FromSeconds(seconds) : null,
+        MaxRunsPerInstance = MaxRunsPerInstance,
         MaxToolOutputCharacters = MaxToolOutputCharacters,
         FenceToolOutput = FenceToolOutput,
         MaxEvidenceCharacters = MaxEvidenceCharacters,
         MaxOutputTokensPerRun = MaxOutputTokensPerRun,
-        MaxWaitForRunSlot = MaxWaitForRunSlot,
+        MaxWaitToStartRun = TimeSpan.FromSeconds(MaxWaitToStartRun),
         RequireTokenUsageTelemetry = RequireTokenUsageTelemetry,
         Pricing = Pricing,
         ValidateAgentToolsAtStartup = ValidateAgentToolsAtStartup,

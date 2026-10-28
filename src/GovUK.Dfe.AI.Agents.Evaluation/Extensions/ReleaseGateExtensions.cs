@@ -44,7 +44,7 @@ public static class ReleaseGateExtensions
         {
             var settings = context.Section.GetSection(SectionName).Get<ReleaseGateSettings>() ?? new ReleaseGateSettings();
             configure?.Invoke(settings);
-            settings.AllowForRunTimeout(context.Options.RunTimeout);
+            settings.AllowForRunTimeout(context.Options.RunTimeout is { } seconds ? TimeSpan.FromSeconds(seconds) : null);
 
             var foundry = context.Options.Foundry;
             var evaluation = context.Section.GetSection(EvaluationSectionName).Get<EvaluationSettings>() ?? new EvaluationSettings();

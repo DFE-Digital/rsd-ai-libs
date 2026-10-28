@@ -125,7 +125,7 @@ public static class McpServersExtensions
         ServerLabel = key,
         ServerUri = new Uri(server.ServerUri!),
         AllowedToolNames = server.AllowedToolNames,
-        ToolListCacheDuration = server.ToolListCacheDuration,
+        ToolListCacheDuration = TimeSpan.FromSeconds(server.ToolListCacheDuration),
         Credential = credential,
         Scope = server.Scope!,
     };

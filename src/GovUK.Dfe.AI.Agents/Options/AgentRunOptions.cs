@@ -23,7 +23,7 @@ internal sealed record AgentRunOptions
 
 
     /// <summary>Runs at once on this instance, across every caller. Null: no limit.</summary>
-    public int? MaxConcurrency { get; init; }
+    public int? MaxRunsPerInstance { get; init; }
 
     /// <summary>Characters of one tool output sent to the model; the rest is cut with a note.</summary>
     public int MaxToolOutputCharacters { get; init; } = DefaultMaxToolOutputCharacters;
@@ -41,7 +41,7 @@ internal sealed record AgentRunOptions
     public int MaxOutputTokensPerRun { get; init; } = DefaultMaxOutputTokensPerRun;
 
     /// <summary>Longest a run waits for a slot before failing with <see cref="TimeoutException"/>.</summary>
-    public TimeSpan MaxWaitForRunSlot { get; init; } = TimeSpan.FromMinutes(2);
+    public TimeSpan MaxWaitToStartRun { get; init; } = TimeSpan.FromMinutes(2);
 
     /// <summary>Remove personal data from prompts, evidence and tool output before they're sent, in order.</summary>
     public IReadOnlyList<Privacy.Interfaces.IAgentInputRedactor> Redactors { get; init; } = [];

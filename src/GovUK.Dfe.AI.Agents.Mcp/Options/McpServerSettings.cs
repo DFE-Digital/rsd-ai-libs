@@ -17,8 +17,8 @@ public sealed class McpServerSettings
     /// <summary>Required: every tool this app may use from the server.</summary>
     public List<string> AllowedToolNames { get; set; } = [];
 
-    /// <summary>How long the server's tool list is reused before asking again.</summary>
-    public TimeSpan ToolListCacheDuration { get; set; } = TimeSpan.FromMinutes(5);
+    /// <summary>Seconds the server's tool list is reused (default 300). 0: no caching.</summary>
+    public int ToolListCacheDuration { get; set; } = 300;
 
     internal IEnumerable<string> Problems()
     {
@@ -39,6 +39,11 @@ public sealed class McpServerSettings
         if (AllowedToolNames.Count == 0)
         {
             yield return "AllowedToolNames";
+        }
+
+        if (ToolListCacheDuration < 0)
+        {
+            yield return "ToolListCacheDuration (seconds, 0 or more)";
         }
     }
 }

@@ -25,11 +25,11 @@ public sealed partial class AgentsOptions
         (bool Invalid, string Problem)[] checks =
         [
             (KeepLatestVersions is < 2, "KeepLatestVersions (must be at least 2)"),
-            (MaxConcurrency is < 1, "MaxConcurrency (must be at least 1)"),
+            (MaxRunsPerInstance is < 1, "MaxRunsPerInstance (must be at least 1)"),
             (LowRemainingTokensPercent is < 0 or > 100, "LowRemainingTokensPercent (from 0 to 100)"),
             (AgentCacheDuration < 0, "AgentCacheDuration (seconds, 0 or more)"),
-            (MaxWaitForRunSlot <= TimeSpan.Zero, "MaxWaitForRunSlot (must be positive)"),
-            (RunTimeout <= TimeSpan.Zero, "RunTimeout (must be positive)"),
+            (MaxWaitToStartRun <= 0, "MaxWaitToStartRun (seconds, must be positive)"),
+            (RunTimeout <= 0, "RunTimeout (seconds, must be positive)"),
             (MaxEvidenceCharacters < 1, "MaxEvidenceCharacters (must be at least 1)"),
             (MaxOutputTokensPerRun < AgentRunOptions.MinOutputTokens, $"MaxOutputTokensPerRun (must be at least {AgentRunOptions.MinOutputTokens})"),
         ];

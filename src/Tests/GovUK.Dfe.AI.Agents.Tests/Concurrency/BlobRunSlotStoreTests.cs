@@ -117,7 +117,7 @@ public sealed class BlobRunSlotStoreTests
     [Fact]
     public void WithGlobalConcurrency_TheStartupCheckIsRegistered_AndWithoutItNothingIs()
     {
-        using var withLimit = Build(("MaxConcurrentRuns", "20"), ("BlobContainerUri", "https://account.blob.core.windows.net/aiagents-run-slots"));
+        using var withLimit = Build(("MaxRunsAcrossInstances", "20"), ("BlobContainerUri", "https://account.blob.core.windows.net/aiagents-run-slots"));
         using var withoutLimit = Build();
 
         Assert.Equal(20, Assert.IsType<BlobRunSlotStore>(withLimit.GetRequiredService<IRunSlotStore>()).Capacity);
@@ -131,7 +131,7 @@ public sealed class BlobRunSlotStoreTests
     [InlineData("https://account.blob.core.windows.net/aiagents-run-slots?sv=2024&sig=abc")]  // a SAS token
     public void AContainerUriThatIsntHttpsOrCarriesASasToken_FailsStartup(string uri)
     {
-        var ex = Assert.Throws<InvalidOperationException>(() => Build(("MaxConcurrentRuns", "20"), ("BlobContainerUri", uri)));
+        var ex = Assert.Throws<InvalidOperationException>(() => Build(("MaxRunsAcrossInstances", "20"), ("BlobContainerUri", uri)));
 
         Assert.Contains("BlobContainerUri (must be https, with no SAS token)", ex.Message, StringComparison.Ordinal);
     }

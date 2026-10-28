@@ -29,7 +29,7 @@ internal static class ErrorMessages
     public const string AiAgentsSettingsMissing = "AI agents can't start: these settings are missing or empty: {0}.";
     public const string AgentRunFailed = "Agent '{0}' failed.";
     public const string ModelNotFromConnection = "Agent '{0}' can't use model '{1}': every model must be on the connection in Foundry:DefaultModel, as '{2}/<model>'.";
-    public const string AgentRateLimited = "Agent '{0}' failed: Foundry's rate limit (HTTP 429) was still reached after retrying. Lower MaxConcurrency or GlobalConcurrency, or raise the model deployment's tokens-per-minute quota.";
+    public const string AgentRateLimited = "Agent '{0}' failed: Foundry's rate limit (HTTP 429) was still reached after retrying. Lower MaxRunsPerInstance or GlobalConcurrency, or raise the model deployment's tokens-per-minute quota.";
     public const string AgentGetOrCreateFailed = "Failed to get or create Foundry agent '{0}'.";
     public const string AgentCreateFailed = "Failed to create Foundry agent '{0}'.";
     public const string AgentDeleteFailed = "Failed to delete Foundry agent '{0}'.";
@@ -45,7 +45,7 @@ internal static class ErrorMessages
         "Not blocked by the guardrail, which this case requires (\"guardrailMustBlock\"). A Foundry guardrail doesn't check evidence, or any input to a model behind your own gateway, so turn on AiAgents:Guardrails:ScanPrompts, ScanEvidence and CheckBlocklists.";
     public const string GuardrailBlockedInError =
         "Blocked by the guardrail, which this case doesn't allow (set \"guardrailMayBlock\" if it should): {0}";
-    public const string NoRunSlot = "No agent run slot came free within {0}. Raise MaxConcurrency or GlobalConcurrency:MaxConcurrentRuns, or MaxWaitForRunSlot.";
+    public const string NoRunSlot = "No agent run could start within {0}. Raise MaxRunsPerInstance or GlobalConcurrency:MaxRunsAcrossInstances, or MaxWaitToStartRun.";
     public const string GuardrailBlocked = "A Foundry guardrail blocked the {1} for agent '{0}'. Check the prompt and evidence, or the guardrail's settings.";
     public const string InputBlocked = "{0} for agent '{1}', so it wasn't sent.";
     public const string InvalidMetricName = "Metric name '{0}' must start with 'dfe.ai_agents.' and be lower-case words joined by dots or underscores, like the library's own, e.g. 'dfe.ai_agents.briefing.exports'.";

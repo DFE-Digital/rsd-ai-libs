@@ -78,7 +78,7 @@ public sealed partial class AgentsOptions
     public sealed class GlobalConcurrencySettings
     {
         /// <summary>The most agent runs at once across all instances. Unset (default): no global limit.</summary>
-        public int? MaxConcurrentRuns { get; set; }
+        public int? MaxRunsAcrossInstances { get; set; }
 
         /// <summary>
         /// A blob container used only for run slots, e.g. https://&lt;account&gt;.blob.core.windows.net/aiagents-run-slots.
@@ -89,19 +89,19 @@ public sealed partial class AgentsOptions
         /// <summary>Optional: a service principal for the run-slot container only. Unset: the default.</summary>
         public ServicePrincipalSettings? Authentication { get; set; }
 
-        internal bool IsEnabled => MaxConcurrentRuns is not null;
+        internal bool IsEnabled => MaxRunsAcrossInstances is not null;
 
         internal IEnumerable<string> Problems()
         {
             if (!IsEnabled)
             {
-                return string.IsNullOrWhiteSpace(BlobContainerUri) ? [] : ["MaxConcurrentRuns"];
+                return string.IsNullOrWhiteSpace(BlobContainerUri) ? [] : ["MaxRunsAcrossInstances"];
             }
 
             var problems = new List<string>();
-            if (MaxConcurrentRuns < 1)
+            if (MaxRunsAcrossInstances < 1)
             {
-                problems.Add("MaxConcurrentRuns (must be at least 1)");
+                problems.Add("MaxRunsAcrossInstances (must be at least 1)");
             }
 
             if (!Uri.TryCreate(BlobContainerUri, UriKind.Absolute, out var uri))

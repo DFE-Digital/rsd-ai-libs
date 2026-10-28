@@ -6,6 +6,6 @@ namespace GovUK.Dfe.AI.Agents.Concurrency.Interfaces;
 internal interface IAgentRunLimiter
 {
     /// <summary>Waits for a free slot. Dispose the result to free it.</summary>
-    /// <exception cref="TimeoutException">No slot came free within <see cref="AgentRunOptions.MaxWaitForRunSlot"/>.</exception>
+    /// <exception cref="TimeoutException">No slot came free within <see cref="AgentRunOptions.MaxWaitToStartRun"/>.</exception>
     ValueTask<IAsyncDisposable> AcquireAsync(CancellationToken cancellationToken = default);
 }

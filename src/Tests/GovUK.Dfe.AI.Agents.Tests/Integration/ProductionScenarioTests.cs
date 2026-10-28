@@ -304,7 +304,7 @@ public sealed class ProductionScenarioTests : IDisposable
     public async Task GlobalLimit_InstancesRunningBriefingsTogether_NeverExceedIt()
     {
         var (settings, specialists) = SlowSpecialists();
-        settings["AiAgents:GlobalConcurrency:MaxConcurrentRuns"] = "2";
+        settings["AiAgents:GlobalConcurrency:MaxRunsAcrossInstances"] = "2";
         settings["AiAgents:GlobalConcurrency:BlobContainerUri"] = "https://account.blob.core.windows.net/run-slots";
         var sharedSlots = new InMemoryRunSlotStore(capacity: 2);
         var instances = Enumerable.Range(0, 3).Select(_ => StartInstance(new(settings), specialists, sharedSlots: sharedSlots)).ToList();
@@ -316,10 +316,10 @@ public sealed class ProductionScenarioTests : IDisposable
     }
 
     [Fact]
-    public async Task MaxConcurrency_AppliesToEveryBriefingOnTheInstance_NotEachOneSeparately()
+    public async Task MaxRunsPerInstance_AppliesToEveryBriefingOnTheInstance_NotEachOneSeparately()
     {
         var (settings, specialists) = SlowSpecialists();
-        settings["AiAgents:MaxConcurrency"] = "2";
+        settings["AiAgents:MaxRunsPerInstance"] = "2";
         var instance = StartInstance(settings, specialists);
 
         await Task.WhenAll(BriefAsync(instance, specialists), BriefAsync(instance, specialists));
@@ -400,7 +400,7 @@ public sealed class ProductionScenarioTests : IDisposable
         Dictionary<string, string?> SettingsFor(string application)
         {
             var settings = Settings(application);
-            settings["AiAgents:RunTimeout"] = "00:05:00";
+            settings["AiAgents:RunTimeout"] = "300";
             settings["AiAgents:PromptFiles:SystemPrompts:WebSearch"] = PromptFile("You search the web.");
             return settings;
         }

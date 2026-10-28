@@ -45,19 +45,18 @@ dotnet add package Azure.Monitor.OpenTelemetry.AspNetCore   # sends token usage 
       "Endpoint": "https://<resource>.services.ai.azure.com/api/projects/<project>",
       "DefaultModel": "<connection>/gpt-5.1"
     },
-    "Authentication": { "TenantId": "<tenant>", "ClientId": "<client id>" },
     "PromptFiles": {
       "SystemPrompts": { "Ofsted": "Prompts/Ofsted.md", "Synthesis": "Prompts/Synthesis.md" }
-    },
-    "RunTimeout": "00:02:00",
-    "MaxConcurrency": 4
+    }
   }
 }
 ```
 
-- Give the identity the **Foundry User** role on the Foundry project ([all roles](https://github.com/DFE-Digital/rsd-ai-libs/blob/main/docs/Access.md#roles)).
-- Load `Authentication:ClientSecret` from Key Vault, or use [managed identities](#credentials-and-roles).
+- Give the app's identity the **Foundry User** role on the Foundry project ([all roles](https://github.com/DFE-Digital/rsd-ai-libs/blob/main/docs/Access.md#roles)).
+- Sign in with a [managed identity](#credentials-and-roles) (recommended), or a client secret as the fallback.
 - Set each prompt file to _Copy to output directory_.
+- Defaults: runs time out after 300 seconds (`RunTimeout`), and at most 10 run at once per instance (`MaxRunsPerInstance`).
+  Override either under `AiAgents`.
 
 ### 3. Register
 
@@ -309,11 +308,12 @@ personal data removed before the model sees it, and every answer traceable. See
 
 ## Scaling and cost
 
-- **Concurrency:** `MaxConcurrency` per instance, or `GlobalConcurrency` across instances (a blob container holds the
-  slots; the identity needs **Storage Blob Data Contributor**). A run waits up to `MaxWaitForRunSlot`.
+- **Concurrency:** `MaxRunsPerInstance`, and optionally `GlobalConcurrency:MaxRunsAcrossInstances` (a blob container
+  holds the slots; the identity needs **Storage Blob Data Contributor**). A run needs room under both, so keep
+  `MaxRunsPerInstance` at or below `MaxRunsAcrossInstances`. It waits up to `MaxWaitToStartRun` seconds to start.
 
   ```json
-  "GlobalConcurrency": { "MaxConcurrentRuns": 20, "BlobContainerUri": "https://<account>.blob.core.windows.net/aiagents-run-slots" }
+  "GlobalConcurrency": { "MaxRunsAcrossInstances": 20, "BlobContainerUri": "https://<account>.blob.core.windows.net/aiagents-run-slots" }
   ```
 
 - **Cost cap:** `MaxOutputTokensPerRun` caps output tokens per run, reasoning and tool rounds included.
@@ -355,8 +355,13 @@ the library's and never mix with another app's. See [Your own metrics](https://g
 
 ## Credentials and roles
 
-`Authentication` is the default identity, or set one in code, e.g. `agents.UseCredential(new ManagedIdentityCredential())`.
-Any service can have its own. Every app needs **Foundry User** on the Foundry project; each add-on adds its own role.
+| Option                             | When                                   | How                                                                                       |
+| ---------------------------------- | -------------------------------------- | ----------------------------------------------------------------------------------------- |
+| **Managed identity** (recommended) | In Azure: no secret to store or rotate | `agents.UseCredential(new ManagedIdentityCredential())`                                   |
+| Your own sign-in                   | Local development                      | `agents.UseCredential(new DefaultAzureCredential())`                                      |
+| Client secret (fallback)           | No managed identity available          | `"Authentication": { "TenantId", "ClientId", "ClientSecret" }`, the secret from Key Vault |
+
+Any service can have its own credential. Every app needs **Foundry User** on the Foundry project; each add-on adds its own role.
 See [Access](https://github.com/DFE-Digital/rsd-ai-libs/blob/main/docs/Access.md) for every package's credentials and roles.
 
 ## Options

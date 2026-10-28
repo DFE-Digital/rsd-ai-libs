@@ -12,7 +12,7 @@ public sealed class AgentRunLimiterTests
     private readonly CancellationToken cancellationToken = TestContext.Current.CancellationToken;
 
     private static AgentRunLimiter Instance(IRunSlotStore? global = null, int? maxConcurrency = null, TimeSpan? maxWait = null)
-        => new(new AgentRunOptions { MaxConcurrency = maxConcurrency, MaxWaitForRunSlot = maxWait ?? TimeSpan.FromSeconds(30) }, global);
+        => new(new AgentRunOptions { MaxRunsPerInstance = maxConcurrency, MaxWaitToStartRun = maxWait ?? TimeSpan.FromSeconds(30) }, global);
 
     [Fact]
     public async Task WaitingLongerThanMaxWait_FailsWithTimeout_AndGivesBackTheInstanceSlot()

@@ -44,10 +44,25 @@ internal sealed class FoundryAgentRunnerService(IAgentFactory agentFactory, IFou
 
         cancellationToken.ThrowIfCancellationRequested();
 
-        var agent = await agentFactory.GetOrCreateAsync(spec, cancellationToken).ConfigureAwait(false);
+        // Taken before the input check, so a burst of runs can't send more checks at once than MaxRunsPerInstance allows.
+        await using var slot = await AcquireRunSlotAsync(cancellationToken).ConfigureAwait(false);
 
-        return await RunCoreAsync(agent, prompt, additionalContext, resolveToolCalls, validateOutput, cancellationToken)
-            .ConfigureAwait(false);
+        // Check the input (e.g. Prompt Shields) while the agent is created: one round trip less. A block still sends nothing.
+        using var inputCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var input = BuildInitialInputItemsAsync(spec.Name, prompt, additionalContext, inputCancellation.Token);
+        try
+        {
+            var agent = await agentFactory.GetOrCreateAsync(spec, cancellationToken).ConfigureAwait(false);
+
+            return await RunCoreAsync(agent, prompt, additionalContext, resolveToolCalls, validateOutput, cancellationToken, input)
+                .ConfigureAwait(false);
+        }
+        finally
+        {
+            // Stop and observe the check if the run ended without it, e.g. the agent couldn't be created.
+            await inputCancellation.CancelAsync().ConfigureAwait(false);
+            await ((Task)input).ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
+        }
     }
 
     public async Task<AgentResult> RunAsync(AgentReference agent, string prompt, string? additionalContext = null,
@@ -60,16 +75,20 @@ internal sealed class FoundryAgentRunnerService(IAgentFactory agentFactory, IFou
 
         cancellationToken.ThrowIfCancellationRequested();
 
+        await using var slot = await AcquireRunSlotAsync(cancellationToken).ConfigureAwait(false);
         return await RunCoreAsync(agent, prompt, additionalContext, resolveToolCalls, validateOutput, cancellationToken)
             .ConfigureAwait(false);
     }
 
-    /// <summary>One run, start to finish. Every failure is rethrown wrapped, carrying the tokens used so far.</summary>
+    /// <summary>Held for the whole run. Waiting for it doesn't count towards RunTimeout.</summary>
+    private async ValueTask<IAsyncDisposable?> AcquireRunSlotAsync(CancellationToken cancellationToken)
+        => runLimiter is null ? null : await runLimiter.AcquireAsync(cancellationToken).ConfigureAwait(false);
+
+    /// <summary>One run, start to finish, in a run slot already held. Every failure is rethrown wrapped, carrying the tokens used so far.</summary>
+    /// <param name="preparedInput">The first input, already being checked; null: built here.</param>
     private async Task<AgentResult> RunCoreAsync(AgentReference agent, string prompt, string? additionalContext, ToolCallResolver? resolveToolCalls, Func<AgentResult, string?>? validateOutput,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, Task<IReadOnlyList<ResponseItem>>? preparedInput = null)
     {
-        // Held for the whole run. Waiting for it doesn't count towards RunTimeout.
-        await using var slot = runLimiter is null ? null : await runLimiter.AcquireAsync(cancellationToken).ConfigureAwait(false);
         using var telemetry = new AgentRunTelemetry(_runOptions.ApplicationName, agent);
         using var timeoutSource = _runOptions.RunTimeout is { } timeout ? CreateTimeoutSource(timeout, cancellationToken) : null;
         var runToken = timeoutSource?.Token ?? cancellationToken;
@@ -81,7 +100,8 @@ internal sealed class FoundryAgentRunnerService(IAgentFactory agentFactory, IFou
         try
         {
             var history = new List<ResponseItem>(
-                await BuildInitialInputItemsAsync(agent.Name, prompt, additionalContext, runToken).ConfigureAwait(false));
+                await (preparedInput?.WaitAsync(runToken) ?? BuildInitialInputItemsAsync(agent.Name, prompt, additionalContext, runToken))
+                    .ConfigureAwait(false));
             var response = await RunResponsesAsync(agent, history, resolveToolCalls, usage, runToken).ConfigureAwait(false);
             telemetry.AnsweredBy(response.Model);
 

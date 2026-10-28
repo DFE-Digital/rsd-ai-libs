@@ -91,11 +91,11 @@ public static class AgentsServiceCollectionExtensions
             services.AddHostedService<PinnedAgentVersionDriftValidator>();
         }
 
-        if (options.GlobalConcurrency.MaxConcurrentRuns is int maxConcurrentRuns)
+        if (options.GlobalConcurrency.MaxRunsAcrossInstances is int maxRunsAcrossInstances)
         {
             var slotContainer = new BlobContainerClient(new Uri(options.GlobalConcurrency.BlobContainerUri!),
                 options.CredentialFor(nameof(AzureCredentialTarget.RunSlots), options.GlobalConcurrency.Authentication));
-            services.AddSingleton(sp => new BlobRunSlotStore(slotContainer, maxConcurrentRuns, sp.GetService<ILogger<BlobRunSlotStore>>()));
+            services.AddSingleton(sp => new BlobRunSlotStore(slotContainer, maxRunsAcrossInstances, sp.GetService<ILogger<BlobRunSlotStore>>()));
             services.AddSingleton<IRunSlotStore>(sp => sp.GetRequiredService<BlobRunSlotStore>());
             services.AddHostedService<RunSlotStartupValidator>();
         }

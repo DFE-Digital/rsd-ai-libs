@@ -74,5 +74,5 @@ Each entry under `McpServers` is keyed by a name you choose.
 | `ServerUri`             | Required             | The server's MCP endpoint; `https://` (`http://` only for localhost), as each request carries a token |
 | `Scope`                 | Required             | The token scope, e.g. `api://school-performance/.default`                                             |
 | `AllowedToolNames`      | Required             | Every tool this app may use from the server                                                           |
-| `ToolListCacheDuration` | 5 minutes            | How long the server's tool list is reused                                                             |
+| `ToolListCacheDuration` | 300                  | Seconds the server's tool list is reused; `0` turns caching off                                       |
 | `Authentication`        | The default identity | A separate identity for this server, possibly in another tenant                                       |

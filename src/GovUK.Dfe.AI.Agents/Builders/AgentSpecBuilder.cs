@@ -52,14 +52,19 @@ internal sealed class AgentSpecBuilder(IPromptProvider promptProvider, IEnumerab
         if (_customProviders.TryGetValue(definition.Name, out var provider))
         {
             var custom = await provider.BuildSpecAsync(cancellationToken).ConfigureAwait(false);
-            return custom is null
-                ? null
-                : custom with
-                {
-                    Tools = AgentToolResolver.FilterToAllowed(custom.Tools, definition),
-                    OutputSchema = custom.OutputSchema ?? definition.OutputSchema,
-                    Guardrail = custom.Guardrail ?? definition.Guardrail,
-                };
+            if (custom is null)
+            {
+                return null;
+            }
+
+            // The agent's bindings (MCP servers, web search) apply to a custom provider's agent too: their calls run in this app.
+            var bound = await AgentToolResolver.ResolveAsync(ToolProviders, definition.Name, cancellationToken).ConfigureAwait(false);
+            return custom with
+            {
+                Tools = AgentToolResolver.FilterToAllowed(AgentToolResolver.Merge(custom.Tools, bound), definition),
+                OutputSchema = custom.OutputSchema ?? definition.OutputSchema,
+                Guardrail = custom.Guardrail ?? definition.Guardrail,
+            };
         }
 
         return new AgentSpec

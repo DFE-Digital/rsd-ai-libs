@@ -40,6 +40,19 @@ internal static class AgentToolResolver
         return FilterToAllowed(offered, definition);
     }
 
+    /// <summary>
+    /// <paramref name="own"/> plus <paramref name="bound"/>, skipping a bound function with the same name as one of
+    /// <paramref name="own"/>'s, since an agent's function names must be unique.
+    /// </summary>
+    public static IReadOnlyList<AgentTool> Merge(IReadOnlyList<AgentTool> own, IReadOnlyList<AgentTool> bound)
+    {
+        ArgumentNullException.ThrowIfNull(own);
+        ArgumentNullException.ThrowIfNull(bound);
+
+        var ownNames = own.Select(static tool => tool.FunctionName).OfType<string>().ToHashSet(StringComparer.Ordinal);
+        return [.. own, .. bound.Where(tool => tool.FunctionName is not { } name || !ownNames.Contains(name))];
+    }
+
     /// <summary>Keeps built-in tools and only the function tools in <see cref="AgentDefinition.AllowedTools"/>.</summary>
     /// <exception cref="InvalidOperationException">An allowed tool isn't among <paramref name="offered"/>.</exception>
     public static IReadOnlyList<AgentTool> FilterToAllowed(IReadOnlyList<AgentTool> offered, AgentDefinition definition)

@@ -26,7 +26,9 @@ public sealed class McpToolStartupValidator(string serverKey, IMcpToolClient cli
         {
             throw new InvalidOperationException(string.Format(ErrorMessages.McpStartupValidationFailed, serverKey), ex);
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        // A timeout is also an OperationCanceledException (e.g. HttpClient's TaskCanceledException): only a
+        // cancelled startup is rethrown, so a slow server is treated like an unreachable one.
+        catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
         {
             logger.LogWarning(ex, "MCP server '{ServerKey}' couldn't be reached at startup; its tools will be checked on first use", serverKey);
         }

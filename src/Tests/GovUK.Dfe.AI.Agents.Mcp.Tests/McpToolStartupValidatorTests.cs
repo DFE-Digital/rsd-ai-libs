@@ -66,6 +66,26 @@ public sealed class McpToolStartupValidatorTests
     }
 
     [Fact]
+    public async Task StartAsync_OnlyWarns_WhenTheServerTimesOut()
+    {
+        _client.GetToolsAsync(cancellationToken).Throws(new TaskCanceledException("The request timed out.", new TimeoutException()));
+        var sut = CreateSut();
+
+        Assert.Null(await Record.ExceptionAsync(() => sut.StartAsync(cancellationToken)));
+    }
+
+    [Fact]
+    public async Task StartAsync_Throws_WhenStartupIsCancelled()
+    {
+        using var cancelled = new CancellationTokenSource();
+        await cancelled.CancelAsync();
+        _client.GetToolsAsync(cancelled.Token).Throws(new OperationCanceledException(cancelled.Token));
+        var sut = CreateSut();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => sut.StartAsync(cancelled.Token));
+    }
+
+    [Fact]
     public async Task StartAsync_ThrowsAndNeverConnects_WhenOptionsAreInvalid()
     {
         var invalidOptions = CreateValidOptions() with { ServerLabel = "" };

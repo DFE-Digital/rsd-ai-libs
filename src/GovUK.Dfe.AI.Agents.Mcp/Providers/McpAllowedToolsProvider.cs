@@ -12,8 +12,11 @@ public sealed class McpAllowedToolsProvider(IMcpToolClient client, IReadOnlyList
 {
     private readonly HashSet<string> _allowedToolNames = new(allowedToolNames, StringComparer.Ordinal);
 
+    /// <summary>The subset's tools; none for an empty subset, which the client would otherwise read as "all of them".</summary>
     public Task<IReadOnlyList<AgentTool>> GetToolsAsync(CancellationToken cancellationToken = default)
-        => client.GetToolsAsync(allowedToolNames, cancellationToken);
+        => _allowedToolNames.Count == 0
+            ? Task.FromResult<IReadOnlyList<AgentTool>>([])
+            : client.GetToolsAsync(allowedToolNames, cancellationToken);
 
     public async Task<string?> TryExecuteAsync(ToolCallRequest call, CancellationToken cancellationToken = default)
     {

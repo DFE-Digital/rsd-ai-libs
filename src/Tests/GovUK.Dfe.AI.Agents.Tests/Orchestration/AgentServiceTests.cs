@@ -173,5 +173,37 @@ public sealed class AgentServiceTests
         Assert.Same(schema, built.OutputSchema);
     }
 
+    [Fact]
+    public async Task RunParallelAsync_AddsTheBoundToolProvidersTools_ToACustomProvidersSpec()
+    {
+        var own = AgentTool.Function("get_performance_data", null, BinaryData.FromString("""{"type":"object"}"""));
+        var duplicate = AgentTool.Function("get_performance_data", "Bound copy.", BinaryData.FromString("""{"type":"object"}"""));
+        var mcpTool = AgentTool.Function("search_schools", null, BinaryData.FromString("""{"type":"object"}"""));
+        var webSearch = AgentTool.FromResponseTool(ResponseTool.CreateWebSearchTool());
+        var toolProvider = Substitute.For<IAgentToolProvider>();
+        toolProvider.GetToolsAsync(Arg.Any<CancellationToken>()).Returns([duplicate, mcpTool, webSearch]);
+        var custom = Substitute.For<IManagedAgentProvider>();
+        custom.AgentName.Returns("custom-agent");
+        custom.CreatesAgent.Returns(true);
+        custom.BuildSpecAsync(Arg.Any<CancellationToken>()).Returns(new AgentSpec { Name = "custom-agent", Instructions = "Custom.", Tools = [own] });
+        var definition = new AgentDefinition("custom-agent", "Unused") { AllowedTools = ["get_performance_data", "search_schools"] };
+
+        AgentSpec? built = null;
+        _agentRuntime.GetOrCreateAsync("custom-agent", Arg.Any<Func<CancellationToken, Task<AgentSpec>>>(), Arg.Any<CancellationToken>())
+            .Returns(async callInfo =>
+            {
+                built = await callInfo.Arg<Func<CancellationToken, Task<AgentSpec>>>()(cancellationToken);
+                return new AgentReference("id", "custom-agent", "1");
+            });
+        _agentRunner.RunAsync(Arg.Any<AgentReference>(), Arg.Any<string>(), additionalContext: Arg.Any<string?>(),
+            resolveToolCalls: AnyResolver(), cancellationToken: Arg.Any<CancellationToken>()).Returns(new AgentResult { AgentName = "custom-agent", Output = "{}", TotalTokens = 1 });
+
+        var sut = new AgentService(_agentRunner, _agentRuntime,
+            new AgentSpecBuilder(_promptProvider, [new AgentToolBinding("custom-agent", toolProvider)], [custom]));
+        await sut.RunParallelAsync([definition], ResolvePrompt, new AgentContext(), cancellationToken: cancellationToken);
+
+        Assert.Equal([own, mcpTool, webSearch], built!.Tools);
+    }
+
     private sealed record Findings(string Rating, string? InspectionDate);
 }

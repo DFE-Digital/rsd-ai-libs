@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Text;
 
 namespace GovUK.Dfe.AI.Agents.Quality;
@@ -9,6 +10,9 @@ namespace GovUK.Dfe.AI.Agents.Quality;
 /// </summary>
 internal sealed class StreamedAnswerCleaner
 {
+    /// <summary>Where an image, link or HTML tag can start.</summary>
+    private static readonly SearchValues<char> SpanStarts = SearchValues.Create("![<");
+
     private readonly StringBuilder _pending = new();
 
     /// <summary>The cleaned text that's safe to show now; empty while it waits.</summary>
@@ -37,48 +41,51 @@ internal sealed class StreamedAnswerCleaner
     /// <summary>The length up to the first image, link or tag that isn't finished yet.</summary>
     private static int SafeLength(string text)
     {
-        for (var i = 0; i < text.Length; i++)
+        var position = 0;
+        while (text.AsSpan(position).IndexOfAny(SpanStarts) is var offset and >= 0)
         {
-            if (text[i] is '!' or '[' or '<')
+            var start = position + offset;
+            if (!IsFinished(text, start))
             {
-                if (!IsFinished(text, i))
-                {
-                    return i;
-                }
-
-                // A finished image, link or tag is skipped whole, so a "<" inside it can't split it.
-                i = Math.Max(i, SpanEnd(text, i) - 1);
+                return start;
             }
+
+            // A finished image, link or tag is skipped whole, so a "<" inside it can't split it.
+            position = Math.Max(start + 1, SpanEnd(text, start));
         }
 
         return text.Length;
     }
 
     /// <summary>The index just after the finished image, link or tag starting at <paramref name="start"/>, or <paramref name="start"/> if there isn't one.</summary>
-    private static int SpanEnd(string text, int start)
+    private static int SpanEnd(string text, int start) => text[start] switch
     {
-        switch (text[start])
+        '<' => TagEnd(text, start),
+        '!' => start + 1 < text.Length && text[start + 1] == '[' ? LinkEnd(text, start + 1) : start,
+        _ => LinkEnd(text, start),
+    };
+
+    private static int TagEnd(string text, int start)
+    {
+        if (start + 1 >= text.Length || !IsTagStart(text[start + 1]))
         {
-            case '<':
-                if (start + 1 < text.Length && IsTagStart(text[start + 1]))
-                {
-                    var close = text.IndexOf('>', start);
-                    return close >= 0 ? close + 1 : start;
-                }
-
-                return start;
-            case '!':
-                return start + 1 < text.Length && text[start + 1] == '[' ? SpanEnd(text, start + 1) : start;
-            default:
-                var bracket = text.IndexOf(']', start);
-                if (bracket < 0 || bracket == text.Length - 1 || text[bracket + 1] != '(')
-                {
-                    return start;
-                }
-
-                var paren = text.IndexOf(')', bracket);
-                return paren >= 0 ? paren + 1 : start;
+            return start;
         }
+
+        var close = text.IndexOf('>', start);
+        return close >= 0 ? close + 1 : start;
+    }
+
+    private static int LinkEnd(string text, int start)
+    {
+        var bracket = text.IndexOf(']', start);
+        if (bracket < 0 || bracket == text.Length - 1 || text[bracket + 1] != '(')
+        {
+            return start;
+        }
+
+        var paren = text.IndexOf(')', bracket);
+        return paren >= 0 ? paren + 1 : start;
     }
 
     private static bool IsTagStart(char next) => char.IsAsciiLetter(next) || next is '/' or '!' or '?';

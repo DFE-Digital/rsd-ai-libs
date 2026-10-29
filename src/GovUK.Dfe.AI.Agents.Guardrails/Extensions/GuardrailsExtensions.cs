@@ -76,17 +76,22 @@ public static class GuardrailsExtensions
             services.AddSingleton<IGuardrailCheck, FoundryGuardrailCheck>();
             services.AddHostedService<GuardrailStartupValidator>();
 
-            // A Foundry guardrail isn't relied on to check evidence, and checks no input to a model behind your own gateway,
-            // so the app checks its input itself before it's sent.
+            // A Foundry guardrail isn't relied on to check evidence, never checks the output of tools this app runs, and checks
+            // no input to a model behind your own gateway, so the app checks these itself before they're sent.
+            var endpoint = settings.UsesPromptShields ? settings.ContentSafetyEndpointFor(context.Options.Foundry.Endpoint) : null;
+            if (endpoint is not null)
+            {
+                services.AddSingleton(_ => new PromptShieldsClient(endpoint, credential));
+            }
+
             if (settings.ChecksInput)
             {
-                var endpoint = settings.UsesPromptShields ? settings.ContentSafetyEndpointFor(context.Options.Foundry.Endpoint) : null;
-                if (endpoint is not null)
-                {
-                    services.AddSingleton(_ => new PromptShieldsClient(endpoint, credential));
-                }
-
                 services.AddSingleton<IInputShield>(sp => new GuardrailInputShield(settings, sp.GetService<PromptShieldsClient>()));
+            }
+
+            if (settings.ScanToolOutput)
+            {
+                services.AddSingleton<IToolOutputShield>(sp => new GuardrailToolOutputShield(sp.GetRequiredService<PromptShieldsClient>()));
             }
         }
 

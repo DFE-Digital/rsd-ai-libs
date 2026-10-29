@@ -92,9 +92,18 @@ public sealed partial class GuardrailSettings
     /// Scans each run's evidence with Azure AI Content Safety Prompt Shields before it's sent, and blocks the run when it
     /// finds planted instructions (an indirect attack). This is the check for evidence: Foundry documents its guardrail
     /// scanning documents only in model calls, not in an agent's input, so <see cref="IndirectAttacks"/> isn't relied on
-    /// for it. Tool output isn't scanned. Needs the <b>Cognitive Services User</b> role on the Foundry resource. Off by default.
+    /// for it. Tool output is scanned by <see cref="ScanToolOutput"/>. Needs the <b>Cognitive Services User</b> role on the
+    /// Foundry resource. Off by default.
     /// </summary>
     public bool ScanEvidence { get; set; }
+
+    /// <summary>
+    /// Scans the output of each tool this app runs, e.g. an MCP server or one added with <c>AddTools</c>, with Prompt Shields
+    /// before the model reads it, and blocks the run when it finds planted instructions (an indirect attack). A Foundry
+    /// guardrail scans tool responses only for Foundry's own tools. Adds one or more calls per tool call to the run's time.
+    /// Needs <b>Cognitive Services User</b>, like <see cref="ScanEvidence"/>. Off by default.
+    /// </summary>
+    public bool ScanToolOutput { get; set; }
 
     /// <summary>
     /// Scans each run's question with Prompt Shields before it's sent, and blocks a jailbreak attempt. Turn it on when
@@ -113,11 +122,12 @@ public sealed partial class GuardrailSettings
     /// <summary>Whether the app checks its own input, so it needs an <c>IInputShield</c>.</summary>
     internal bool ChecksInput => ScanPrompts || ScanEvidence || CheckBlocklists;
 
-    /// <summary>Whether input is sent to Prompt Shields, so it needs a Content Safety endpoint.</summary>
-    internal bool UsesPromptShields => ScanPrompts || ScanEvidence;
+    /// <summary>Whether input or tool output is sent to Prompt Shields, so it needs a Content Safety endpoint.</summary>
+    internal bool UsesPromptShields => ScanPrompts || ScanEvidence || ScanToolOutput;
 
     /// <summary>
-    /// Optional: the Content Safety endpoint <see cref="ScanPrompts"/> and <see cref="ScanEvidence"/> call. Unset: the
+    /// Optional: the Content Safety endpoint <see cref="ScanPrompts"/>, <see cref="ScanEvidence"/> and
+    /// <see cref="ScanToolOutput"/> call. Unset: the
     /// Foundry resource's own, https://&lt;resource&gt;.cognitiveservices.azure.com/.
     /// </summary>
     public string? ContentSafetyEndpoint { get; set; }
@@ -160,7 +170,7 @@ public sealed partial class GuardrailSettings
             (AccountNameFor(foundryEndpoint) is null, "AccountName (Foundry:Endpoint doesn't name the resource, so set it here)"),
             (string.IsNullOrWhiteSpace(Name), "Name"),
             (UsesPromptShields && ContentSafetyEndpointFor(foundryEndpoint) is null,
-                "ContentSafetyEndpoint (an https URL, needed for ScanPrompts and ScanEvidence)"),
+                "ContentSafetyEndpoint (an https URL, needed for ScanPrompts, ScanEvidence and ScanToolOutput)"),
             (CheckBlocklists && Blocklists.Count == 0, "Blocklists (CheckBlocklists needs at least one)"),
             (Targets == 0 || (Targets & ~AllTargets) != 0, "Targets (Deployments, Agents, or both)"),
             (Deployments.Exists(string.IsNullOrWhiteSpace) || (Targets.HasFlag(GuardrailTargets.Deployments) && Deployments.Count == 0),

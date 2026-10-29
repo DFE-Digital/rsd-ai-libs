@@ -93,6 +93,16 @@ internal sealed class PromptShieldsClient : IDisposable
         return found == 1;
     }
 
+    /// <summary>
+    /// Whether a tool's output carries planted instructions (a document attack). Scanned as evidence is, in parts, with the
+    /// tool's name as the context Prompt Shields asks for.
+    /// </summary>
+    public Task<bool> ToolOutputHasAttackAsync(string toolName, string output, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(toolName);
+        return EvidenceHasAttackAsync(string.Format(Constants.ErrorMessages.ToolOutputContext, toolName), output, cancellationToken);
+    }
+
     /// <summary>The evidence in parts of at most <see cref="PartLength"/> characters, each overlapping the last.</summary>
     internal static IEnumerable<string> Parts(string evidence)
     {

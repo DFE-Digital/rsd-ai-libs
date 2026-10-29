@@ -7,25 +7,25 @@ Token usage is billed, so startup fails unless these metrics are subscribed. For
 [OpenTelemetry GenAI conventions](https://github.com/open-telemetry/semantic-conventions-genai) (`gen_ai.*`); the rest
 use `dfe.ai_agents.*`.
 
-| Metric                                        | Records                                                                          |
-| --------------------------------------------- | -------------------------------------------------------------------------------- |
-| `gen_ai.client.inference.usage.input_tokens`  | Input tokens per run, tool rounds and failed runs included                       |
-| `gen_ai.client.inference.usage.output_tokens` | Output tokens per run, reasoning, tool rounds and failed runs included           |
-| `gen_ai.invoke_agent.duration`                | Seconds per run; `error.type` set when it failed                                 |
-| `gen_ai.client.operation.duration`            | Seconds per call to Foundry, by agent and model; `error.type` set when it failed |
-| `gen_ai.invoke_agent.inference_calls`         | Model calls per run (over 1: tool rounds or a retry)                             |
-| `gen_ai.invoke_agent.tool_calls`              | Tool calls per run                                                               |
-| `gen_ai.execute_tool.duration`                | Seconds per tool call, by tool                                                   |
-| `gen_ai.invoke_workflow.duration`             | Seconds per parallel or sequential run                                           |
-| `dfe.ai_agents.workflow.tokens`               | Tokens per parallel or sequential run, by `gen_ai.token.type`                    |
-| `dfe.ai_agents.cost`                          | Cost per run, by agent, model and `dfe.ai_agents.currency` (needs `Pricing`)     |
-| `dfe.ai_agents.workflow.cost`                 | Cost per parallel or sequential run (needs `Pricing`)                            |
-| `dfe.ai_agents.run_slot.wait.duration`        | Seconds waiting for a slot; if it keeps rising, limits are too low               |
-| `dfe.ai_agents.time_to_first_token`           | Seconds until a streamed run shows its first text                                |
-| `dfe.ai_agents.guardrail.blocks`              | Guardrail blocks, by `dfe.ai_agents.guardrail.stage`: prompt, answer or evidence |
-| `dfe.ai_agents.tool.approvals`                | Approval decisions, by tool and `dfe.ai_agents.tool.approved`                    |
-| `dfe.ai_agents.tokens.remaining`              | The deployment's remaining tokens per minute                                     |
-| `dfe.ai_agents.tokens.low`                    | Responses below `LowRemainingTokensPercent` of the token limit                   |
+| Metric                                        | Records                                                                                       |
+| --------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `gen_ai.client.inference.usage.input_tokens`  | Input tokens per run, tool rounds and failed runs included                                    |
+| `gen_ai.client.inference.usage.output_tokens` | Output tokens per run, reasoning, tool rounds and failed runs included                        |
+| `gen_ai.invoke_agent.duration`                | Seconds per run; `error.type` set when it failed                                              |
+| `gen_ai.client.operation.duration`            | Seconds per call to Foundry, by agent and model; `error.type` set when it failed              |
+| `gen_ai.invoke_agent.inference_calls`         | Model calls per run (over 1: tool rounds or a retry)                                          |
+| `gen_ai.invoke_agent.tool_calls`              | Tool calls per run                                                                            |
+| `gen_ai.execute_tool.duration`                | Seconds per tool call, by tool                                                                |
+| `gen_ai.invoke_workflow.duration`             | Seconds per parallel or sequential run                                                        |
+| `dfe.ai_agents.workflow.tokens`               | Tokens per parallel or sequential run, by `gen_ai.token.type`                                 |
+| `dfe.ai_agents.cost`                          | Cost per run, by agent, model and `dfe.ai_agents.currency` (needs `Pricing`)                  |
+| `dfe.ai_agents.workflow.cost`                 | Cost per parallel or sequential run (needs `Pricing`)                                         |
+| `dfe.ai_agents.run_slot.wait.duration`        | Seconds waiting for a slot; if it keeps rising, limits are too low                            |
+| `dfe.ai_agents.time_to_first_token`           | Seconds until a streamed run shows its first text                                             |
+| `dfe.ai_agents.guardrail.blocks`              | Guardrail blocks, by `dfe.ai_agents.guardrail.stage`: prompt, answer, evidence or tool_output |
+| `dfe.ai_agents.tool.approvals`                | Approval decisions, by tool and `dfe.ai_agents.tool.approved`                                 |
+| `dfe.ai_agents.tokens.remaining`              | The deployment's remaining tokens per minute                                                  |
+| `dfe.ai_agents.tokens.low`                    | Responses below `LowRemainingTokensPercent` of the token limit                                |
 
 - Metrics are tagged with `gen_ai.agent.name`, `gen_ai.response.model` and `dfe.ai_agents.application`. Spans are
   `invoke_workflow`, `invoke_agent {agent}` and `execute_tool {tool}`.
@@ -208,7 +208,7 @@ customMetrics
 
 ### Safety and oversight
 
-**Guardrail blocks per agent, per day, by what was blocked (`prompt`, `answer` or `evidence`):**
+**Guardrail blocks per agent, per day, by what was blocked (`prompt`, `answer`, `evidence` or `tool_output`):**
 
 ```kusto
 let app = "<ApplicationName>";

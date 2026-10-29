@@ -408,6 +408,40 @@ public sealed class GuardrailTests
         Assert.Equal(promptShields, services.Any(service => service.ServiceType == typeof(PromptShieldsClient)));
     }
 
+    [Theory]
+    [InlineData(null, false)]
+    [InlineData("ScanEvidence", false)]
+    [InlineData("ScanToolOutput", true)]
+    public void ScanToolOutput_RegistersTheToolOutputShield_AndPromptShields_WithoutAnInputShield(string? setting, bool toolOutputShield)
+    {
+        var guardrail = ValidGuardrail();
+        if (setting is not null)
+        {
+            guardrail[setting] = "true";
+        }
+
+        var services = Build(guardrail);
+
+        Assert.Equal(toolOutputShield, services.Any(service => service.ServiceType == typeof(Safety.Interfaces.IToolOutputShield)));
+        if (toolOutputShield)
+        {
+            Assert.Contains(services, service => service.ServiceType == typeof(PromptShieldsClient));
+            Assert.DoesNotContain(services, service => service.ServiceType == typeof(Safety.Interfaces.IInputShield));
+        }
+    }
+
+    [Fact]
+    public void ScanToolOutput_WithAnEndpointThatIsntHttps_FailsStartup()
+    {
+        var guardrail = ValidGuardrail();
+        guardrail["ScanToolOutput"] = "true";
+        guardrail["ContentSafetyEndpoint"] = "http://content-safety-1.cognitiveservices.azure.com/";
+
+        var ex = Assert.Throws<InvalidOperationException>(() => Build(guardrail));
+
+        Assert.Contains("ScanToolOutput", ex.Message, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void CheckBlocklists_WithoutABlocklist_FailsStartup()
     {

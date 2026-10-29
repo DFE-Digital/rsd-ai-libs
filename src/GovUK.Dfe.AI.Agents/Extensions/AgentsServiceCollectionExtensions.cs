@@ -171,7 +171,7 @@ public static class AgentsServiceCollectionExtensions
             return new ExternalFoundryProjectService(credential, client.AgentAdministrationClient, new FoundryResponsesClient(client.ProjectOpenAIClient),
                 FactoryOptions(options),
                 new ExternalFoundryProjectService.SharedRunServices(sp.GetRequiredService<AgentRunOptions>(), sp.GetRequiredService<IAgentRunLimiter>(),
-                    sp.GetService<IInputShield>()),
+                    sp.GetService<IInputShield>(), sp.GetService<IToolOutputShield>()),
                 sp.GetRequiredService<ILoggerFactory>());
         });
 

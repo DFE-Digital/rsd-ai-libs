@@ -16,6 +16,6 @@ public interface IInputShield
 }
 
 /// <summary>Why a run's input was blocked.</summary>
-/// <param name="Stage">What was blocked: <c>AgentGuardrailException.PromptStage</c> or <c>EvidenceStage</c>.</param>
+/// <param name="Stage">What was blocked: <c>AgentGuardrailException.PromptStage</c>, <c>EvidenceStage</c> or <c>ToolOutputStage</c>.</param>
 /// <param name="Reason">What found it, e.g. "Prompt Shields found a prompt attack in the question".</param>
 public sealed record InputBlock(string Stage, string Reason);

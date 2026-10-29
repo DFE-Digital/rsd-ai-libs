@@ -23,12 +23,14 @@ internal sealed class ExternalFoundryProjectService
         Credential = credential;
         Factory = new FoundryAgentFactory(admin, factoryOptions, loggers.CreateLogger<FoundryAgentFactory>());
         Runner = new FoundryAgentRunnerService(Factory, responses, loggers.CreateLogger<FoundryAgentRunnerService>(), shared.RunOptions,
-            shared.RunLimiter, shared.InputShield);
+            shared.RunLimiter, shared.InputShield, shared.ToolOutputShield);
     }
 
     /// <summary>What runs in the other project share with this app's own runs.</summary>
     /// <param name="InputShield">This app's input check (e.g. Prompt Shields), so runs in the other project are checked too.</param>
-    internal sealed record SharedRunServices(AgentRunOptions RunOptions, IAgentRunLimiter RunLimiter, IInputShield? InputShield);
+    /// <param name="ToolOutputShield">This app's check of its tools' output, likewise.</param>
+    internal sealed record SharedRunServices(AgentRunOptions RunOptions, IAgentRunLimiter RunLimiter, IInputShield? InputShield,
+        IToolOutputShield? ToolOutputShield = null);
 
     /// <summary>Its own <c>Authentication</c>, or this app's Foundry credential.</summary>
     public TokenCredential Credential { get; }

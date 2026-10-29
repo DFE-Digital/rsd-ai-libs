@@ -27,7 +27,7 @@ namespace GovUK.Dfe.AI.Agents.Services;
 /// </remarks>
 internal sealed class FoundryAgentRunnerService(IAgentFactory agentFactory, IFoundryResponsesClient responsesClient,
     ILogger<FoundryAgentRunnerService>? logger = null, AgentRunOptions? runOptions = null, IAgentRunLimiter? runLimiter = null,
-    IInputShield? inputShield = null)
+    IInputShield? inputShield = null, IToolOutputShield? toolOutputShield = null)
     : IAgentRunnerService
 {
     /// <summary>The most tool-call rounds in one run.</summary>
@@ -238,7 +238,7 @@ internal sealed class FoundryAgentRunnerService(IAgentFactory agentFactory, IFou
 
             usage.ToolCalls += toolCalls.Count;
 
-            history.AddRange(await ResolveToolCallsAsync(response, toolCalls, resolveToolCalls, cancellationToken).ConfigureAwait(false));
+            history.AddRange(await ResolveToolCallsAsync(agent.Name, response, toolCalls, resolveToolCalls, cancellationToken).ConfigureAwait(false));
         }
 
         throw new InvalidOperationException(string.Format(ErrorMessages.ToolCallRoundLimitExceeded, agent.Name, MaxToolCallRounds));
@@ -517,8 +517,8 @@ internal sealed class FoundryAgentRunnerService(IAgentFactory agentFactory, IFou
             string.Format(ErrorMessages.ResponseDidNotComplete, agentName, response.Id, response.Status, detail));
     }
 
-    /// <summary>Runs the model's tool calls in this app and returns their outputs, capped, redacted and fenced.</summary>
-    private async Task<IReadOnlyList<ResponseItem>> ResolveToolCallsAsync(ResponseResult response,
+    /// <summary>Runs the model's tool calls in this app and returns their outputs, capped, redacted, checked and fenced.</summary>
+    private async Task<IReadOnlyList<ResponseItem>> ResolveToolCallsAsync(string agentName, ResponseResult response,
         IReadOnlyList<FunctionCallResponseItem> toolCalls,
         ToolCallResolver? resolveToolCalls,
         CancellationToken cancellationToken)
@@ -545,20 +545,42 @@ internal sealed class FoundryAgentRunnerService(IAgentFactory agentFactory, IFou
 
         var outputByCallId = outputs.ToDictionary(o => o.CallId, o => o.Output);
 
-        var outputItems = new List<ResponseItem>();
-        foreach (var callId in toolCalls.Select(toolCall => toolCall.CallId))
+        var checkedOutputs = new List<(string CallId, string ToolName, string Output)>();
+        foreach (var toolCall in toolCalls)
         {
-            if (!outputByCallId.TryGetValue(callId, out var output))
+            if (!outputByCallId.TryGetValue(toolCall.CallId, out var output))
             {
-                throw new InvalidOperationException(string.Format(ErrorMessages.MissingToolCallOutput, callId));
+                throw new InvalidOperationException(string.Format(ErrorMessages.MissingToolCallOutput, toolCall.CallId));
             }
 
-            var limited = await _runOptions.RedactAsync(LimitToolOutput(callId, output), cancellationToken).ConfigureAwait(false);
-            outputItems.Add(ResponseItem.CreateFunctionCallOutputItem(callId,
-                _runOptions.FenceToolOutput ? PromptText.FenceToolOutput(limited) : limited));
+            var limited = await _runOptions.RedactAsync(LimitToolOutput(toolCall.CallId, output), cancellationToken).ConfigureAwait(false);
+            checkedOutputs.Add((toolCall.CallId, toolCall.FunctionName, limited));
         }
 
-        return outputItems;
+        await ThrowIfToolOutputBlockedAsync(agentName, checkedOutputs, cancellationToken).ConfigureAwait(false);
+
+        return [.. checkedOutputs.Select(item => ResponseItem.CreateFunctionCallOutputItem(item.CallId,
+            _runOptions.FenceToolOutput ? PromptText.FenceToolOutput(item.Output) : item.Output))];
+    }
+
+    /// <summary>
+    /// Checks every output with the tool output shield, side by side, as the model would read them: capped and redacted.
+    /// The first block fails the run, so nothing of this round reaches the model.
+    /// </summary>
+    private async Task ThrowIfToolOutputBlockedAsync(string agentName, IReadOnlyList<(string CallId, string ToolName, string Output)> outputs,
+        CancellationToken cancellationToken)
+    {
+        if (toolOutputShield is null)
+        {
+            return;
+        }
+
+        var checks = await Task.WhenAll(outputs.Select(output =>
+            toolOutputShield.CheckAsync(output.ToolName, output.Output, cancellationToken).AsTask())).ConfigureAwait(false);
+        if (checks.FirstOrDefault(static block => block is not null) is { } block)
+        {
+            throw new AgentGuardrailException(agentName, block.Stage, block.Reason);
+        }
     }
 
     /// <summary>

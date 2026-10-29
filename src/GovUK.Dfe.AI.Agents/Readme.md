@@ -162,7 +162,7 @@ fenced as data so it can't act as an instruction.
 | `IsManagedAgent`                | `true` (default): kept and reused. `false`: created and deleted on every run                                                                             |
 | `AllowedTools`                  | The only tools it may call. Empty (default): none                                                                                                        |
 | `ToolsRequiringApproval`        | Tools that run only once a person approves ([how](https://github.com/DFE-Digital/rsd-ai-libs/blob/main/docs/ResponsibleAI.md#a-person-approves-changes)) |
-| `OutputSchema`                  | A JSON schema for a typed answer; read it with `ReadOutputAs<T>()`                                                                                       |
+| `OutputSchema`                  | A strict JSON schema for a typed answer; read it with `ReadOutputAs<T>()`. No dictionaries: use a list of records with a key                             |
 | `Validate`, `RequiredCitations` | [Answer checks](#answer-checks)                                                                                                                          |
 
 ### Streaming

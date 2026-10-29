@@ -3,6 +3,7 @@ using GovUK.Dfe.AI.Agents.Factories;
 using GovUK.Dfe.AI.Agents.Tests.Integration.Fakes;
 using GovUK.Dfe.AI.Agents.ValueObjects;
 using System.Text.Json.Nodes;
+using System.Text.Json.Serialization;
 using Xunit;
 
 namespace GovUK.Dfe.AI.Agents.Tests;
@@ -19,6 +20,48 @@ public sealed class AgentResultTests
 
         Assert.False(schema["additionalProperties"]!.GetValue<bool>());
         Assert.Equal(["rating", "inspectionDate", "strengths"], schema["required"]!.AsArray().Select(node => node!.GetValue<string>()));
+    }
+
+    public sealed record Inspection(string Rating, Judgement Leadership, IReadOnlyList<Judgement> Areas, NoDetail Extra);
+
+    public sealed record Judgement(string Area, int Grade);
+
+    /// <summary>An object with no properties in its schema: its one property isn't serialized.</summary>
+    public sealed record NoDetail([property: JsonIgnore] string? Note = null);
+
+    public sealed record ScoresByArea(string Rating, Dictionary<string, int> Scores);
+
+    public sealed record NestedScores(string Rating, IReadOnlyList<ScoresByArea> Sections);
+
+    [Fact]
+    public void For_MakesEveryObjectStrict_AtAnyDepth_IncludingOneWithNoProperties()
+    {
+        var schema = JsonNode.Parse(AgentOutputSchema.For<Inspection>("inspection").JsonSchema)!;
+        var properties = schema["properties"]!;
+
+        JsonNode[] objects = [schema, properties["leadership"]!, properties["areas"]!["items"]!, properties["extra"]!];
+        Assert.All(objects, node => Assert.False(node["additionalProperties"]!.GetValue<bool>()));
+        Assert.Equal(["area", "grade"], properties["leadership"]!["required"]!.AsArray().Select(node => node!.GetValue<string>()));
+        Assert.Empty(properties["extra"]!["required"]!.AsArray());
+        Assert.Empty(properties["extra"]!["properties"]!.AsObject());
+    }
+
+    [Fact]
+    public void For_RefusesADictionary_NamingWhereItIs_RatherThanFailingWhenFoundryRejectsTheSchema()
+    {
+        var ex = Assert.Throws<NotSupportedException>(() => AgentOutputSchema.For<ScoresByArea>("scores"));
+
+        Assert.Contains("ScoresByArea", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("#/properties/scores", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("list of records with a key property", ex.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void For_RefusesADictionary_NestedInAList()
+    {
+        var ex = Assert.Throws<NotSupportedException>(() => AgentOutputSchema.For<NestedScores>("sections"));
+
+        Assert.Contains("#/properties/sections/items/properties/scores", ex.Message, StringComparison.Ordinal);
     }
 
     [Fact]

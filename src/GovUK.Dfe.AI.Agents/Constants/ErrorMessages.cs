@@ -18,6 +18,7 @@ internal static class ErrorMessages
         "To run without it (local development or tests only), set AiAgents:RequireTokenUsageTelemetry to false.";
     public const string NoToolExecutor = "The model called '{0}', but no tool bound to this agent runs it.";
     public const string EphemeralAgentNeedsSpec = "Agent '{0}' is ephemeral, so it must be built by this app; it can't use an externally managed provider.";
+    public const string SchemaHasDictionary = "{0} can't be a strict output schema: {1} is a dictionary ({2}), whose keys aren't known in advance. Use a list of records with a key property instead.";
     public const string StructuredOutputUnreadable = "The answer from agent '{0}' couldn't be read as {1}. Check the agent succeeded and has a matching OutputSchema.";
     public const string AllowedToolNotOffered = "Agent '{0}' lists AllowedTools ({1}) that none of its tool bindings offers. Bind the provider for them, or remove them from AllowedTools.";
     public const string ToolNotAllowedForAgent = "The model called '{0}', which isn't in this agent's AllowedTools, so it wasn't run.";

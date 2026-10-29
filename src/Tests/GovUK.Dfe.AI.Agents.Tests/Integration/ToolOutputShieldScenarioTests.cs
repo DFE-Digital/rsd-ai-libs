@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using GovUK.Dfe.AI.Agents.Exceptions;
 using GovUK.Dfe.AI.Agents.Safety.Interfaces;
 using GovUK.Dfe.AI.Agents.Services.Interfaces;
@@ -5,7 +6,6 @@ using GovUK.Dfe.AI.Agents.Tests.Integration.Fakes;
 using GovUK.Dfe.AI.Agents.Tools;
 using GovUK.Dfe.AI.Agents.ValueObjects;
 using Microsoft.Extensions.DependencyInjection;
-using NSubstitute;
 using Xunit;
 
 namespace GovUK.Dfe.AI.Agents.Tests.Integration;
@@ -14,16 +14,6 @@ namespace GovUK.Dfe.AI.Agents.Tests.Integration;
 public sealed partial class AgentPlatformEndToEndTests
 {
     private static readonly AgentDefinition ToolAgent = new("chat-agent", "Chat") { AllowedTools = ["get_performance_data"] };
-
-    private static IToolOutputShield ShieldBlocking(string planted)
-    {
-        var shield = Substitute.For<IToolOutputShield>();
-        shield.CheckAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
-            .Returns(call => ValueTask.FromResult(call.ArgAt<string>(1).Contains(planted, StringComparison.Ordinal)
-                ? new InputBlock(AgentGuardrailException.ToolOutputStage, "Planted instructions in get_performance_data")
-                : null));
-        return shield;
-    }
 
     [Fact]
     public async Task AToolOutputWithPlantedInstructions_BlocksTheRun_BeforeTheModelReadsIt()
@@ -36,7 +26,7 @@ public sealed partial class AgentPlatformEndToEndTests
 
         using var provider = Build(services => services
             .AddSingleton(new AgentToolBinding("chat-agent", tools))
-            .AddSingleton(ShieldBlocking("SYSTEM:")));
+            .AddSingleton<IToolOutputShield>(new ShieldBlocking("SYSTEM:")));
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
             provider.GetRequiredService<IAgentService>().RunAsync(ToolAgent, "How is attendance?", cancellationToken: cancellationToken));
 
@@ -53,15 +43,32 @@ public sealed partial class AgentPlatformEndToEndTests
             FoundryResponses.FunctionCall("r1", "call-1", "get_performance_data"),
             FoundryResponses.Completed("r2", "Attendance is 92%."));
         var tools = new FakeToolServer("get_performance_data") { Output = "attendance 92%" };
-        var shield = ShieldBlocking("SYSTEM:");
+        var shield = new ShieldBlocking("SYSTEM:");
 
         using var provider = Build(services => services
             .AddSingleton(new AgentToolBinding("chat-agent", tools))
-            .AddSingleton(shield));
+            .AddSingleton<IToolOutputShield>(shield));
         var result = await provider.GetRequiredService<IAgentService>().RunAsync(ToolAgent, "How is attendance?", cancellationToken: cancellationToken);
 
         Assert.Equal("Attendance is 92%.", result.Output);
-        await shield.Received(1).CheckAsync("get_performance_data", "attendance 92%", Arg.Any<CancellationToken>());
+        Assert.Equal(("get_performance_data", "attendance 92%"), Assert.Single(shield.Checked));
         Assert.Contains("attendance 92%", _responses.CallsFor("chat-agent")[1].SerializedInput, StringComparison.Ordinal);
+    }
+
+    /// <summary>Blocks any output containing <paramref name="planted"/>, and records each output it's given.</summary>
+    private sealed class ShieldBlocking(string planted) : IToolOutputShield
+    {
+        private readonly ConcurrentQueue<(string ToolName, string Output)> _checked = new();
+
+        public IReadOnlyList<(string ToolName, string Output)> Checked => [.. _checked];
+
+        ValueTask<InputBlock?> IToolOutputShield.CheckAsync(string toolName, string output, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            _checked.Enqueue((toolName, output));
+            return ValueTask.FromResult(output.Contains(planted, StringComparison.Ordinal)
+                ? new InputBlock(AgentGuardrailException.ToolOutputStage, "Planted instructions in get_performance_data")
+                : null);
+        }
     }
 }

@@ -1,6 +1,7 @@
 # Access
 
-How each package signs in to Azure, and the roles its identity needs.
+How each package signs in to Azure, and the roles its identity needs. To check them in a deployment, see the
+[Security review](SecurityReview.md).
 
 ## Credentials
 

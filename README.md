@@ -38,13 +38,14 @@ Start with the [core readme](src/GovUK.Dfe.AI.Agents/Readme.md): configuration, 
 
 Guides that cover every package:
 
-| Guide                                   | What's in it                                                                                   |
-| --------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| [Access](docs/Access.md)                | How each package signs in to Azure, and the roles each identity needs                          |
-| [Telemetry](docs/Telemetry.md)          | Every metric the packages record, and standard Application Insights queries to use in your app |
-| [Limits](docs/Limits.md)                | The limits a run works within, set by the library and by Azure AI Foundry                      |
-| [Settings](docs/Settings.md)            | Every `AiAgents` setting in the core package, with its default                                 |
-| [Responsible AI](docs/ResponsibleAI.md) | How the library supports the UK Government AI Playbook                                         |
+| Guide                                     | What's in it                                                                                   |
+| ----------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| [Access](docs/Access.md)                  | How each package signs in to Azure, and the roles each identity needs                          |
+| [Telemetry](docs/Telemetry.md)            | Every metric the packages record, and standard Application Insights queries to use in your app |
+| [Limits](docs/Limits.md)                  | The limits a run works within, set by the library and by Azure AI Foundry                      |
+| [Settings](docs/Settings.md)              | Every `AiAgents` setting in the core package, with its default                                 |
+| [Responsible AI](docs/ResponsibleAI.md)   | How the library supports the UK Government AI Playbook                                         |
+| [Security review](docs/SecurityReview.md) | Each trust boundary, what to check in your deployment, and a sign-off checklist                |
 
 ## UK Government AI Playbook
 
@@ -56,7 +57,7 @@ what stays with the service team:
 | -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
 | 1. Know AI's limits              | Answer checks, required citations, a release gate                                                                                         | Tell users what the tool can't do                                                      |
 | 2. Lawful and ethical            | Personal data redaction; nothing sensitive in telemetry; nothing stored in Foundry                                                        | Complete a DPIA and equality impact assessment                                         |
-| 3. Secure                        | Entra ID only; tools denied by default; evidence fenced against prompt injection; model HTML shown as text; guardrails checked at startup | Threat model and Secure by Design review                                               |
+| 3. Secure                        | Entra ID only; tools denied by default; evidence fenced against prompt injection; model HTML shown as text; guardrails checked at startup | Threat model and Secure by Design review ([checklist](docs/SecurityReview.md))         |
 | 4. Meaningful human control      | Approval before tools that change things; every answer traceable by run ID                                                                | Decide which decisions a person reviews, label AI answers, and collect users' feedback |
 | 5. Full life cycle               | Agent versions and pins, drift warnings, release gate against a baseline, live quality scores                                             | Plan ownership, model upgrades and retirement                                          |
 | 6. Right tool                    | Token and cost metrics per app and agent; cost caps per run                                                                               | Show AI beats a simpler option                                                         |

@@ -3,6 +3,7 @@ using GovUK.Dfe.AI.Agents.Tests.Integration.Fakes;
 using GovUK.Dfe.AI.Agents.Tools;
 using GovUK.Dfe.AI.Agents.ValueObjects;
 using Microsoft.Extensions.DependencyInjection;
+using OpenAI.Responses;
 using Xunit;
 
 namespace GovUK.Dfe.AI.Agents.Tests.Integration;
@@ -77,6 +78,72 @@ public sealed partial class AgentPlatformEndToEndTests
         Assert.Equal("Attendance is 92%.", string.Concat(pieces));
         Assert.NotNull(result);
         Assert.Equal(2, _responses.StreamedCalls);   // the tool round and the answer
+    }
+
+    [Fact]
+    public async Task TextWrittenBeforeAToolCall_IsInTheResult_AsItWasShown()
+    {
+        WriteSystemPrompt("Chat", "You answer questions about schools.");
+        _responses.Reply("chat-agent",
+            FoundryResponses.WithOutputItems("r1",
+            [
+                ResponseItem.CreateAssistantMessageItem("Let me check.", (IEnumerable<ResponseMessageAnnotation>?)null),
+                ResponseItem.CreateFunctionCallItem(callId: "call-1", functionName: "get_performance_data", functionArguments: BinaryData.FromString("{}")),
+            ], totalTokens: 30),
+            FoundryResponses.Completed("r2", "Attendance is 92%."));
+        var tools = new FakeToolServer("get_performance_data") { Output = "attendance 92%" };
+
+        using var provider = Build(services => services.AddSingleton(new AgentToolBinding("chat-agent", tools)));
+        var (pieces, result) = await StreamAsync(provider.GetRequiredService<IAgentService>(),
+            ChatAgent with { AllowedTools = ["get_performance_data"] });
+
+        Assert.Equal("Let me check.\n\nAttendance is 92%.", string.Concat(pieces));
+        Assert.Equal(string.Concat(pieces), result!.Output);
+    }
+
+    [Fact]
+    public async Task TextWrittenBeforeAToolCall_IsChecked_SoNothingShownEscapesTheChecks()
+    {
+        WriteSystemPrompt("Chat", "You answer questions about schools.");
+        _responses.Reply("chat-agent",
+            FoundryResponses.WithOutputItems("r1",
+            [
+                ResponseItem.CreateAssistantMessageItem("Pupil URN100000 is absent.", (IEnumerable<ResponseMessageAnnotation>?)null),
+                ResponseItem.CreateFunctionCallItem(callId: "call-1", functionName: "get_performance_data", functionArguments: BinaryData.FromString("{}")),
+            ], totalTokens: 30),
+            FoundryResponses.Completed("r2", "Attendance is 92%."));
+        var tools = new FakeToolServer("get_performance_data") { Output = "attendance 92%" };
+
+        using var provider = Build(services => services.AddSingleton(new AgentToolBinding("chat-agent", tools)));
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(async () => await StreamAsync(provider.GetRequiredService<IAgentService>(),
+            ChatAgent with
+            {
+                AllowedTools = ["get_performance_data"],
+                Validate = run => run.Output!.Contains("URN", StringComparison.Ordinal) ? "it mustn't name a pupil" : null,
+            }));
+
+        Assert.Contains("it mustn't name a pupil", ex.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AnAgentRunByATool_DoesntStreamIntoTheAnswer()
+    {
+        WriteSystemPrompt("Chat", "You answer questions about schools.");
+        WriteSystemPrompt("Lookup", "You look things up.");
+        _responses.Reply("chat-agent",
+            FoundryResponses.FunctionCall("r1", "call-1", "ask_lookup"),
+            FoundryResponses.Completed("r2", "Attendance is 92%."));
+        _responses.Reply("lookup-agent", FoundryResponses.Completed("r3", "Internal lookup notes."));
+        var tools = new FakeToolServer("ask_lookup");
+
+        using var provider = Build(services => services.AddSingleton(new AgentToolBinding("chat-agent", tools)));
+        var agents = provider.GetRequiredService<IAgentService>();
+        tools.Execute = async (_, ct) => (await agents.RunAsync(new AgentDefinition("lookup-agent", "Lookup"), "Look it up.", cancellationToken: ct)).Output!;
+        var (pieces, result) = await StreamAsync(agents, ChatAgent with { AllowedTools = ["ask_lookup"] });
+
+        Assert.Equal("Attendance is 92%.", string.Concat(pieces));
+        Assert.Equal("Attendance is 92%.", result!.Output);
+        Assert.Equal(2, _responses.StreamedCalls);   // only the chat agent's two responses
     }
 
     [Fact]

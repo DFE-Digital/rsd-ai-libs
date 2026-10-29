@@ -15,6 +15,9 @@ internal sealed class FakeToolServer(params string[] toolNames) : IAgentToolProv
     /// <summary>What every tool call returns.</summary>
     public string Output { get; init; } = "KS2: 72% met the expected standard.";
 
+    /// <summary>When set, runs each call instead of returning <see cref="Output"/>, e.g. to run another agent.</summary>
+    public Func<ToolCallRequest, CancellationToken, Task<string>>? Execute { get; set; }
+
     /// <summary>When set, describing the tools fails with it, as an unreachable server would.</summary>
     public Exception? ListFailure { get; init; }
 
@@ -43,6 +46,8 @@ internal sealed class FakeToolServer(params string[] toolNames) : IAgentToolProv
         }
 
         _calls.Enqueue(call);
-        return Task.FromResult<string?>(Output);
+        return Execute is { } execute ? ExecuteAsync(execute) : Task.FromResult<string?>(Output);
+
+        async Task<string?> ExecuteAsync(Func<ToolCallRequest, CancellationToken, Task<string>> run) => await run(call, cancellationToken);
     }
 }

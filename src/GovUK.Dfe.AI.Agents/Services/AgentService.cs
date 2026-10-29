@@ -258,6 +258,9 @@ internal sealed class AgentService(IAgentRunnerService agentRunner, IAgentRuntim
 
         if (_hooks.Observers.Count > 0)
         {
+            // An observer that runs an agent (e.g. a judge) mustn't stream into this answer; cleared for this method only.
+            AnswerStream.Current = null;
+
             // Observers (scoring, audit) get what the model was given and wrote: redacted, so no copy keeps data the model never
             // saw, and with citations as [Evidence n], so they still match the evidence.
             Notify(new CompletedAgentRun

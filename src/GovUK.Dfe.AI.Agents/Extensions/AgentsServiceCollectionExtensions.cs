@@ -198,6 +198,7 @@ public static class AgentsServiceCollectionExtensions
 
         // An app's own metrics are tagged with the same name as the library's, so apps sharing a workspace never mix.
         services.TryAddSingleton<IAgentMetrics>(sp => new AgentMetrics(sp.GetRequiredService<AgentRunOptions>().ApplicationName));
+        services.TryAddSingleton<IModelCallTelemetry>(sp => new ModelCallTelemetry(sp.GetRequiredService<AgentRunOptions>()));
         services.AddHostedService<TokenUsageTelemetryValidator>();
         services.AddHostedService<AgentToolCompatibilityValidator>();
         services.AddSingleton(sp => sp.GetRequiredService<AIProjectClient>().AgentAdministrationClient);
@@ -231,7 +232,7 @@ public static class AgentsServiceCollectionExtensions
     internal static AIProjectClientOptions FoundryClientOptions(AgentsOptions options, string applicationName)
     {
         var clientOptions = new AIProjectClientOptions { RetryPolicy = new ClientRetryPolicy(options.MaxRetries) };
-        clientOptions.AddPolicy(new GovUK.Dfe.AI.Agents.Diagnostics.TokenHeadroomPolicy(applicationName, options.LowRemainingTokensPercent), PipelinePosition.PerTry);
+        clientOptions.AddPolicy(new TokenHeadroomPolicy(applicationName, options.LowRemainingTokensPercent), PipelinePosition.PerTry);
         return clientOptions;
     }
 

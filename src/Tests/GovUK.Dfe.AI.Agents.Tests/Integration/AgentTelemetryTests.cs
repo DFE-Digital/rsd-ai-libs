@@ -360,6 +360,38 @@ public sealed class AgentTelemetryTests : IDisposable
     }
 
     [Fact]
+    public void AModelCallMadeWithoutAnAgent_IsRecordedLikeARun_WithItsTokensAndCost()
+    {
+        PriceGpt4o();
+        using var provider = Build();
+
+        using (var call = provider.GetRequiredService<GovUK.Dfe.AI.Agents.Diagnostics.Interfaces.IModelCallTelemetry>().Start("answer-judge"))
+        {
+            call.Completed("gpt-4o", new TokenUsage(10, 240, 250));
+        }
+
+        Assert.Equal((double)RunCost, Assert.Single(MeasurementsOf("dfe.ai_agents.cost")).Value, precision: 12);
+        var span = Assert.Single(SpansOf("invoke_agent"));
+        Assert.Equal("answer-judge", span.GetTagItem(AgentTelemetry.AgentNameTag));
+        var outputTokens = Assert.Single(MeasurementsOf("gen_ai.client.inference.usage.output_tokens"));
+        Assert.Equal(240, outputTokens.Value, precision: 0);
+        Assert.Equal("answer-judge", outputTokens.Tags[AgentTelemetry.AgentNameTag]);
+    }
+
+    [Fact]
+    public void AFailedModelCallMadeWithoutAnAgent_IsRecordedWithItsErrorType()
+    {
+        using var provider = Build();
+
+        using (var call = provider.GetRequiredService<GovUK.Dfe.AI.Agents.Diagnostics.Interfaces.IModelCallTelemetry>().Start("answer-judge"))
+        {
+            call.Failed(new HttpRequestException("refused"));
+        }
+
+        Assert.Equal(typeof(HttpRequestException).FullName, Assert.Single(SpansOf("invoke_agent")).GetTagItem("error.type"));
+    }
+
+    [Fact]
     public async Task WithoutPrices_RunsReportTokensOnly()
     {
         WriteSystemPrompt("Ofsted", "You analyse Ofsted reports.");

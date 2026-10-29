@@ -1,5 +1,6 @@
 using Azure.AI.Extensions.OpenAI;
 using GovUK.Dfe.AI.Agents.Builders;
+using GovUK.Dfe.AI.Agents.Diagnostics.Interfaces;
 using GovUK.Dfe.AI.Agents.Evaluation.Options;
 using GovUK.Dfe.AI.Agents.Evaluation.Clients;
 using GovUK.Dfe.AI.Agents.Evaluation.QualityGates;
@@ -36,7 +37,8 @@ public static class QualityEvaluationExtensions
         return agents.AddPackage(new EvaluationPackage((judgeModel, asAgent) => sp => asAgent
             ? JudgedByAgents(scoring, sp.GetRequiredService<IAgentRunnerService>(), judgeModel!, sp)
             : new ExtensionsAiEvaluator(Combined(scoring),
-                new ChatConfiguration(new FoundryJudgeChatClient(sp.GetRequiredService<ProjectOpenAIClient>(), judgeModel!)),
+                new ChatConfiguration(new FoundryJudgeChatClient(sp.GetRequiredService<ProjectOpenAIClient>(), judgeModel!,
+                    sp.GetService<IModelCallTelemetry>())),
                 sp.GetService<ILogger<ExtensionsAiEvaluator>>()), needsJudge: true));
     }
 

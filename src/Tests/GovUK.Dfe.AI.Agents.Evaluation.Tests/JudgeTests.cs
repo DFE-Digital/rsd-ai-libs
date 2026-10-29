@@ -3,6 +3,7 @@ using System.ClientModel;
 using Azure.AI.Extensions.OpenAI;
 using Azure.Core;
 using GovUK.Dfe.AI.Agents.Builders;
+using GovUK.Dfe.AI.Agents.Diagnostics.Interfaces;
 using GovUK.Dfe.AI.Agents.Evaluation.Clients;
 using GovUK.Dfe.AI.Agents.Evaluation.QualityGates;
 using GovUK.Dfe.AI.Agents.Quality.Interfaces;
@@ -64,6 +65,58 @@ public sealed class JudgeTests
         Assert.Null(sent()!.Temperature);
         Assert.Null(sent()!.TopP);
         Assert.Null(sent()!.MaxOutputTokenCount);
+    }
+
+    [Fact]
+    public async Task AJudgeCalledOnItsDeployment_IsRecordedInTokenAndCostTelemetry_AsTheJudge()
+    {
+        var telemetry = Substitute.For<IModelCallTelemetry>();
+        var call = Substitute.For<IModelCall>();
+        (string? Model, TokenUsage Usage)? completed = null;
+        call.When(c => c.Completed(Arg.Any<string?>(), Arg.Any<TokenUsage>()))
+            .Do(info => completed = (info.ArgAt<string?>(0), info.ArgAt<TokenUsage>(1)));
+        telemetry.Start(Arg.Any<string>()).Returns(call);
+        var responses = Substitute.For<ProjectResponsesClient>();
+        responses.CreateResponseAsync(Arg.Any<CreateResponseOptions>(), Arg.Any<CancellationToken>())
+            .Returns(ClientResult.FromValue(FoundryResponses.Completed("r1", "{\"score\": 4}", totalTokens: 50, cachedTokens: 4),
+                Substitute.For<PipelineResponse>()));
+        var project = Substitute.For<ProjectOpenAIClient>();
+        project.GetProjectResponsesClient().Returns(responses);
+
+        await new FoundryJudgeChatClient(project, "myconnection/gpt-5.1", telemetry)
+            .GetResponseAsync([new(ChatRole.User, "Grade this.")], cancellationToken: TestContext.Current.CancellationToken);
+
+        telemetry.Received(1).Start("answer-judge");
+        Assert.Equal(("gpt-4o", new TokenUsage(10, 40, 50) { CachedInputTokens = 4 }), completed);
+        call.Received(1).Dispose();
+    }
+
+    [Fact]
+    public async Task AFailedJudgeCallOnItsDeployment_IsStillRecorded()
+    {
+        var telemetry = Substitute.For<IModelCallTelemetry>();
+        var call = Substitute.For<IModelCall>();
+        telemetry.Start(Arg.Any<string>()).Returns(call);
+        var failure = new InvalidOperationException("429");
+        var responses = Substitute.For<ProjectResponsesClient>();
+        responses.CreateResponseAsync(Arg.Any<CreateResponseOptions>(), Arg.Any<CancellationToken>())
+            .Returns<Task<ClientResult<ResponseResult>>>(_ => throw failure);
+        var project = Substitute.For<ProjectOpenAIClient>();
+        project.GetProjectResponsesClient().Returns(responses);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => new FoundryJudgeChatClient(project, "myconnection/gpt-5.1", telemetry)
+            .GetResponseAsync([new(ChatRole.User, "Grade this.")], cancellationToken: TestContext.Current.CancellationToken));
+
+        call.Received(1).Failed(failure);
+        call.Received(1).Dispose();
+    }
+
+    [Fact]
+    public void AddQualityEvaluation_GivesTheDeploymentJudgeTheLibrarysTelemetry()
+    {
+        using var provider = Build(agents => agents.AddQualityEvaluation());
+
+        Assert.NotNull(provider.GetService<IModelCallTelemetry>());
     }
 
     [Fact]

@@ -178,7 +178,9 @@ await foreach (var update in agents.RunStreamingAsync(BriefingAgents.Synthesis, 
 ```
 
 - Same slots, limits, tools, redaction, cleaning and telemetry as `RunAsync`. Stop reading to cancel.
-- Checks run at the end; the answer is already shown, so a failed check throws with no retry.
+- Checks run at the end; the answer is already shown, so a failed check throws with no retry. Discard what you showed.
+- `result.Output` is exactly the pieces joined, including any text written before a tool call, so checks cover
+  everything shown. An agent that a tool or observer runs never streams into the answer.
 - Single runs only. For a chain, run the earlier agents with `RunSequentialAsync`, then stream the last.
 
 ### Tools and other agents

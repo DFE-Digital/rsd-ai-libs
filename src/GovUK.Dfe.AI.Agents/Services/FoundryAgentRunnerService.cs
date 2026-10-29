@@ -33,6 +33,9 @@ internal sealed class FoundryAgentRunnerService(IAgentFactory agentFactory, IFou
     /// <summary>The most tool-call rounds in one run.</summary>
     private const int MaxToolCallRounds = 10;
 
+    /// <summary>Between the text of two responses in one streamed answer.</summary>
+    private const string ParagraphBreak = "\n\n";
+
     private readonly ILogger<FoundryAgentRunnerService> _logger = logger ?? NullLogger<FoundryAgentRunnerService>.Instance;
     private readonly AgentRunOptions _runOptions = runOptions ?? new AgentRunOptions();
 
@@ -93,7 +96,7 @@ internal sealed class FoundryAgentRunnerService(IAgentFactory agentFactory, IFou
         using var timeoutSource = _runOptions.RunTimeout is { } timeout ? CreateTimeoutSource(timeout, cancellationToken) : null;
         var runToken = timeoutSource?.Token ?? cancellationToken;
 
-        var usage = new UsageTally();
+        var usage = new UsageTally { Streamed = AnswerStream.Current is null ? null : new System.Text.StringBuilder() };
         var runId = Guid.CreateVersion7().ToString("N");   // time-ordered, so audit records sort by when they ran
         telemetry.Identified(runId);
 
@@ -201,7 +204,8 @@ internal sealed class FoundryAgentRunnerService(IAgentFactory agentFactory, IFou
             AgentName = agent.Name,
             RunId = runId,
             CompletedAt = DateTimeOffset.UtcNow,
-            Output = Quality.AnswerLinks.Clean(response.GetOutputText()),
+            // A streamed answer is everything shown, including text written before a tool call, so it's checked and returned whole.
+            Output = Quality.AnswerLinks.Clean(usage.Streamed?.ToString() ?? response.GetOutputText()),
             TotalTokens = usage.Total.TotalTokens,
             InputTokens = usage.Total.InputTokens,
             OutputTokens = usage.Total.OutputTokens,
@@ -256,8 +260,9 @@ internal sealed class FoundryAgentRunnerService(IAgentFactory agentFactory, IFou
         var started = Stopwatch.GetTimestamp();
         try
         {
-            response = AnswerStream.Current is { } onText
-                ? await responsesClient.StreamResponseAsync(agent.Name, inputItems, onText, agent.Version, outputTokensLeft, cancellationToken)
+            response = AnswerStream.Current is { } onText && usage.Streamed is { } streamed
+                ? await responsesClient.StreamResponseAsync(agent.Name, inputItems, ShowAndKeep(streamed, onText), agent.Version, outputTokensLeft,
+                        cancellationToken)
                     .ConfigureAwait(false)
                 : await responsesClient.CreateResponseAsync(agent.Name, inputItems, agent.Version, outputTokensLeft, cancellationToken)
                     .ConfigureAwait(false);
@@ -289,6 +294,32 @@ internal sealed class FoundryAgentRunnerService(IAgentFactory agentFactory, IFou
         }
 
         return response;
+    }
+
+    /// <summary>
+    /// Passes each piece of a streamed response on and keeps it, so the run's answer is exactly what was shown. Text from a
+    /// later response, e.g. after a tool call, starts a new paragraph.
+    /// </summary>
+    private static Action<string> ShowAndKeep(System.Text.StringBuilder streamed, Action<string> onText)
+    {
+        var firstPiece = true;
+        return piece =>
+        {
+            if (string.IsNullOrEmpty(piece))
+            {
+                return;
+            }
+
+            if (firstPiece && streamed.Length > 0)
+            {
+                streamed.Append(ParagraphBreak);
+                onText(ParagraphBreak);
+            }
+
+            firstPiece = false;
+            streamed.Append(piece);
+            onText(piece);
+        };
     }
 
     /// <summary>
@@ -401,6 +432,9 @@ internal sealed class FoundryAgentRunnerService(IAgentFactory agentFactory, IFou
         /// <summary>The model that answered, from the first response; it prices the run, even one that later fails.</summary>
         public string? Model { get; set; }
 
+        /// <summary>Every piece of a streamed run's text so far, across its responses; null when the run isn't streamed.</summary>
+        public System.Text.StringBuilder? Streamed { get; init; }
+
         public void Add(ResponseTokenUsage? usage)
         {
             if (usage is not null)
@@ -491,6 +525,10 @@ internal sealed class FoundryAgentRunnerService(IAgentFactory agentFactory, IFou
         {
             throw new InvalidOperationException(string.Format(ErrorMessages.ToolCallsRequiredNoCallback, response.Id));
         }
+
+        // A tool that runs another agent mustn't stream that agent's text into this answer. Cleared for this method only:
+        // an async method's change to an async-local value doesn't flow back to its caller.
+        AnswerStream.Current = null;
 
         var requests = toolCalls
             .Select(call => new ToolCallRequest(call.CallId, call.FunctionName, call.FunctionArguments.ToString()))

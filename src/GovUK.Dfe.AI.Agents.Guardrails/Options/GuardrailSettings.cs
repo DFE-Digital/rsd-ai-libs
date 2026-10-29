@@ -78,7 +78,11 @@ public sealed partial class GuardrailSettings
     /// <summary>Blocks jailbreak attempts in prompts.</summary>
     public bool PromptShields { get; set; } = true;
 
-    /// <summary>Blocks instructions hidden in documents and tool output (indirect attacks).</summary>
+    /// <summary>
+    /// The guardrail's indirect attack filter. For agents, Foundry applies it to the responses of its own tools, e.g. Azure
+    /// AI Search, in preview. It isn't relied on for evidence, nor for output from tools this app runs: turn on
+    /// <see cref="ScanEvidence"/> for evidence.
+    /// </summary>
     public bool IndirectAttacks { get; set; } = true;
 
     /// <summary>Blocks answers that reproduce protected text or code.</summary>
@@ -86,8 +90,9 @@ public sealed partial class GuardrailSettings
 
     /// <summary>
     /// Scans each run's evidence with Azure AI Content Safety Prompt Shields before it's sent, and blocks the run when it
-    /// finds planted instructions. A Foundry guardrail can't: it doesn't scan evidence in an agent's input. Needs the
-    /// <b>Cognitive Services User</b> role on the Foundry resource. Off by default.
+    /// finds planted instructions (an indirect attack). This is the check for evidence: Foundry documents its guardrail
+    /// scanning documents only in model calls, not in an agent's input, so <see cref="IndirectAttacks"/> isn't relied on
+    /// for it. Tool output isn't scanned. Needs the <b>Cognitive Services User</b> role on the Foundry resource. Off by default.
     /// </summary>
     public bool ScanEvidence { get; set; }
 

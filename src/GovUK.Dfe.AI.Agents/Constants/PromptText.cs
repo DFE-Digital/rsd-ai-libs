@@ -15,8 +15,9 @@ internal static class PromptText
     /// <summary>
     /// Fences untrusted evidence in the user turn, never a developer message. The markers carry a random value,
     /// so evidence can't close the fence early. Inside, the evidence is in Foundry's document delimiter, JSON-escaped as
-    /// Foundry requires, so a guardrail's indirect attack (document) shield scans it; without the delimiter, Foundry
-    /// treats it as user text and checks it only for jailbreaks.
+    /// Foundry asks, so a guardrail that scans documents in the input can recognise it. That's documented for model calls,
+    /// not agents, so it isn't relied on: the Guardrails package's <c>ScanEvidence</c> is what scans evidence for planted
+    /// instructions.
     /// </summary>
     public static string FenceReferenceMaterial(string evidence)
     {

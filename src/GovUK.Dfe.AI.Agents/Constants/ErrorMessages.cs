@@ -42,7 +42,7 @@ internal static class ErrorMessages
     public const string TestCaseWithoutPrompt = "Test case {0} has no \"prompt\".";
 
     public const string GuardrailDidNotBlock =
-        "Not blocked by the guardrail, which this case requires (\"guardrailMustBlock\"). A Foundry guardrail doesn't check evidence, or any input to a model behind your own gateway, so turn on AiAgents:Guardrails:ScanPrompts, ScanEvidence and CheckBlocklists.";
+        "Not blocked by the guardrail, which this case requires (\"guardrailMustBlock\"). A Foundry guardrail isn't relied on to check evidence, and checks no input to a model behind your own gateway, so turn on AiAgents:Guardrails:ScanEvidence for planted instructions in evidence, and ScanPrompts and CheckBlocklists for a gateway model.";
     public const string GuardrailBlockedInError =
         "Blocked by the guardrail, which this case doesn't allow (set \"guardrailMayBlock\" if it should): {0}";
     public const string NoRunSlot = "No agent run could start within {0}. Raise MaxRunsPerInstance or GlobalConcurrency:MaxRunsAcrossInstances, or MaxWaitToStartRun.";

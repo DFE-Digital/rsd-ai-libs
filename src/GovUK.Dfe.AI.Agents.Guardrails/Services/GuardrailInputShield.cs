@@ -10,7 +10,8 @@ namespace GovUK.Dfe.AI.Agents.Guardrails.Services;
 /// The guardrail's controls the app runs itself, before anything is sent to the model: the blocklists, checked locally
 /// (<see cref="GuardrailSettings.CheckBlocklists"/>), then Prompt Shields on the question
 /// (<see cref="GuardrailSettings.ScanPrompts"/>) and the evidence (<see cref="GuardrailSettings.ScanEvidence"/>). A
-/// Foundry guardrail doesn't run these for a model behind your own gateway, nor scan evidence for any agent.
+/// Foundry guardrail doesn't run at all for a model behind your own gateway, and isn't relied on to scan evidence for any
+/// agent. Tool output isn't checked here.
 /// </summary>
 internal sealed class GuardrailInputShield : IInputShield
 {

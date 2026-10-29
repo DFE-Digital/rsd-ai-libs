@@ -76,8 +76,8 @@ public static class GuardrailsExtensions
             services.AddSingleton<IGuardrailCheck, FoundryGuardrailCheck>();
             services.AddHostedService<GuardrailStartupValidator>();
 
-            // A Foundry guardrail doesn't check evidence, nor any input to a model behind your own gateway, so the app
-            // checks its input itself before it's sent.
+            // A Foundry guardrail isn't relied on to check evidence, and checks no input to a model behind your own gateway,
+            // so the app checks its input itself before it's sent.
             if (settings.ChecksInput)
             {
                 var endpoint = settings.UsesPromptShields ? settings.ContentSafetyEndpointFor(context.Options.Foundry.Endpoint) : null;

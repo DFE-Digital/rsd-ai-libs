@@ -45,8 +45,13 @@ public static class QualityEvaluationExtensions
     /// <summary>
     /// One evaluator as it is, as a team's own may not list its metric names, which <c>CompositeEvaluator</c> requires.
     /// </summary>
+    /// <summary>
+    /// A <see cref="CompositeEvaluator"/>, even for one: it reports a failed judge call as an unscored metric with the reason,
+    /// where a lone evaluator would throw it out of the evaluation. It needs each evaluator's metric names, so a lone
+    /// evaluator of the app's own that lists none is used as it is.
+    /// </summary>
     private static IEvaluator Combined(IEvaluator[] evaluators)
-        => evaluators.Length == 1 ? evaluators[0] : new CompositeEvaluator(evaluators);
+        => evaluators is [{ EvaluationMetricNames.Count: 0 } only] ? only : new CompositeEvaluator(evaluators);
 
     /// <summary>
     /// Each evaluator gets its own judge agent, named after what it scores (e.g. "answer-judge-groundedness"), kept and

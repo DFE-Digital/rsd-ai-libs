@@ -1,5 +1,6 @@
 using Azure.AI.Extensions.OpenAI;
 using GovUK.Dfe.AI.Agents.Diagnostics.Interfaces;
+using GovUK.Dfe.AI.Agents.Evaluation.Constants;
 using GovUK.Dfe.AI.Agents.ValueObjects;
 using Microsoft.Extensions.AI;
 using OpenAI.Responses;
@@ -42,6 +43,14 @@ internal sealed class FoundryJudgeChatClient(ProjectOpenAIClient client, string 
             }
             : TokenUsage.None);
 
+        // A failed or cut-short reply, e.g. one stopped at its token limit, could still hold something that reads as a
+        // score; it's thrown instead, so the metric is left unscored with the reason. Its tokens are still recorded.
+        if (Unfinished(response) is { } unfinished)
+        {
+            call?.Failed(unfinished);
+            throw unfinished;
+        }
+
         return new ChatResponse(new ChatMessage(ChatRole.Assistant, response.GetOutputText()))
         {
             ModelId = response.Model,
@@ -49,6 +58,18 @@ internal sealed class FoundryJudgeChatClient(ProjectOpenAIClient client, string 
                 ? new UsageDetails { InputTokenCount = usage.InputTokenCount, OutputTokenCount = usage.OutputTokenCount, TotalTokenCount = usage.TotalTokenCount }
                 : null,
         };
+    }
+
+    /// <summary>Why the reply didn't finish, or null when it did. A reply with no status is taken as finished, as agent runs take it.</summary>
+    private InvalidOperationException? Unfinished(ResponseResult response)
+    {
+        if (response.Error is null && (response.Status is null || response.Status == ResponseStatus.Completed))
+        {
+            return null;
+        }
+
+        var reason = response.Error?.Message ?? response.IncompleteStatusDetails?.Reason?.ToString() ?? "no reason given";
+        return new InvalidOperationException(JudgeMessages.ReplyUnfinished(model, response.Status?.ToString(), reason));
     }
 
     private static ResponseItem ToResponseItem(ChatMessage message)

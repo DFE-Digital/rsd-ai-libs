@@ -142,18 +142,28 @@ internal sealed class AgentService(IAgentRunnerService agentRunner, IAgentRuntim
         ArgumentNullException.ThrowIfNull(context);
 
         using var workflow = AgentTelemetry.StartWorkflow(_applicationName, AgentTelemetry.ParallelMode, definitions.Count);
+        var billed = new BilledUsage();
 
         // Concurrency limits apply in the runner, to every run on the instance (and globally when configured).
         // A failure that isn't suppressed cancels the other agents straight away rather than letting
         // them run - and bill - to completion for a result that will be thrown away.
-        var steps = await FailFastParallel.WhenAllAsync(definitions.Select(definition =>
-                (Func<CancellationToken, Task<AgentStepResult>>)(token =>
-                    RunStepAsync(definition, async ct =>
-                        (await resolvePrompt(definition, ct).ConfigureAwait(false),
-                         resolveEvidence is null ? null : await resolveEvidence(definition, ct).ConfigureAwait(false)),
-                        shouldSuppress, token))),
-                cancellationToken)
-            .ConfigureAwait(false);
+        AgentStepResult[] steps;
+        try
+        {
+            steps = await FailFastParallel.WhenAllAsync(definitions.Select(definition =>
+                    (Func<CancellationToken, Task<AgentStepResult>>)(token =>
+                        BilledAsync(billed, RunStepAsync(definition, async ct =>
+                            (await resolvePrompt(definition, ct).ConfigureAwait(false),
+                             resolveEvidence is null ? null : await resolveEvidence(definition, ct).ConfigureAwait(false)),
+                            shouldSuppress, token)))),
+                    cancellationToken)
+                .ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            FailWorkflow(workflow, billed, ex);
+            throw;
+        }
 
         IReadOnlyList<AgentResult> results = [.. steps.Select(step => step.ToAgentResult())];
         CompleteWorkflow(workflow, results, steps.Count(step => !step.Succeeded));
@@ -173,6 +183,7 @@ internal sealed class AgentService(IAgentRunnerService agentRunner, IAgentRuntim
         var results = new List<AgentResult>(definitions.Count);
         var previousOutput = initialInput;
         var failedAgents = 0;
+        var billed = new BilledUsage();
 
         foreach (var definition in definitions)
         {
@@ -181,13 +192,22 @@ internal sealed class AgentService(IAgentRunnerService agentRunner, IAgentRuntim
 
             // The previous output goes in as fenced evidence, never as part of the prompt: whatever
             // influenced it (e.g. injected text in search results) can't become an instruction here.
-            var step = await RunStepAsync(definition,
-                async ct =>
-                {
-                    prompt = await resolvePrompt(definition, ct).ConfigureAwait(false);
-                    return (prompt, input);
-                },
-                shouldSuppress, cancellationToken).ConfigureAwait(false);
+            AgentStepResult step;
+            try
+            {
+                step = await BilledAsync(billed, RunStepAsync(definition,
+                    async ct =>
+                    {
+                        prompt = await resolvePrompt(definition, ct).ConfigureAwait(false);
+                        return (prompt, input);
+                    },
+                    shouldSuppress, cancellationToken)).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                FailWorkflow(workflow, billed, ex);
+                throw;
+            }
 
             var result = step.ToAgentResult();
             results.Add(result);
@@ -310,6 +330,32 @@ internal sealed class AgentService(IAgentRunnerService agentRunner, IAgentRuntim
         }
 
         return json ? Citations.PresentIn(answer, present) : present(answer);
+    }
+
+    /// <summary>Awaits a step, adding what it was billed whether it succeeds, falls back or throws (cancelled included).</summary>
+    private static async Task<AgentStepResult> BilledAsync(BilledUsage billed, Task<AgentStepResult> step)
+    {
+        try
+        {
+            var result = await step.ConfigureAwait(false);
+            billed.Add(result.ToAgentResult());
+            return result;
+        }
+        catch (Exception ex)
+        {
+            billed.Add(ex);
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// A run of several agents is ending with <paramref name="exception"/>: records what it was billed anyway, and puts the
+    /// total on the exception, so the caller's <see cref="AgentTelemetry.TokenUsageOf"/> covers every agent, not only the one that failed.
+    /// </summary>
+    private void FailWorkflow(WorkflowTelemetry workflow, BilledUsage billed, Exception exception)
+    {
+        billed.AttachTo(exception);
+        workflow.Failed(billed.Total, billed.Cost, _runOptions.Pricing.Currency);
     }
 
     /// <summary>Records what the whole run used and cost, e.g. one briefing.</summary>

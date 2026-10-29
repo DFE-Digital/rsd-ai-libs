@@ -34,10 +34,11 @@ public sealed class ExtensionsAiEvaluator(IEvaluator evaluator, ChatConfiguratio
         var result = await evaluator.EvaluateAsync(messages, response, chatConfiguration, context, cancellationToken).ConfigureAwait(false);
 
         var scores = new Dictionary<string, double>();
-        // Not only NumericMetric: when the judge call throws, CompositeEvaluator reports a plain EvaluationMetric.
+        // Not only NumericMetric: when the judge call throws, CompositeEvaluator reports a plain EvaluationMetric. A value
+        // with an error diagnostic, e.g. from a reply the evaluator couldn't fully read, isn't trusted as a score.
         foreach (var metric in result.Metrics.Values)
         {
-            if (metric is NumericMetric { Value: { } score })
+            if (metric is NumericMetric { Value: { } score } && !HasError(metric))
             {
                 scores[metric.Name] = score;
                 continue;
@@ -48,6 +49,9 @@ public sealed class ExtensionsAiEvaluator(IEvaluator evaluator, ChatConfiguratio
 
         return scores;
     }
+
+    private static bool HasError(EvaluationMetric metric)
+        => metric.Diagnostics?.Any(static diagnostic => diagnostic.Severity == EvaluationDiagnosticSeverity.Error) == true;
 
     /// <summary>The evaluator's diagnostics without stack traces, e.g. the judge call's error or an unreadable reply.</summary>
     internal static string WhyUnscored(EvaluationMetric metric)

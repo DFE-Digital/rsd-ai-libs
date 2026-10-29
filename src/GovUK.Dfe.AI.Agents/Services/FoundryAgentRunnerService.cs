@@ -122,9 +122,11 @@ internal sealed class FoundryAgentRunnerService(IAgentFactory agentFactory, IFou
             _logger.LogError(ex, "Agent {AgentName} did not finish within {RunTimeout}", agent.Name, _runOptions.RunTimeout);
             throw WithUsage(new TimeoutException(string.Format(ErrorMessages.AgentRunTimedOut, agent.Name, _runOptions.RunTimeout), ex), usage);
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException ex)
         {
+            // Still carries what was billed before it was cancelled, e.g. by a sibling's failure, for the run's totals.
             telemetry.Cancelled();
+            WithUsage(ex, usage);
             throw;
         }
         catch (AgentGuardrailException ex)

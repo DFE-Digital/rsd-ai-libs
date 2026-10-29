@@ -28,7 +28,8 @@ public static class AgentResultExtensions
 
     /// <summary>
     /// Adds up the tokens used across <paramref name="results"/> - e.g. every specialist result plus the
-    /// synthesis result of a briefing - in total and per agent. A failed agent counts as zero.
+    /// synthesis result of a briefing - in total and per agent. A failed agent's fallback result counts what it was billed
+    /// before it failed.
     /// </summary>
     public static TokenUsageSummary ToTokenUsageSummary(this IEnumerable<AgentResult> results)
     {

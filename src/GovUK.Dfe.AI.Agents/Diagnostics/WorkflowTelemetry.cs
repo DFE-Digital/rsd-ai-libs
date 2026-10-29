@@ -33,9 +33,19 @@ internal sealed class WorkflowTelemetry : IDisposable
     public void Completed(TokenUsage usage, int failedAgents, decimal? cost = null, string? currency = null)
     {
         _completed = true;
+        _activity?.SetTag(AgentTelemetry.WorkflowFailedAgentCountTag, failedAgents);
+        RecordUsage(usage, cost, currency);
+    }
+
+    /// <summary>
+    /// Records what a run that's ending with an exception was billed: it stays failed, but its tokens and cost still count.
+    /// </summary>
+    public void Failed(TokenUsage usage, decimal? cost = null, string? currency = null) => RecordUsage(usage, cost, currency);
+
+    private void RecordUsage(TokenUsage usage, decimal? cost, string? currency)
+    {
         _activity?.SetTag(AgentTelemetry.InputTokensTag, usage.InputTokens);
         _activity?.SetTag(AgentTelemetry.OutputTokensTag, usage.OutputTokens);
-        _activity?.SetTag(AgentTelemetry.WorkflowFailedAgentCountTag, failedAgents);
 
         AgentTelemetry.WorkflowTokens.Record(usage.InputTokens, _mode, _application, new(AgentTelemetry.TokenTypeTag, "input"));
         AgentTelemetry.WorkflowTokens.Record(usage.OutputTokens, _mode, _application, new(AgentTelemetry.TokenTypeTag, "output"));

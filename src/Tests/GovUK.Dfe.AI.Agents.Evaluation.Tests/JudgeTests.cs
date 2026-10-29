@@ -111,6 +111,77 @@ public sealed class JudgeTests
         call.Received(1).Dispose();
     }
 
+    [Theory]
+    [InlineData("incomplete")]
+    [InlineData("failed")]
+    public async Task AnUnfinishedJudgeReply_IsntScored_ButIsStillRecordedAsBilled(string status)
+    {
+        var telemetry = Substitute.For<IModelCallTelemetry>();
+        var call = Substitute.For<IModelCall>();
+        telemetry.Start(Arg.Any<string>()).Returns(call);
+        // Cut short, yet holding what would read as a score.
+        var reply = FoundryResponses.WithOutputItems("r1",
+            [ResponseItem.CreateAssistantMessageItem("<S2>5</S2>", (IEnumerable<ResponseMessageAnnotation>?)null)], totalTokens: 50, status: status);
+        var responses = Substitute.For<ProjectResponsesClient>();
+        responses.CreateResponseAsync(Arg.Any<CreateResponseOptions>(), Arg.Any<CancellationToken>())
+            .Returns(ClientResult.FromValue(reply, Substitute.For<PipelineResponse>()));
+        var project = Substitute.For<ProjectOpenAIClient>();
+        project.GetProjectResponsesClient().Returns(responses);
+        var judge = new FoundryJudgeChatClient(project, "myconnection/gpt-5.1", telemetry);
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => judge.GetResponseAsync([new(ChatRole.User, "Grade this.")],
+            cancellationToken: TestContext.Current.CancellationToken));
+        var scores = await new ExtensionsAiEvaluator(new CompositeEvaluator(new GroundednessEvaluator()), new ChatConfiguration(judge))
+            .EvaluateAsync(Sample, cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Contains($"status '{status}'", ex.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Empty(scores);
+        call.Received().Completed("gpt-4o", Arg.Is<TokenUsage>(usage => usage.TotalTokens == 50));
+        call.Received().Failed(Arg.Any<InvalidOperationException>());
+    }
+
+    [Fact]
+    public async Task WithOneEvaluator_AFailedJudgeCall_LeavesItUnscored_RatherThanFailingTheEvaluation()
+    {
+        var judge = Substitute.For<IChatClient>();
+        judge.GetResponseAsync(Arg.Any<IEnumerable<ChatMessage>>(), Arg.Any<ChatOptions?>(), Arg.Any<CancellationToken>())
+            .Returns<Task<ChatResponse>>(_ => throw new InvalidOperationException("The judge didn't finish its reply."));
+        var logs = new CollectingLoggerProvider();
+        using var provider = Build(agents => agents.AddQualityEvaluation(new GroundednessEvaluator()), builder => builder.AddProvider(logs),
+            services: services => services.AddSingleton(JudgeAgentThatThrows()));
+
+        var scores = await provider.GetRequiredService<IAgentRunEvaluator>().EvaluateAsync(Sample, cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Empty(scores);
+        Assert.Contains(logs.AtLevel(LogLevel.Warning), log => log.Message.StartsWith("No Groundedness score", StringComparison.Ordinal));
+    }
+
+    /// <summary>A runner whose judge agent run fails, as an unfinished reply makes it.</summary>
+    private static IAgentRunnerService JudgeAgentThatThrows()
+    {
+        var runner = Substitute.For<IAgentRunnerService>();
+        runner.RunFromSpecAsync(Arg.Any<AgentSpec>(), Arg.Any<string>(), Arg.Any<string?>(), Arg.Any<ToolCallResolver?>(),
+                Arg.Any<Func<AgentResult, string?>?>(), Arg.Any<CancellationToken>())
+            .Returns<Task<AgentResult>>(_ => throw new InvalidOperationException("Agent 'answer-judge-groundedness' response r1 did not complete."));
+        return runner;
+    }
+
+    [Fact]
+    public async Task AScoreTheEvaluatorReportsAnErrorWith_IsntUsed()
+    {
+        var metric = new NumericMetric("Groundedness", 3);
+        metric.AddDiagnostics(EvaluationDiagnostic.Error("The judge's reply was cut short."));
+        var evaluator = Substitute.For<IEvaluator>();
+        evaluator.EvaluateAsync(Arg.Any<IEnumerable<ChatMessage>>(), Arg.Any<ChatResponse>(), Arg.Any<ChatConfiguration?>(),
+                Arg.Any<IEnumerable<EvaluationContext>?>(), Arg.Any<CancellationToken>())
+            .Returns(new EvaluationResult(metric, new NumericMetric("Relevance", 5)));
+
+        var scores = await new ExtensionsAiEvaluator(evaluator, new ChatConfiguration(Substitute.For<IChatClient>()))
+            .EvaluateAsync(Sample, cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Equal(new Dictionary<string, double> { ["Relevance"] = 5 }, scores);
+    }
+
     [Fact]
     public void AddQualityEvaluation_GivesTheDeploymentJudgeTheLibrarysTelemetry()
     {

@@ -32,7 +32,8 @@ public interface IAgentService
 
     /// <summary>
     /// Runs agents side by side. A failure returns a fallback result, unless <paramref name="shouldSuppress"/> returns
-    /// false: then the others are cancelled and it's thrown.
+    /// false: then the others are cancelled and it's thrown, carrying what every agent was billed, cancelled ones
+    /// included; read it with <c>AgentTelemetry.TokenUsageOf</c>.
     /// </summary>
     /// <param name="context">Unused here; matches <see cref="RunSequentialAsync"/>.</param>
     /// <param name="shouldSuppress">Which failures become fallback results. Default: all but cancellation.</param>
@@ -45,7 +46,8 @@ public interface IAgentService
 
     /// <summary>
     /// Runs agents in order. Each gets the previous output (the first gets <paramref name="initialInput"/>) as fenced
-    /// evidence, so nothing passed along the chain can act as an instruction.
+    /// evidence, so nothing passed along the chain can act as an instruction. A failure <paramref name="shouldSuppress"/>
+    /// doesn't accept is thrown, carrying what every agent so far was billed; read it with <c>AgentTelemetry.TokenUsageOf</c>.
     /// </summary>
     /// <param name="context">Records each successful step.</param>
     /// <param name="shouldSuppress">Which failures become fallback results. Default: all but cancellation.</param>

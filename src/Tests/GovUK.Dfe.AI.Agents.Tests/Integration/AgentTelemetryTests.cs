@@ -283,6 +283,45 @@ public sealed class AgentTelemetryTests : IDisposable
     }
 
     [Fact]
+    public async Task AParallelRunThatThrows_StillCountsWhatEveryAgentWasBilled_IncludingOneItCancelled()
+    {
+        WriteSystemPrompt("Ofsted", "You analyse Ofsted reports.");
+        WriteSystemPrompt("Trust", "You analyse trusts.");
+        // The trust agent is billed for a tool round, then cancelled while waiting when the Ofsted agent fails.
+        _responses.ReplyAfter("ofsted-agent", TimeSpan.FromMilliseconds(300), FoundryResponses.WithOutputItems("r1", [], totalTokens: 250, status: "failed"));
+        _responses.Reply("trust-agent", FoundryResponses.WithOutputItems("r2",
+            [OpenAI.Responses.ResponseItem.CreateFunctionCallItem("call-1", "lookup", BinaryData.FromString("{}"))], totalTokens: 100));
+        _responses.Hang("trust-agent");
+        using var provider = Build(services => services.AddSingleton(new AgentToolBinding("trust-agent", new FakeToolServer("lookup"))));
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => provider.GetRequiredService<IAgentService>().RunParallelAsync(
+            [new AgentDefinition("ofsted-agent", "Ofsted"), new AgentDefinition("trust-agent", "Trust") { AllowedTools = ["lookup"] }],
+            PromptFor, new AgentContext(), shouldSuppress: _ => false, cancellationToken: TestContext.Current.CancellationToken));
+
+        Assert.Equal(new TokenUsage(20, 330, 350), AgentTelemetry.TokenUsageOf(ex));
+        Assert.Equal(330, WorkflowTokens("output").Value, precision: 0);
+        Assert.Equal(ActivityStatusCode.Error, Assert.Single(SpansOf("invoke_workflow")).Status);   // still failed
+    }
+
+    [Fact]
+    public async Task ASequentialRunThatThrows_CountsWhatTheAgentsBeforeItWereBilled()
+    {
+        PriceGpt4o();
+        WriteSystemPrompt("Ofsted", "You analyse Ofsted reports.");
+        WriteSystemPrompt("Trust", "You analyse trusts.");
+        _responses.Reply("ofsted-agent", FoundryResponses.Completed("r1", "Good.", totalTokens: 250));
+        _responses.Reply("trust-agent", FoundryResponses.WithOutputItems("r2", [], totalTokens: 250, status: "failed"));
+        using var provider = Build();
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => provider.GetRequiredService<IAgentService>().RunSequentialAsync(
+            [new AgentDefinition("ofsted-agent", "Ofsted"), new AgentDefinition("trust-agent", "Trust")], PromptFor, "Start.",
+            new AgentContext(), shouldSuppress: _ => false, cancellationToken: TestContext.Current.CancellationToken));
+
+        Assert.Equal(new TokenUsage(20, 480, 500), AgentTelemetry.TokenUsageOf(ex));
+        Assert.Equal((double)(RunCost * 2), Assert.Single(MeasurementsOf("dfe.ai_agents.workflow.cost")).Value, precision: 12);
+    }
+
+    [Fact]
     public async Task TheLowerLevelOrchestrator_AlsoRecordsItsTotalTokens_IncludingFailedSteps()
     {
         _responses.Reply("ofsted-agent", FoundryResponses.Completed("r1", "Good.", totalTokens: 100));

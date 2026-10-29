@@ -11,12 +11,14 @@ public sealed class McpAllowedToolsProviderTests
 {
     private readonly CancellationToken cancellationToken = TestContext.Current.CancellationToken;
     private readonly IMcpToolClient _client = Substitute.For<IMcpToolClient>();
+    private static readonly string[] second = ["get_performance_data"];
+
 
     [Fact]
     public async Task GetToolsAsync_OffersOnlyTheSubset()
     {
         var tool = AgentTool.Function("get_performance_data", null, BinaryData.FromString("{}"));
-        _client.GetToolsAsync(Arg.Is<IReadOnlyList<string>?>(names => names!.SequenceEqual(new[] { "get_performance_data" })), cancellationToken)
+        _client.GetToolsAsync(Arg.Is<IReadOnlyList<string>?>(names => names!.SequenceEqual(second)), cancellationToken)
             .Returns([tool]);
 
         var tools = await new McpAllowedToolsProvider(_client, ["get_performance_data"]).GetToolsAsync(cancellationToken);

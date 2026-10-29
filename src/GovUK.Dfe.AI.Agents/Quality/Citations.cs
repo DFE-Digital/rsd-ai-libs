@@ -2,6 +2,8 @@ using GovUK.Dfe.AI.Agents.Constants;
 using GovUK.Dfe.AI.Agents.ValueObjects;
 using System.Globalization;
 using System.Net;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 
 namespace GovUK.Dfe.AI.Agents.Quality;
@@ -67,6 +69,76 @@ internal static partial class Citations
     /// <summary>Removes every <c>[Evidence n]</c>, with the space before it, for an agent that doesn't show citations.</summary>
     public static string? Remove(string? answer)
         => string.IsNullOrEmpty(answer) ? answer : CitationWithSpaceBefore().Replace(answer, string.Empty);
+
+    /// <summary>
+    /// Applies <paramref name="present"/> to each string value of a JSON answer, e.g. a structured one, never to its
+    /// property names, so a link's quotes are escaped and the answer still reads as the JSON that was checked. Any other
+    /// answer is presented whole. A JSON answer is rewritten only when a string changes, so otherwise it keeps its layout.
+    /// </summary>
+    public static string? PresentIn(string? answer, Func<string?, string?> present)
+    {
+        if (!StartsAsJsonObject(answer))
+        {
+            return present(answer);
+        }
+
+        try
+        {
+            return JsonNode.Parse(answer!) is { } root && PresentStrings(root, present) ? root.ToJsonString() : answer;
+        }
+        catch (Exception ex) when (ex is JsonException or ArgumentException or InvalidOperationException)
+        {
+            // Not JSON after all, or JSON a node can't hold, e.g. a property named twice.
+            return present(answer);
+        }
+    }
+
+    /// <summary>Whether the answer's first non-white-space character is "{", as a structured answer's is.</summary>
+    public static bool StartsAsJsonObject(string? answer)
+        => answer is not null && answer.AsSpan().TrimStart() is [ '{', .. ];
+
+    /// <returns>Whether any string changed.</returns>
+    private static bool PresentStrings(JsonNode node, Func<string?, string?> present)
+    {
+        var changed = false;
+        switch (node)
+        {
+            case JsonObject properties:
+                foreach (var name in properties.Select(static property => property.Key).ToList())
+                {
+                    changed |= PresentChild(properties[name], replacement => properties[name] = replacement, present);
+                }
+
+                break;
+            case JsonArray items:
+                for (var index = 0; index < items.Count; index++)
+                {
+                    var at = index;
+                    changed |= PresentChild(items[at], replacement => items[at] = replacement, present);
+                }
+
+                break;
+        }
+
+        return changed;
+    }
+
+    private static bool PresentChild(JsonNode? child, Action<JsonNode?> replace, Func<string?, string?> present)
+    {
+        if (child is JsonValue value && value.TryGetValue<string>(out var text))
+        {
+            var shown = present(text);
+            if (shown == text)
+            {
+                return false;
+            }
+
+            replace(JsonValue.Create(shown));
+            return true;
+        }
+
+        return child is not null && PresentStrings(child, present);
+    }
 
     private static string Show(EvidenceSource source)
     {

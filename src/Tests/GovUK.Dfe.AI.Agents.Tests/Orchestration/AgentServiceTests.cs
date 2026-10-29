@@ -202,7 +202,8 @@ public sealed class AgentServiceTests
             new AgentSpecBuilder(_promptProvider, [new AgentToolBinding("custom-agent", toolProvider)], [custom]));
         await sut.RunParallelAsync([definition], ResolvePrompt, new AgentContext(), cancellationToken: cancellationToken);
 
-        Assert.Equal([own, mcpTool, webSearch], built!.Tools);
+        // A function in both is shown as bound: the bound provider is the one that runs it.
+        Assert.Equal([duplicate, mcpTool, webSearch], built!.Tools);
     }
 
     private sealed record Findings(string Rating, string? InspectionDate);

@@ -50,7 +50,7 @@ internal sealed class AgentService(IAgentRunnerService agentRunner, IAgentRuntim
     /// Runs the agent as <see cref="RunAsync"/> does, with the runner passing each piece of the answer to a channel that's
     /// read here, cleaned, its citations shown, and passed on. Stopping early cancels the run, which still cleans up after
     /// itself. A piece never holds part of a citation (the cleaner waits for a "[" to close), so the pieces join up to the
-    /// result's <see cref="AgentResult.Output"/>.
+    /// result's <see cref="AgentResult.Output"/>. A JSON answer comes as one piece at the end (see <see cref="StreamedAnswerShape"/>).
     /// </summary>
     private async IAsyncEnumerable<AgentStreamUpdate> StreamAgentAsync(AgentDefinition definition, string prompt, AgentEvidence? evidence,
         [EnumeratorCancellation] CancellationToken cancellationToken)
@@ -62,20 +62,16 @@ internal sealed class AgentService(IAgentRunnerService agentRunner, IAgentRuntim
         var heldSpace = string.Empty;
         var started = System.Diagnostics.Stopwatch.GetTimestamp();
         var firstText = true;
+        var shape = new StreamedAnswerShape(isJson: definition.OutputSchema is not null);
         AgentResult result;
         try
         {
             await foreach (var piece in pieces.Reader.ReadAllAsync(cancellationToken).ConfigureAwait(false))
             {
-                if (Present(cleaner.Add(piece)) is { Length: > 0 } text)
+                // Told apart on the cleaned text, as the whole answer is, so both decide alike.
+                if (Present(shape.Add(cleaner.Add(piece))) is { Length: > 0 } text)
                 {
-                    if (firstText)
-                    {
-                        firstText = false;
-                        AgentTelemetry.RecordTimeToFirstToken(_applicationName, definition.Name,
-                            System.Diagnostics.Stopwatch.GetElapsedTime(started).TotalSeconds);
-                    }
-
+                    RecordFirstText();
                     yield return new AgentStreamUpdate { Text = text };
                 }
             }
@@ -91,12 +87,26 @@ internal sealed class AgentService(IAgentRunnerService agentRunner, IAgentRuntim
             }
         }
 
-        if (PresentCitations(definition, heldSpace + cleaner.Flush(), evidence) is { Length: > 0 } rest)
+        // A JSON answer is shown whole, as checked and with its citations inside its strings.
+        var tail = shape.Add(cleaner.Flush()) + shape.Flush();
+        var rest = shape.IsJson ? result.Output : PresentCitations(definition, heldSpace + tail, evidence, json: false);
+        if (rest is { Length: > 0 })
         {
+            RecordFirstText();
             yield return new AgentStreamUpdate { Text = rest };
         }
 
         yield return new AgentStreamUpdate { Result = result };
+
+        void RecordFirstText()
+        {
+            if (firstText)
+            {
+                firstText = false;
+                AgentTelemetry.RecordTimeToFirstToken(_applicationName, definition.Name,
+                    System.Diagnostics.Stopwatch.GetElapsedTime(started).TotalSeconds);
+            }
+        }
 
         // Trailing spaces wait for the next piece: a citation removed there takes the space before it, as in the whole answer.
         string? Present(string cleaned)
@@ -104,7 +114,7 @@ internal sealed class AgentService(IAgentRunnerService agentRunner, IAgentRuntim
             var text = heldSpace + cleaned;
             var shown = text.TrimEnd(' ', '\t');
             heldSpace = text[shown.Length..];
-            return PresentCitations(definition, shown, evidence);
+            return PresentCitations(definition, shown, evidence, json: false);   // a piece of plain text, even if it looks like JSON
         }
 
         async Task<AgentResult> RunWithStreamAsync()
@@ -281,14 +291,25 @@ internal sealed class AgentService(IAgentRunnerService agentRunner, IAgentRuntim
     /// The answer's citations as the agent shows them: each <c>[Evidence n]</c> as a link to its source or its text, or, for an
     /// agent with <see cref="AgentDefinition.RequiredCitations"/> off, removed. Without sources, shown citations stay as written.
     /// </summary>
-    private static string? PresentCitations(AgentDefinition definition, string? answer, AgentEvidence? evidence)
+    /// <param name="json">
+    /// True: in a JSON answer, only inside its strings, so it still reads as the JSON that was checked. False: the answer is
+    /// plain text, e.g. a streamed piece.
+    /// </param>
+    private static string? PresentCitations(AgentDefinition definition, string? answer, AgentEvidence? evidence, bool json = true)
     {
-        if (!definition.RequiredCitations)
+        Func<string?, string?>? present = (definition.RequiredCitations, evidence) switch
         {
-            return Citations.Remove(answer);
+            (false, _) => Citations.Remove,
+            (true, { Sources.Count: > 0 } sourced) => text => Citations.Render(text, sourced.Sources),
+            _ => null,
+        };
+
+        if (present is null)
+        {
+            return answer;
         }
 
-        return evidence is { Sources.Count: > 0 } ? Citations.Render(answer, evidence.Sources) : answer;
+        return json ? Citations.PresentIn(answer, present) : present(answer);
     }
 
     /// <summary>Records what the whole run used and cost, e.g. one briefing.</summary>

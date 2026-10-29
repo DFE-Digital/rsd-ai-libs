@@ -41,16 +41,17 @@ internal static class AgentToolResolver
     }
 
     /// <summary>
-    /// <paramref name="own"/> plus <paramref name="bound"/>, skipping a bound function with the same name as one of
-    /// <paramref name="own"/>'s, since an agent's function names must be unique.
+    /// <paramref name="own"/> plus <paramref name="bound"/>. A function in both is described as <paramref name="bound"/>
+    /// has it: only bound providers run calls, so the model must be shown the arguments the one that runs it expects. An
+    /// agent's function names must be unique, so it's listed once.
     /// </summary>
     public static IReadOnlyList<AgentTool> Merge(IReadOnlyList<AgentTool> own, IReadOnlyList<AgentTool> bound)
     {
         ArgumentNullException.ThrowIfNull(own);
         ArgumentNullException.ThrowIfNull(bound);
 
-        var ownNames = own.Select(static tool => tool.FunctionName).OfType<string>().ToHashSet(StringComparer.Ordinal);
-        return [.. own, .. bound.Where(tool => tool.FunctionName is not { } name || !ownNames.Contains(name))];
+        var boundNames = bound.Select(static tool => tool.FunctionName).OfType<string>().ToHashSet(StringComparer.Ordinal);
+        return [.. own.Where(tool => tool.FunctionName is not { } name || !boundNames.Contains(name)), .. bound];
     }
 
     /// <summary>Keeps built-in tools and only the function tools in <see cref="AgentDefinition.AllowedTools"/>.</summary>

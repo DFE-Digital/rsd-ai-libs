@@ -181,6 +181,8 @@ await foreach (var update in agents.RunStreamingAsync(BriefingAgents.Synthesis, 
 - Checks run at the end; the answer is already shown, so a failed check throws with no retry. Discard what you showed.
 - `result.Output` is exactly the pieces joined, including any text written before a tool call, so checks cover
   everything shown. An agent that a tool or observer runs never streams into the answer.
+- A JSON answer (an `OutputSchema`, or any answer starting with `{`) comes as one piece at the end, once its citations
+  are placed inside its strings, so it always reads with `ReadOutputAs<T>()`.
 - Single runs only. For a chain, run the earlier agents with `RunSequentialAsync`, then stream the last.
 
 ### Tools and other agents

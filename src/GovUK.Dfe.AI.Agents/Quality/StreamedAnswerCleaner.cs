@@ -39,13 +39,46 @@ internal sealed class StreamedAnswerCleaner
     {
         for (var i = 0; i < text.Length; i++)
         {
-            if (text[i] is '!' or '[' or '<' && !IsFinished(text, i))
+            if (text[i] is '!' or '[' or '<')
             {
-                return i;
+                if (!IsFinished(text, i))
+                {
+                    return i;
+                }
+
+                // A finished image, link or tag is skipped whole, so a "<" inside it can't split it.
+                i = Math.Max(i, SpanEnd(text, i) - 1);
             }
         }
 
         return text.Length;
+    }
+
+    /// <summary>The index just after the finished image, link or tag starting at <paramref name="start"/>, or <paramref name="start"/> if there isn't one.</summary>
+    private static int SpanEnd(string text, int start)
+    {
+        switch (text[start])
+        {
+            case '<':
+                if (start + 1 < text.Length && IsTagStart(text[start + 1]))
+                {
+                    var close = text.IndexOf('>', start);
+                    return close >= 0 ? close + 1 : start;
+                }
+
+                return start;
+            case '!':
+                return start + 1 < text.Length && text[start + 1] == '[' ? SpanEnd(text, start + 1) : start;
+            default:
+                var bracket = text.IndexOf(']', start);
+                if (bracket < 0 || bracket == text.Length - 1 || text[bracket + 1] != '(')
+                {
+                    return start;
+                }
+
+                var paren = text.IndexOf(')', bracket);
+                return paren >= 0 ? paren + 1 : start;
+        }
     }
 
     private static bool IsTagStart(char next) => char.IsAsciiLetter(next) || next is '/' or '!' or '?';

@@ -27,6 +27,6 @@ public sealed class PatternRedactor : IAgentInputRedactor
     public string Redact(string text)
     {
         ArgumentNullException.ThrowIfNull(text);
-        return _patterns.Aggregate(text, static (current, pattern) => pattern.Pattern.Replace(current, pattern.Replacement));
+        return _patterns.Aggregate(text, static (current, pattern) => pattern.Pattern.Replace(current, _ => pattern.Replacement));
     }
 }

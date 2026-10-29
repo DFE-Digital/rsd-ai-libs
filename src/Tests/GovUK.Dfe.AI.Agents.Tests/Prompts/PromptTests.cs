@@ -60,6 +60,7 @@ public sealed class PromptTests : IDisposable
     [InlineData("Academy: {{Name}}\nEvidence: {{Context}}", "Test Academy", "Academy: Test Academy\nEvidence: some evidence")]   // known tokens replaced
     [InlineData("Academy: {{Name}}, Other: {{NotSupplied}}", "Test Academy", "Academy: Test Academy, Other: {{NotSupplied}}")]   // unknown left alone
     [InlineData("Value: [{{Name}}]", null, "Value: []")]                                                                    // null becomes empty
+    [InlineData("{{Name}} / {{Context}}", "{{Context}}", "{{Context}} / some evidence")]                                    // inserted values are not re-expanded
     public void Build_FillsPlaceholders(string template, string? name, string expected)
     {
         var store = Substitute.For<IPromptTemplateStore>();

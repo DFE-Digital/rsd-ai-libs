@@ -20,6 +20,12 @@ public interface IMcpToolClient : IAgentToolProvider, IAgentToolExecutor, IAsync
     /// <param name="argumentsJson">The call's arguments as a JSON object.</param>
     Task<string> CallToolAsync(string functionName, string argumentsJson, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// The one allowed tool a function name stands for, or <see langword="null"/> when it stands for none. Two allowed
+    /// tools never share a function name, so this is the tool <see cref="CallToolAsync"/> runs.
+    /// </summary>
+    string? GetAllowedToolName(string functionName);
+
     /// <summary>A prompt from the server.</summary>
     Task<string> GetPromptAsync(string name, string promptType, CancellationToken cancellationToken = default);
 }

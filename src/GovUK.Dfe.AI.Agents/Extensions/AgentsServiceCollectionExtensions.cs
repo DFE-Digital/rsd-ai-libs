@@ -24,6 +24,7 @@ using GovUK.Dfe.AI.Agents.Prompts;
 using GovUK.Dfe.AI.Agents.Providers.Interfaces;
 using GovUK.Dfe.AI.Agents.Providers;
 using GovUK.Dfe.AI.Agents.Quality.Interfaces;
+using GovUK.Dfe.AI.Agents.Safety.Interfaces;
 using GovUK.Dfe.AI.Agents.Services.Interfaces;
 using GovUK.Dfe.AI.Agents.Services;
 using GovUK.Dfe.AI.Agents.Tools;
@@ -169,7 +170,9 @@ public static class AgentsServiceCollectionExtensions
                 FoundryClientOptions(options, sp.GetRequiredService<AgentRunOptions>().ApplicationName));
             return new ExternalFoundryProjectService(credential, client.AgentAdministrationClient, new FoundryResponsesClient(client.ProjectOpenAIClient),
                 FactoryOptions(options),
-                sp.GetRequiredService<AgentRunOptions>(), sp.GetRequiredService<IAgentRunLimiter>(), sp.GetRequiredService<ILoggerFactory>());
+                new ExternalFoundryProjectService.SharedRunServices(sp.GetRequiredService<AgentRunOptions>(), sp.GetRequiredService<IAgentRunLimiter>(),
+                    sp.GetService<IInputShield>()),
+                sp.GetRequiredService<ILoggerFactory>());
         });
 
         foreach (var (agentName, version) in external.Agents)

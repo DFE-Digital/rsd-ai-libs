@@ -136,6 +136,42 @@ public sealed class McpToolClientTests
     }
 
     [Fact]
+    public async Task AToolThatOnlyBecomesTheSameFunctionNameAsAnAllowedOne_IsNeverDescribedOrRun()
+    {
+        // "school.read" is allowed and becomes the function name "school_read"; the server's own "school_read" isn't allowed.
+        var session = new FakeSession(_ => [ServerTool("school.read"), ServerTool("school_read")]);
+        var sut = new McpToolClient(Options("school.read"), NullLogger<McpToolClient>.Instance, _ => Task.FromResult<IMcpSession>(session));
+
+        await Assert.ThrowsAsync<McpToolConfigurationException>(() => sut.GetToolsAsync(["school_read"], cancellationToken));
+        var output = await sut.TryExecuteAsync(new ToolCallRequest("call-1", "school_read", "{}"), cancellationToken);
+
+        Assert.Equal("school.read ok", output);
+        Assert.Equal("school.read", sut.GetAllowedToolName("school_read"));
+    }
+
+    [Fact]
+    public void AllowedToolsThatBecomeTheSameFunctionName_AreRefused_SoACallCantRunTheWrongOne()
+    {
+        var ex = Assert.Throws<McpToolConfigurationException>(() =>
+            new McpToolClient(Options("school.read", "school_read"), NullLogger<McpToolClient>.Instance, _ => Task.FromResult(Substitute.For<IMcpSession>())));
+
+        Assert.Contains("school_read", ex.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AnAgentsToolSubset_RunsOnlyTheToolsItNames_ByTheirExactName()
+    {
+        var client = Substitute.For<Clients.Interfaces.IMcpToolClient>();
+        client.GetAllowedToolName("school_read").Returns("school.read");
+        var sut = new Providers.McpAllowedToolsProvider(client, ["school_read"]);
+
+        var output = await sut.TryExecuteAsync(new ToolCallRequest("call-1", "school_read", "{}"), cancellationToken);
+
+        Assert.Null(output);
+        await client.DidNotReceiveWithAnyArgs().CallToolAsync(default!, default!, cancellationToken);
+    }
+
+    [Fact]
     public async Task AToolReportedError_GoesBackToTheModel()
     {
         var session = new FakeSession(_ => ServerTools, _ => new CallToolResult

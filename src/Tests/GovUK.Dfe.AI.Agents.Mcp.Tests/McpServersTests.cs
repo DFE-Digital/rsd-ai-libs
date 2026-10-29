@@ -180,6 +180,7 @@ public sealed class McpServersTests : IDisposable
         var server = Substitute.For<IMcpToolClient>();
         server.GetToolsAsync(Arg.Any<IReadOnlyList<string>?>(), Arg.Any<CancellationToken>()).Returns(_ => Task.FromResult(tools));
         server.CallToolAsync("get_performance_data", Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns("KS2: 72% met the expected standard.");
+        server.GetAllowedToolName("get_performance_data").Returns("get_performance_data");
         var foundry = new InMemoryFoundry();
         var responses = new ScriptedResponsesClient();
         responses.Reply("performance-agent",

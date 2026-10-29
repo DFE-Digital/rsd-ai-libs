@@ -1,4 +1,3 @@
-using GovUK.Dfe.AI.Agents.Mcp.Clients;
 using GovUK.Dfe.AI.Agents.Mcp.Clients.Interfaces;
 using GovUK.Dfe.AI.Agents.Tools;
 using GovUK.Dfe.AI.Agents.Tools.Interfaces;
@@ -11,7 +10,7 @@ namespace GovUK.Dfe.AI.Agents.Mcp.Providers;
 public sealed class McpAllowedToolsProvider(IMcpToolClient client, IReadOnlyList<string> allowedToolNames)
     : IAgentToolProvider, IAgentToolExecutor
 {
-    private readonly HashSet<string> _allowedFunctionNames = [.. allowedToolNames.Select(McpToolClient.ToFunctionName)];
+    private readonly HashSet<string> _allowedToolNames = new(allowedToolNames, StringComparer.Ordinal);
 
     public Task<IReadOnlyList<AgentTool>> GetToolsAsync(CancellationToken cancellationToken = default)
         => client.GetToolsAsync(allowedToolNames, cancellationToken);
@@ -20,7 +19,8 @@ public sealed class McpAllowedToolsProvider(IMcpToolClient client, IReadOnlyList
     {
         ArgumentNullException.ThrowIfNull(call);
 
-        return _allowedFunctionNames.Contains(call.FunctionName)
+        // Matched on the exact tool the call would run, not its function name: another tool can become the same function name.
+        return client.GetAllowedToolName(call.FunctionName) is { } toolName && _allowedToolNames.Contains(toolName)
             ? await client.CallToolAsync(call.FunctionName, call.Arguments, cancellationToken).ConfigureAwait(false)
             : null;
     }

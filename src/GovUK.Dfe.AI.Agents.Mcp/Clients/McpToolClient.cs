@@ -47,7 +47,7 @@ public sealed class McpToolClient : IMcpToolClient, IDisposable
     private readonly McpServerConnectionOptions _options;
     private readonly ILogger<McpToolClient> _logger;
     private readonly Func<CancellationToken, Task<IMcpSession>> _connect;
-    private readonly HashSet<string> _allowedFunctionNames;
+    private readonly Dictionary<string, string> _allowedToolsByFunctionName;
     private readonly SemaphoreSlim _sessionLock = new(1, 1);
     private readonly SemaphoreSlim _toolsLock = new(1, 1);
     private readonly TimeSpan _disposeTimeout;
@@ -71,7 +71,7 @@ public sealed class McpToolClient : IMcpToolClient, IDisposable
         _disposeTimeout = disposeTimeout ?? DefaultDisposeTimeout;
 
         // Deny by default: with no allow-list (options not validated), nothing can be described or run.
-        _allowedFunctionNames = [.. (options.AllowedToolNames ?? []).Select(ToFunctionName)];
+        _allowedToolsByFunctionName = ToolNamesByFunctionName(options.ServerLabel, options.AllowedToolNames ?? []);
     }
 
     /// <summary>
@@ -92,7 +92,8 @@ public sealed class McpToolClient : IMcpToolClient, IDisposable
     {
         var names = allowedToolNames is { Count: > 0 } requested ? requested : _options.AllowedToolNames ?? [];
 
-        var notAllowed = names.Where(name => !_allowedFunctionNames.Contains(ToFunctionName(name))).ToList();
+        // Exact names only: a name that merely becomes the same function name as an allowed tool isn't allowed.
+        var notAllowed = names.Where(name => GetAllowedToolName(ToFunctionName(name)) != name).ToList();
         if (notAllowed.Count > 0)
         {
             throw new McpToolConfigurationException(string.Format(ErrorMessages.McpToolNotAllowed, string.Join(", ", notAllowed), _options.ServerLabel));
@@ -117,15 +118,19 @@ public sealed class McpToolClient : IMcpToolClient, IDisposable
     {
         ArgumentNullException.ThrowIfNull(call);
 
-        if (!_allowedFunctionNames.Contains(call.FunctionName))
+        if (GetAllowedToolName(call.FunctionName) is not { } toolName)
         {
             return null;
         }
 
-        return FindTool(await GetServerToolsAsync(cancellationToken).ConfigureAwait(false), call.FunctionName) is null
-            ? null
-            : await CallToolAsync(call.FunctionName, call.Arguments, cancellationToken).ConfigureAwait(false);
+        return HasTool(await GetServerToolsAsync(cancellationToken).ConfigureAwait(false), toolName)
+            ? await CallToolAsync(call.FunctionName, call.Arguments, cancellationToken).ConfigureAwait(false)
+            : null;
     }
+
+    /// <summary>The allowed tool a function name stands for, or <see langword="null"/> when it stands for none.</summary>
+    public string? GetAllowedToolName(string functionName)
+        => _allowedToolsByFunctionName.GetValueOrDefault(functionName);
 
     /// <summary>Runs an allowed tool. Malformed arguments and the tool's own errors go back to the model as text.</summary>
     public async Task<string> CallToolAsync(string functionName, string argumentsJson, CancellationToken cancellationToken = default)
@@ -133,13 +138,13 @@ public sealed class McpToolClient : IMcpToolClient, IDisposable
         ArgumentException.ThrowIfNullOrWhiteSpace(functionName);
 
         // Checked here as well as in TryExecuteAsync, so no caller can reach a tool outside the allow-list.
-        if (!_allowedFunctionNames.Contains(functionName))
-        {
-            throw new InvalidOperationException(string.Format(ErrorMessages.McpToolNotAllowed, functionName, _options.ServerLabel));
-        }
+        var toolName = GetAllowedToolName(functionName)
+            ?? throw new InvalidOperationException(string.Format(ErrorMessages.McpToolNotAllowed, functionName, _options.ServerLabel));
 
-        var toolName = FindTool(await GetServerToolsAsync(cancellationToken).ConfigureAwait(false), functionName)?.Name
-            ?? throw new InvalidOperationException(string.Format(ErrorMessages.McpToolsNotFoundOnServer, _options.ServerLabel, functionName));
+        if (!HasTool(await GetServerToolsAsync(cancellationToken).ConfigureAwait(false), toolName))
+        {
+            throw new InvalidOperationException(string.Format(ErrorMessages.McpToolsNotFoundOnServer, _options.ServerLabel, toolName));
+        }
 
         // Malformed arguments are the model's mistake: tell it, rather than failing the run or dropping the connection.
         if (!TryParseArguments(argumentsJson, out var arguments))
@@ -252,6 +257,24 @@ public sealed class McpToolClient : IMcpToolClient, IDisposable
         return safe.Length <= MaxFunctionNameLength ? safe : safe[..MaxFunctionNameLength];
     }
 
+    /// <summary>
+    /// Maps each function name back to the one tool it stands for. Two tools that become the same function name are
+    /// refused, so a call can never run a different tool from the one the model was shown.
+    /// </summary>
+    internal static Dictionary<string, string> ToolNamesByFunctionName(string serverLabel, IEnumerable<string> toolNames)
+    {
+        var byFunctionName = toolNames.Distinct(StringComparer.Ordinal).GroupBy(ToFunctionName, StringComparer.Ordinal).ToList();
+
+        var clash = byFunctionName.Find(group => group.Count() > 1);
+        if (clash is not null)
+        {
+            throw new McpToolConfigurationException(string.Format(ErrorMessages.McpToolNamesClash, serverLabel,
+                string.Join(", ", clash), clash.Key));
+        }
+
+        return byFunctionName.ToDictionary(group => group.Key, group => group.Single(), StringComparer.Ordinal);
+    }
+
     internal static string ReadOutput(CallToolResult result)
     {
         var text = string.Join(Environment.NewLine, result.Content.OfType<TextContentBlock>().Select(block => block.Text));
@@ -288,9 +311,8 @@ public sealed class McpToolClient : IMcpToolClient, IDisposable
         }
     }
 
-    /// <summary>The server tool behind a function name, or null if the server doesn't have it.</summary>
-    private static Tool? FindTool(IReadOnlyList<Tool> serverTools, string functionName)
-        => serverTools.FirstOrDefault(tool => ToFunctionName(tool.Name) == functionName);
+    private static bool HasTool(IReadOnlyList<Tool> serverTools, string toolName)
+        => serverTools.Any(tool => tool.Name == toolName);
 
     private bool ToolListIsFresh => _cachedTools is not null && DateTimeOffset.UtcNow - _toolsCachedAt < _options.ToolListCacheDuration;
 

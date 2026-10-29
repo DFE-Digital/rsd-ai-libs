@@ -258,6 +258,15 @@ public sealed class AzureSearchContextRetrieverTests
 
     // ===================== Evidence size =====================
 
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public void WithANonPositiveEvidenceLimit_ThrowsArgumentOutOfRangeException(int limit)
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() => new AzureSearchContextRetriever(
+            new Dictionary<string, SearchClient> { [Scope] = _client }, _relevanceFilter, maxEvidenceCharacters: limit));
+    }
+
     [Fact]
     public async Task WithALimit_WholeResultsAreKept_MostRelevantFirst_AndTheRestAreLeftOutWithANote()
     {
@@ -318,7 +327,8 @@ public sealed class AzureSearchContextRetrieverTests
         SetUpDocuments(
             new SearchDocument
             {
-                ["title"] = "Copthorne School", ["content"] = "Key Stage 2: 72% met the standard.",
+                ["title"] = "Copthorne School",
+                ["content"] = "Key Stage 2: 72% met the standard.",
                 ["url"] = "https://www.compare-school-performance.service.gov.uk/school/100000",
             },
             new SearchDocument { ["content"] = "Part of a trust of 12 academies.", ["page"] = "javascript:alert(1)" });
@@ -381,7 +391,11 @@ public sealed class AzureSearchContextRetrieverTests
     {
         SetUpDocuments(new SearchDocument
         {
-            ["name"] = "Oakfield Primary", ["capacity"] = 420, ["number_on_roll"] = 398, ["attendance"] = 94.8, ["converter"] = true,
+            ["name"] = "Oakfield Primary",
+            ["capacity"] = 420,
+            ["number_on_roll"] = 398,
+            ["attendance"] = 94.8,
+            ["converter"] = true,
             ["id"] = "est-1",
         });
         var sut = new AzureSearchContextRetriever(new Dictionary<string, SearchClient> { [Scope] = _client }, _relevanceFilter,

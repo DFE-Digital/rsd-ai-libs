@@ -40,6 +40,9 @@ public sealed class AzureSearchContextRetriever(IReadOnlyDictionary<string, Sear
         contentFields ?? new Dictionary<string, IReadOnlyList<string>>();
     private readonly IReadOnlyDictionary<string, AzureSearchIndexOptions> _indexes =
         indexes ?? new Dictionary<string, AzureSearchIndexOptions>();
+    private readonly int? _maxEvidenceCharacters = maxEvidenceCharacters is <= 0
+        ? throw new ArgumentOutOfRangeException(nameof(maxEvidenceCharacters))
+        : maxEvidenceCharacters;
 
     public async Task<ContextResult> GetContextAsync(string scope, string query, int size = 10, ODataFilter filter = default,
         CancellationToken cancellationToken = default)
@@ -76,7 +79,7 @@ public sealed class AzureSearchContextRetriever(IReadOnlyDictionary<string, Sear
     {
         var separator = Environment.NewLine + Environment.NewLine;
         var blocks = relevant.Select((item, i) => $"--- {scope} Evidence {i + 1} ---\n{item.Content}").ToList();
-        if (maxEvidenceCharacters is not { } limit || blocks.Sum(static block => block.Length) + separator.Length * (blocks.Count - 1) <= limit)
+        if (_maxEvidenceCharacters is not { } limit || blocks.Sum(static block => block.Length) + separator.Length * (blocks.Count - 1) <= limit)
         {
             return (string.Join(separator, blocks), blocks.Count);
         }

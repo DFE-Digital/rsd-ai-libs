@@ -43,9 +43,12 @@ public static readonly AgentDefinition Ofsted = new("ofsted-agent", "Ofsted")
 An app can call MCP tools itself, with no Foundry settings and no agents:
 
 ```csharp
-builder.Services.AddMcpServers(builder.Configuration, new ManagedIdentityCredential());
-
 using System.Text.Json;
+using Azure.Identity;
+using GovUK.Dfe.AI.Agents.Mcp.Clients.Interfaces;
+using Microsoft.Extensions.DependencyInjection;
+
+builder.Services.AddMcpServers(builder.Configuration, new ManagedIdentityCredential());
 
 public sealed class PerformanceService([FromKeyedServices("school-performance")] IMcpToolClient server)
 {
@@ -64,7 +67,8 @@ and only its `AllowedToolNames` can be called. Adding agents later still connect
 - **Sign-in:** a cached token for each server's `Scope`. For another identity, add the server's `Authentication` block
   or call `agents.UseMcpCredential("school-performance", credential)`.
 - **Safe output:** cut at `MaxToolOutputCharacters` (default 40,000) and fenced as data.
-- **Errors** go back to the model. Calls are never retried, so side effects can't happen twice.
+- **Errors** go back to the model. The client doesn't automatically retry a failed tool call, but the model may call it
+  again in a later round; make tools safe to repeat where possible.
 - **Startup check:** fails if an allowed tool doesn't exist; only warns if a server can't be reached.
 
 ## Settings

@@ -1,7 +1,8 @@
 # GovUK.Dfe.AI.Agents
 
 Run Azure AI Foundry agents from .NET: one at a time, streamed, in parallel or in sequence. Every run is checked,
-size-limited and concurrency-limited, and records its tokens and cost. Nothing is stored in Foundry.
+size-limited and concurrency-limited, and records its tokens and cost. Run history stays in the app; agent definitions
+and versions are stored in Foundry.
 
 ## Packages
 

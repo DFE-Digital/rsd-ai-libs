@@ -45,10 +45,12 @@ An app can call MCP tools itself, with no Foundry settings and no agents:
 ```csharp
 builder.Services.AddMcpServers(builder.Configuration, new ManagedIdentityCredential());
 
+using System.Text.Json;
+
 public sealed class PerformanceService([FromKeyedServices("school-performance")] IMcpToolClient server)
 {
     public Task<string> GetAsync(string urn, CancellationToken ct)
-        => server.CallToolAsync("get_performance_data", $$"""{"urn":"{{urn}}"}""", ct);
+        => server.CallToolAsync("get_performance_data", JsonSerializer.Serialize(new { urn }), ct);
 }
 ```
 

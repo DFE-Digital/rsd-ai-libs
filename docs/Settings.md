@@ -8,6 +8,7 @@ All under `AiAgents`, or in code with `agents.Configure(o => ...)`.
 | --------------------------------- | ------------------- | ----------------------------------------------------------------------------------------------------- |
 | `Foundry:Endpoint`                | Required            | The Foundry project endpoint                                                                          |
 | `Foundry:DefaultModel`            | Required            | The model agents use, e.g. `<connection>/gpt-5.1`; every model must then be on that connection        |
+| `Foundry:Authentication`          | The default identity | A separate identity for Foundry                                                                      |
 | `Foundry:Guardrail`               | None                | The guardrail every new agent version uses                                                            |
 | `Foundry:GatewayGuardrailErrors`  | None                | Gateway errors (`Status`, `Code`) reported as guardrail blocks                                        |
 | `Authentication`                  | None                | The default identity: `TenantId`, `ClientId` and `ClientSecret`, unless set in code                   |
@@ -20,6 +21,7 @@ All under `AiAgents`, or in code with `agents.Configure(o => ...)`.
 | `FenceToolOutput`                 | `true`              | Fences tool output as data                                                                            |
 | `MaxRunsPerInstance`              | 10                  | Runs at once on one instance                                                                          |
 | `GlobalConcurrency`               | Off                 | `MaxRunsAcrossInstances` across instances, and the `BlobContainerUri` for slots                       |
+| `GlobalConcurrency:Authentication` | The default identity | A separate identity for the run-slot container                                                       |
 | `MaxWaitToStartRun`               | 120                 | Seconds a run waits for a slot                                                                        |
 | `AgentCacheDuration`              | 60                  | Seconds a resolved version is reused, e.g. `30`; `0` turns caching off                                |
 | `VersionPins`                     | None                | The version this environment runs, per agent                                                          |
@@ -29,7 +31,7 @@ All under `AiAgents`, or in code with `agents.Configure(o => ...)`.
 | `ResponseFormatKey`               | None                | A system prompt appended to every agent's instructions                                                |
 | `ResponseFormatExemptPromptTypes` | None                | Prompt keys `ResponseFormatKey` isn't appended to                                                     |
 | `RequireTokenUsageTelemetry`      | `true`              | Fails startup when token metrics aren't recorded                                                      |
-| `ValidateAgentToolsAtStartup`     | `true`              | Fails startup if a pinned or external agent's tools can't run here                                    |
+| `ValidateAgentToolsAtStartup`     | `true`              | Fails if a deployed tool isn't allowed or has no binding; warns if Foundry or a tool service is unavailable |
 | `EnableDriftDetection`            | `false`             | Warns when a pinned version no longer matches its definition                                          |
 | `Pricing`                         | None                | Prices per model per 1,000 tokens, and `Currency` (default `GBP`), so results and metrics report cost |
 | `MaxRetries`                      | 6                   | Retries on a rate limit or transient failure; a retried 5xx may be billed twice                       |

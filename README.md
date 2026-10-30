@@ -1,7 +1,8 @@
 # DfE AI Agents Libraries
 
 .NET libraries for running Azure AI Foundry agents in DfE services: agents defined in code, checked answers with
-citations, cost and concurrency limits, and token and cost telemetry. Nothing is stored in Foundry.
+citations, cost and concurrency limits, and token and cost telemetry. Run history stays in the app; agent definitions
+and versions are stored in Foundry.
 
 ## Packages
 

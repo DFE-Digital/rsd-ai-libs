@@ -22,7 +22,7 @@ Roles are listed in [Access](Access.md); settings in [Settings](Settings.md); gu
 | 4 | [App to Resource Manager](#4-foundry-guardrails)                     | Guardrail definitions: read by apps, written by a provisioning job | The Guardrails credential                                         |
 | 5 | [App to Content Safety](#5-prompt-shields)                           | Question, evidence and tool output, when scanning is on            | The Guardrails credential                                         |
 | 6 | [Untrusted content to the model](#6-untrusted-content-and-the-model) | Evidence (e.g. AI Search results), tool output, earlier answers    | None                                                              |
-| 7 | [Model to your users](#6-untrusted-content-and-the-model)            | Answers                                                            | None                                                              |
+| 7 | [Model to your users](#streamed-answers)                             | Answers, streamed or whole                                         | None                                                              |
 | 8 | [App to telemetry and logs](#7-personal-data-telemetry-and-logs)     | Metrics, traces, logs                                              | None                                                              |
 
 Every Azure call uses Entra ID: a `TokenCredential` set in code (e.g. a managed identity) or a service principal from
@@ -163,6 +163,34 @@ Used when `ScanPrompts`, `ScanEvidence` or `ScanToolOutput` is on. For indirect 
 
 **Evidence:** the release gate's report; a review of how your page renders answers.
 
+### Streamed answers
+
+With `RunStreamingAsync`, an answer reaches the page before it's finished, so a failure can come after text is shown.
+
+**The library enforces:**
+
+- Each piece is cleaned before it's passed on: an image or tag is held back until it's complete, so it never reaches the
+  page before it can be removed.
+- The answer's checks (`Validate`, required citations) run once it's complete. A failed check, a guardrail block of the
+  answer, a timeout or a token cap throws after the last piece, with no retry.
+- The result's `Output` is exactly the pieces joined, including any text written before a tool call, so the checks cover
+  everything shown. A JSON answer comes as one piece at the end.
+- An agent that a tool or observer runs never streams into the answer.
+- Stopping reading cancels the run; what it was billed is still recorded.
+
+**Check in your deployment:**
+
+- **Your page discards what it showed when the stream throws**, and tells the user the answer can't be used. Test it with
+  an agent whose `Validate` always fails, and with a run that times out.
+- A guardrail block of a streamed answer, run against the deployed agent, ends the stream with a block
+  (`AgentGuardrailException`, stage `answer`) and leaves nothing on the page.
+- The deployment's content filter doesn't use **asynchronous** streaming filtering, if your model offers it: that mode can
+  send text before it's filtered.
+- A user closing the page cancels the run, so it stops using tokens.
+
+**Evidence:** recordings or tests of the page with a failed check, a timeout and a guardrail block; the content filter's
+streaming setting.
+
 ## 7. Personal data, telemetry and logs
 
 **The library enforces:**
@@ -217,6 +245,8 @@ block, a Prompt Shields block, and non-zero token and cost metrics. Keep the res
 | 5.3 | The Content Safety region is acceptable                                                                           | Resource location                           |            |
 | 6.1 | Release-gate cases cover your injection risks                                                                     | Release gate report                         |            |
 | 6.2 | Your page renders answers safely, including links                                                                 | Page review                                 |            |
+| 6.3 | A streamed answer that fails, times out or is blocked is removed from the page                                    | Page tests                                  |            |
+| 6.4 | The content filter doesn't filter streamed text after sending it                                                  | Content filter setting                      |            |
 | 7.1 | Redactors cover your personal data                                                                                | Redactor tests                              |            |
 | 7.2 | Log access and retention are set                                                                                  | Workspace settings                          |            |
 | 8.1 | Each package upgrade is checked against the services in a test environment                                        | Upgrade results                             |            |
@@ -229,3 +259,4 @@ block, a Prompt Shields block, and non-zero token and cost metrics. Keep the res
 - Anyone with Foundry User on a shared project can create versions of your agents.
 - Without its own credential, another project is called with this app's Foundry identity.
 - Logs can carry content from exception messages.
+- A streamed answer is shown before it's checked: the page, not the library, must remove it when the stream fails.

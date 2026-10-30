@@ -78,10 +78,10 @@ An agent fails if a case fails, or with a judge, a metric averages below `Minimu
 
 One folder per agent under `TestCasesDirectory`, with the cases in two folders:
 
-| Folder | Each case | Passes when |
-| --- | --- | --- |
-| `guardrail/` | Sets `"guardrailMustBlock": true`; no `group` | The guardrail blocks it |
-| `evaluation/` | No guardrail flag | The answer has the right facts and scores. A block fails it as the guardrail's mistake |
+| Folder        | Each case                                     | Passes when                                                                            |
+| ------------- | --------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `guardrail/`  | Sets `"guardrailMustBlock": true`; no `group` | The guardrail blocks it                                                                |
+| `evaluation/` | No guardrail flag                             | The answer has the right facts and scores. A block fails it as the guardrail's mistake |
 
 `CheckReleaseAsync` fails a case that breaks these rules. Check them in a unit test too, so a wrong file fails the build
 (`GovUK.Dfe.AI.Agents.ReleaseTesting`): `Assert.Empty(cases.SelectMany(ReleaseSections.Problems))`.
@@ -100,25 +100,26 @@ groundedness and relevance evaluators, with the judge model, and shown on the pr
 evaluation per agent (`<agent> release gate (<model>)`), one run per release.
 
 - It doesn't affect the gate; a failure is only logged.
-- It sends test prompts, evidence and answers to Foundry.
+- It **stores** each test case's prompt, evidence and answer in the Foundry evaluation, until you delete it. Use
+  synthetic data in test cases ([what Foundry stores](https://github.com/DFE-Digital/rsd-ai-libs/blob/main/docs/SecurityReview.md#what-foundry-stores)).
 - The identity needs **Foundry User** on the Foundry **resource**, not just the project. Without `PublishToFoundry`,
   Foundry User on the project is enough.
 
 Settings, under `AiAgents:Evaluation:ReleaseGate`, e.g. `{ "MinimumScore": 3.5, "Tolerance": 0.2, "MaxGroupGap": 0.5 }`:
 
-| Setting               | Default                 | Purpose                                                      |
-| --------------------- | ----------------------- | ------------------------------------------------------------ |
-| `TestCasesDirectory`  | `TestCases`             | One folder of cases per agent, relative to the app's folder  |
-| `ReportsDirectory`    | `evaluation-reports`    | Where reports are written, relative to the working directory |
-| `BaselinesDirectory`  | `Baselines`             | Each agent's accepted report, relative to the app's folder   |
-| `Metrics`             | Groundedness, Relevance | The metrics each agent must be scored on                     |
-| `MinimumScore`        | `3.5`                   | Lowest average per metric (1 to 5)                           |
-| `Tolerance`           | `0.2`                   | How far a score may fall below the baseline                  |
-| `MaxGroupGap`         | Off                     | Largest gap between case groups                              |
-| `Repeats`             | `1`                     | Runs per case; scores are averaged                           |
-| `MaxParallelTestRuns` | `4`                     | Cases run at once                                            |
-| `RefusalPhrases`      | None                    | Fixed refusals whose cases aren't scored                     |
-| `PublishToFoundry`    | `false`                 | Also sends answers to a Foundry evaluation                   |
+| Setting               | Default                 | Purpose                                                         |
+| --------------------- | ----------------------- | --------------------------------------------------------------- |
+| `TestCasesDirectory`  | `TestCases`             | One folder of cases per agent, relative to the app's folder     |
+| `ReportsDirectory`    | `evaluation-reports`    | Where reports are written, relative to the working directory    |
+| `BaselinesDirectory`  | `Baselines`             | Each agent's accepted report, relative to the app's folder      |
+| `Metrics`             | Groundedness, Relevance | The metrics each agent must be scored on                        |
+| `MinimumScore`        | `3.5`                   | Lowest average per metric (1 to 5)                              |
+| `Tolerance`           | `0.2`                   | How far a score may fall below the baseline                     |
+| `MaxGroupGap`         | Off                     | Largest gap between case groups                                 |
+| `Repeats`             | `1`                     | Runs per case; scores are averaged                              |
+| `MaxParallelTestRuns` | `4`                     | Cases run at once                                               |
+| `RefusalPhrases`      | None                    | Fixed refusals whose cases aren't scored                        |
+| `PublishToFoundry`    | `false`                 | Also sends answers to a Foundry evaluation                      |
 | `RequireGuardrail`    | `true`                  | `CheckReleaseAsync` fails every agent without a guardrail check |
 
 ## Metrics
@@ -144,7 +145,8 @@ for what each answers and the query that shows each release per agent.
   metric keeps one agent named after what it scores (`answer-judge-groundedness`, `answer-judge-relevance`), created
   once and reused; a new version only when its instructions or the guardrail change. Its tokens and cost show in
   telemetry.
-- **Nothing stored:** judge calls store nothing in Foundry, though they carry the run's prompt, evidence and answer.
+- **Storage:** judge calls store no run history in Foundry, though they carry the run's prompt, evidence and answer.
+  A judge agent stores only the evaluator's instructions. `PublishToFoundry` does store answers: see the release gate.
 - **Reasoning models** work as judges.
 - **Missing scores:** if a metric can't be scored (e.g. a wrong model name), the reason is logged.
 - **Custom metrics:** `agents.AddQualityEvaluation(evaluator: new MyEvaluator())` with any Microsoft.Extensions.AI

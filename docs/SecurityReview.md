@@ -28,11 +28,39 @@ Roles are listed in [Access](Access.md); settings in [Settings](Settings.md); gu
 Every Azure call uses Entra ID: a `TokenCredential` set in code (e.g. a managed identity) or a service principal from
 an `Authentication` block. There are no API keys.
 
+## What Foundry stores
+
+Runs don't store their history in Foundry, but an agent's definition is stored there, and so is anything published to
+an evaluation. Treat what's stored as you would the data in it: a system prompt can describe your data or processes, and
+a tool's description can name your systems.
+
+| What                                                             | Stored in Foundry?                        | What it holds                                                                                                                                                                    | How long                                                                                                             |
+| ---------------------------------------------------------------- | ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| A run's question, evidence, tool output and answer               | **No**: every request sets `store: false` | Nothing                                                                                                                                                                          | The app keeps the run's history in memory for the run only                                                           |
+| Each agent version                                               | **Yes**                                   | Its full instructions (the system prompt file), every tool's name, description and argument schema (including MCP servers'), its output schema, description, model and guardrail | Until deleted. **Old versions are never pruned unless `KeepLatestVersions` is set**; pinned versions are always kept |
+| An ephemeral agent (`IsManagedAgent: false`)                     | **Yes**, for the run                      | The same as a version                                                                                                                                                            | Deleted after the run; if that fails, until `DeleteOrphanedEphemeralAgentsAsync` removes it                          |
+| A judge agent (Evaluation, on a model connection)                | **Yes**                                   | The evaluator's instructions; never a run's content                                                                                                                              | Until deleted                                                                                                        |
+| Release-gate answers, with Evaluation's `PublishToFoundry: true` | **Yes**                                   | Each test case's **prompt, evidence and answer**, in a Foundry evaluation run                                                                                                    | Until the evaluation is deleted                                                                                      |
+| Guardrails and blocklists (Guardrails' `ApplyAsync`)             | **Yes**, in the Foundry resource          | The filter settings and **every blocklist term and pattern**                                                                                                                     | Until deleted                                                                                                        |
+
+**Outside the library:** Microsoft's own handling of what's sent to a model, e.g. abuse monitoring, follows your Azure
+agreement, not these settings. Check it for your data.
+
+**Check in your deployment:**
+
+- System prompts and tool descriptions hold nothing you couldn't store in the Foundry project, e.g. no personal data or
+  secrets.
+- `KeepLatestVersions` is set (e.g. 3), unless every past version should be kept.
+- `PublishToFoundry` is on only if the release-gate test cases may be stored in the project: use synthetic data in them.
+- Blocklists hold no sensitive terms you can't store in the resource. The Guardrails package says to load them from Key
+  Vault, but `ApplyAsync` still writes them to the resource.
+
 ## 1. App to its Foundry project
 
 **The library enforces:**
 
-- Runs are stateless: every request sets `store: false`, and the run's history stays in the app.
+- Runs are stateless: every request sets `store: false`, and the run's history stays in the app. Agent definitions
+  are stored: see [What Foundry stores](#what-foundry-stores).
 - Each run is capped: `RunTimeout` (300 s), `MaxOutputTokensPerRun` (64,000), `MaxEvidenceCharacters` (200,000),
   `MaxToolOutputCharacters` (40,000) and 10 tool-call rounds.
 - Every agent version it creates gets the guardrail, when one is set.
@@ -224,32 +252,33 @@ block, a Prompt Shields block, and non-zero token and cost metrics. Keep the res
 
 ## Sign-off checklist
 
-| #   | Check                                                                                                             | Evidence                                    | Signed off |
-| --- | ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------- | ---------- |
-| 1.1 | Foundry identity is a managed identity or Key Vault-held service principal, with Foundry User on the project only | Role assignments                            |            |
-| 1.2 | Foundry stores no responses for the app's runs                                                                    | Project after a test run                    |            |
-| 1.3 | Production versions are pinned; `EnableDriftDetection` decided                                                    | Settings                                    |            |
-| 2.1 | Identity used for another project is known, with Foundry User there only                                          | Role assignments on both projects           |            |
-| 2.2 | The central project's agents carry a guardrail; versions are pinned                                               | Evidence from its owners; settings          |            |
-| 2.3 | Sending data to that project is allowed                                                                           | Data-processing review                      |            |
-| 3.1 | Each MCP `Scope` is the server's own registration; the app holds only the roles it needs                          | App registration                            |            |
-| 3.2 | Each server checks audience, issuer and role on every tool call, and authorises each record                       | Refused call with a wrong-audience token    |            |
-| 3.3 | Tools that change data need approval                                                                              | `ToolsRequiringApproval`, or server control |            |
-| 3.4 | MCP tokens reach only their server                                                                                | Egress logs; Foundry traces                 |            |
-| 4.1 | `FailWhenUnreachable` decided for production                                                                      | Settings                                    |            |
-| 4.2 | Real guardrail blocks are reported as blocks                                                                      | Release gate report; block metric           |            |
-| 4.3 | A gateway model's own policy is checked, and `GatewayGuardrailErrors` matches it                                  | Gateway policy; a real block                |            |
-| 4.4 | Only the provisioning job holds Cognitive Services Contributor                                                    | Role assignments                            |            |
-| 5.1 | `ScanEvidence` and, with tools, `ScanToolOutput` are on, or their absence is accepted                             | Settings                                    |            |
-| 5.2 | Planted instructions are blocked; a missing role fails runs                                                       | Test runs                                   |            |
-| 5.3 | The Content Safety region is acceptable                                                                           | Resource location                           |            |
-| 6.1 | Release-gate cases cover your injection risks                                                                     | Release gate report                         |            |
-| 6.2 | Your page renders answers safely, including links                                                                 | Page review                                 |            |
-| 6.3 | A streamed answer that fails, times out or is blocked is removed from the page                                    | Page tests                                  |            |
-| 6.4 | The content filter doesn't filter streamed text after sending it                                                  | Content filter setting                      |            |
-| 7.1 | Redactors cover your personal data                                                                                | Redactor tests                              |            |
-| 7.2 | Log access and retention are set                                                                                  | Workspace settings                          |            |
-| 8.1 | Each package upgrade is checked against the services in a test environment                                        | Upgrade results                             |            |
+| #   | Check                                                                                                                            | Evidence                                    | Signed off |
+| --- | -------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- | ---------- |
+| 0.1 | Stored agent definitions, published evaluations and blocklists hold only what may be stored in Foundry; `KeepLatestVersions` set | Prompt files and blocklist review; settings |            |
+| 1.1 | Foundry identity is a managed identity or Key Vault-held service principal, with Foundry User on the project only                | Role assignments                            |            |
+| 1.2 | Foundry stores no responses for the app's runs                                                                                   | Project after a test run                    |            |
+| 1.3 | Production versions are pinned; `EnableDriftDetection` decided                                                                   | Settings                                    |            |
+| 2.1 | Identity used for another project is known, with Foundry User there only                                                         | Role assignments on both projects           |            |
+| 2.2 | The central project's agents carry a guardrail; versions are pinned                                                              | Evidence from its owners; settings          |            |
+| 2.3 | Sending data to that project is allowed                                                                                          | Data-processing review                      |            |
+| 3.1 | Each MCP `Scope` is the server's own registration; the app holds only the roles it needs                                         | App registration                            |            |
+| 3.2 | Each server checks audience, issuer and role on every tool call, and authorises each record                                      | Refused call with a wrong-audience token    |            |
+| 3.3 | Tools that change data need approval                                                                                             | `ToolsRequiringApproval`, or server control |            |
+| 3.4 | MCP tokens reach only their server                                                                                               | Egress logs; Foundry traces                 |            |
+| 4.1 | `FailWhenUnreachable` decided for production                                                                                     | Settings                                    |            |
+| 4.2 | Real guardrail blocks are reported as blocks                                                                                     | Release gate report; block metric           |            |
+| 4.3 | A gateway model's own policy is checked, and `GatewayGuardrailErrors` matches it                                                 | Gateway policy; a real block                |            |
+| 4.4 | Only the provisioning job holds Cognitive Services Contributor                                                                   | Role assignments                            |            |
+| 5.1 | `ScanEvidence` and, with tools, `ScanToolOutput` are on, or their absence is accepted                                            | Settings                                    |            |
+| 5.2 | Planted instructions are blocked; a missing role fails runs                                                                      | Test runs                                   |            |
+| 5.3 | The Content Safety region is acceptable                                                                                          | Resource location                           |            |
+| 6.1 | Release-gate cases cover your injection risks                                                                                    | Release gate report                         |            |
+| 6.2 | Your page renders answers safely, including links                                                                                | Page review                                 |            |
+| 6.3 | A streamed answer that fails, times out or is blocked is removed from the page                                                   | Page tests                                  |            |
+| 6.4 | The content filter doesn't filter streamed text after sending it                                                                 | Content filter setting                      |            |
+| 7.1 | Redactors cover your personal data                                                                                               | Redactor tests                              |            |
+| 7.2 | Log access and retention are set                                                                                                 | Workspace settings                          |            |
+| 8.1 | Each package upgrade is checked against the services in a test environment                                                       | Upgrade results                             |            |
 
 ## Known limits
 
@@ -259,4 +288,5 @@ block, a Prompt Shields block, and non-zero token and cost metrics. Keep the res
 - Anyone with Foundry User on a shared project can create versions of your agents.
 - Without its own credential, another project is called with this app's Foundry identity.
 - Logs can carry content from exception messages.
+- Agent definitions, published release-gate answers and blocklists are stored in Foundry; only run history isn't.
 - A streamed answer is shown before it's checked: the page, not the library, must remove it when the stream fails.

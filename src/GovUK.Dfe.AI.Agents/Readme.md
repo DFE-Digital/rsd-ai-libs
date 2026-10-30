@@ -135,7 +135,9 @@ fenced as data so it can't act as an instruction.
 
 ## What happens in a run
 
-1. **Version:** each definition becomes an agent version in Foundry; unchanged definitions reuse theirs.
+1. **Version:** each definition becomes an agent version in Foundry, which stores its instructions, tools and output
+   schema; unchanged definitions reuse theirs. Old versions stay unless `KeepLatestVersions` is set
+   ([what Foundry stores](https://github.com/DFE-Digital/rsd-ai-libs/blob/main/docs/SecurityReview.md#what-foundry-stores)).
 2. **Slot:** the run waits for a free concurrency slot.
 3. **Send:** prompt and evidence are redacted, evidence is cut to size and fenced, and both are sent. Calls are
    stateless: the run's history stays in your app.

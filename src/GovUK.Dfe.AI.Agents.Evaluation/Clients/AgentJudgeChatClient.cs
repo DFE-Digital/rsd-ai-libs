@@ -7,7 +7,7 @@ namespace GovUK.Dfe.AI.Agents.Evaluation.Clients;
 
 /// <summary>
 /// The judge run as an agent, used when <c>Foundry:DefaultModel</c> is on a connection: like every agent, it calls its
-/// model through that connection, has the guardrail (if set), stores nothing, and shows in token and cost telemetry. It
+/// model through that connection, has the guardrail (if set), stores no run history, and shows in token and cost telemetry. It
 /// has no tools.
 /// </summary>
 /// <remarks>

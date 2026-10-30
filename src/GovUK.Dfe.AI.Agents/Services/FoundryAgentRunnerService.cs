@@ -22,7 +22,7 @@ namespace GovUK.Dfe.AI.Agents.Services;
 /// invalid answer, and enforces the run's timeout, token budget and run slot. Records tokens.
 /// </summary>
 /// <remarks>
-/// Runs are stateless, so nothing is stored in Foundry. The runner keeps the run's history (input, the model's output
+/// Runs are stateless, so their history isn't stored in Foundry. The runner keeps the run's history (input, the model's output
 /// items, including encrypted reasoning, and tool outputs) and sends it with each call.
 /// </remarks>
 internal sealed class FoundryAgentRunnerService(IAgentFactory agentFactory, IFoundryResponsesClient responsesClient,

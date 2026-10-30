@@ -9,8 +9,8 @@ namespace GovUK.Dfe.AI.Agents.Evaluation.Clients;
 
 /// <summary>A judge model called through this app's Foundry project, with no extra client or credential.</summary>
 /// <remarks>
-/// Sends only the model and messages, so reasoning models (e.g. gpt-5.1) work. Like agent runs, judge calls store nothing
-/// in Foundry: they carry the run's prompt, evidence and answer.
+/// Sends only the model and messages, so reasoning models (e.g. gpt-5.1) work. Like agent runs, judge calls aren't stored
+/// in Foundry, which matters as they carry the run's prompt, evidence and answer.
 /// </remarks>
 /// <param name="client">This app's Foundry project client.</param>
 /// <param name="model">The judge model, e.g. "myconnection/gpt-5.1".</param>

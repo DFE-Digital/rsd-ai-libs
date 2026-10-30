@@ -2,7 +2,7 @@ using OpenAI.Responses;
 
 namespace GovUK.Dfe.AI.Agents.Clients.Interfaces;
 
-/// <summary>Sends input to a Foundry agent and returns its response. Nothing is stored in Foundry.</summary>
+/// <summary>Sends input to a Foundry agent and returns its response, which Foundry doesn't store.</summary>
 internal interface IFoundryResponsesClient
 {
     /// <summary>Sends the run's history to an agent and returns its response.</summary>

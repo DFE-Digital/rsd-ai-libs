@@ -5,7 +5,8 @@ namespace GovUK.Dfe.AI.Agents.Services.Interfaces;
 
 /// <summary>
 /// Runs your agents. Creates or resolves each one (respecting pins), attaches its allowed tools, runs tool calls,
-/// fences evidence and records token usage. Nothing is stored in Foundry.
+/// fences evidence and records token usage. Runs' history isn't stored in Foundry; each agent version, with its
+/// instructions, tools and output schema, is.
 /// </summary>
 public interface IAgentService
 {

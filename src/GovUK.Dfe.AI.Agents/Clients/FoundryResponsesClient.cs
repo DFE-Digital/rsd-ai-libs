@@ -5,7 +5,7 @@ using OpenAI.Responses;
 namespace GovUK.Dfe.AI.Agents.Clients;
 
 /// <summary>
-/// Foundry agent responses, through the project's OpenAI client. Stateless: nothing is stored, so the caller sends the
+/// Foundry agent responses, through the project's OpenAI client. Stateless: responses aren't stored, so the caller sends the
 /// run's history each time. Encrypted reasoning is returned, so a reasoning model keeps its reasoning across tool rounds.
 /// </summary>
 internal sealed class FoundryResponsesClient(ProjectOpenAIClient client) : IFoundryResponsesClient

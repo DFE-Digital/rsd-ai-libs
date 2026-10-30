@@ -1,0 +1,31 @@
+name: CI & Pack GovUK.Dfe.AI.Agents.Guardrails
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - "src/GovUK.Dfe.AI.Agents.Guardrails/**"
+  pull_request:
+    branches: [ main ]
+    paths:
+      - "src/GovUK.Dfe.AI.Agents.Guardrails/**"
+
+jobs:
+  build-and-test:
+    uses: ./.github/workflows/build-test-template.yml
+    with:
+      project_name: GovUK.Dfe.AI.Agents.Guardrails
+      project_path: src/GovUK.Dfe.AI.Agents.Guardrails
+
+  pack-and-release:
+    needs: build-and-test
+    if: needs.build-and-test.result == 'success'
+    permissions:
+      contents: write
+      packages: write
+    uses: ./.github/workflows/pack-template.yml
+    with:
+      project_name: GovUK.Dfe.AI.Agents.Guardrails
+      project_path: src/GovUK.Dfe.AI.Agents.Guardrails/GovUK.Dfe.AI.Agents.Guardrails.csproj
+    secrets:
+      NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}

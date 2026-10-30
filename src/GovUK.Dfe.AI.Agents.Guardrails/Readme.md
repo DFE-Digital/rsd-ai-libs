@@ -1,0 +1,165 @@
+# GovUK.Dfe.AI.Agents.Guardrails
+
+Makes sure every model deployment, or agent version, your
+[GovUK.Dfe.AI.Agents](https://github.com/DFE-Digital/rsd-ai-libs/blob/main/src/GovUK.Dfe.AI.Agents/Readme.md)
+agents use has an Azure AI Foundry guardrail. Foundry then blocks:
+
+- harmful content (hate, sexual, violence, self-harm)
+- jailbreak attempts in the question
+- protected material in answers
+
+Instructions planted in evidence or tool output (indirect attacks) need `ScanEvidence` and `ScanToolOutput`, which the
+app runs itself: see [Which setting catches indirect attacks](#which-setting-catches-indirect-attacks).
+
+## Set up
+
+```sh
+dotnet add package GovUK.Dfe.AI.Agents.Guardrails
+```
+
+```json
+"AiAgents": {
+  "Guardrails": {
+    "SubscriptionId": "<subscription id>",
+    "ResourceGroup": "<resource group>",
+    "Name": "briefing-guardrail",
+    "Deployments": [ "gpt-5.1" ]
+  }
+}
+```
+
+```csharp
+builder.Services.AddAgents(builder.Configuration, agents => agents
+    .AddAgents(BriefingAgents.All)
+    .AddGuardrails());
+```
+
+**You need** these roles, all on the Foundry **resource** (not the project), where guardrails live:
+
+| Identity                                                     | Role                           | For                                                                                                                            |
+| ------------------------------------------------------------ | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
+| Every app                                                    | Reader                         | Checking the guardrail at startup                                                                                              |
+| Apps using `ScanPrompts`, `ScanEvidence` or `ScanToolOutput` | Cognitive Services User        | Scanning input with Prompt Shields, a data-plane call Contributor doesn't grant (on `ContentSafetyEndpoint`'s resource if set) |
+| A provisioning job                                           | Cognitive Services Contributor | `ApplyAsync`; not needed if Bicep or Terraform creates the guardrail                                                           |
+
+## Apply once, check everywhere
+
+- **A provisioning job** calls `await guardrails.ApplyAsync(ct)` (`IFoundryGuardrailsService`). It creates or updates
+  the guardrail and assigns it to each deployment, writing only what differs.
+- **Every app** does nothing: at startup it checks each deployment has the guardrail, unweakened.
+- **Infrastructure as code instead:** create the guardrail in Bicep or Terraform and skip `ApplyAsync`; apps still check
+  it, with only Reader.
+- **Missing or weakened:** startup fails, saying what's wrong (`"RequireAtStartup": false` only warns).
+- **Resource Manager unreachable:** startup warns, so an outage doesn't stop new instances
+  (`"FailWhenUnreachable": true` fails instead).
+- **Release check:** the release gate's `CheckReleaseAsync` checks the guardrail before any agent is tested, and fails
+  every agent while it's missing or weakened (see the Evaluation package's release gate).
+- **Metric:** every check counts `dfe.ai_agents.guardrail.checks` once per agent the app runs, with its outcome and
+  whether `ApplyAsync` made it. It shows whether an agent's safety net was in place when it was released. See
+  [Release metrics](https://github.com/DFE-Digital/rsd-ai-libs/blob/main/docs/Telemetry.md#release-metrics).
+
+## Models through a connection
+
+When `Foundry:DefaultModel` is `<connection>/<model>`, the deployments aren't in your Foundry resource, so put the
+guardrail on the agents:
+
+```json
+"Guardrails": {
+  "SubscriptionId": "<subscription id>",
+  "ResourceGroup": "<resource group>",
+  "Name": "briefing-guardrail",
+  "Targets": "Agents"
+}
+```
+
+- No `Deployments`; `ApplyAsync` creates or updates only the guardrail and blocklists.
+- Every agent version the app creates gets the guardrail, by its full Resource Manager ID (it becomes `Foundry:Guardrail`).
+- The startup check confirms each pinned or externally managed version has it, e.g.
+  `agent 'rsd-trust-agent' version 4 uses no guardrail`. Fix by provisioning a new version.
+- `"Targets": "Deployments, Agents"` does both.
+
+## Settings
+
+| Setting                           | Default                            | Purpose                                                                                                                                   |
+| --------------------------------- | ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `SubscriptionId`, `ResourceGroup` | Required                           | Where the Foundry resource is                                                                                                             |
+| `AccountName`                     | The resource in `Foundry:Endpoint` | Set only if the deployments are on another Foundry resource                                                                               |
+| `Name`                            | Required                           | The guardrail's name in Foundry                                                                                                           |
+| `Targets`                         | `Deployments`                      | Where the guardrail goes: `Deployments`, `Agents`, or both                                                                                |
+| `Deployments`                     | Required for `Deployments`         | Every model deployment your agents use                                                                                                    |
+| `BlockFrom`                       | `Medium`                           | Lowest harm severity blocked in prompts and answers. `Low` blocks the most                                                                |
+| `PromptShields`                   | `true`                             | Blocks jailbreak attempts                                                                                                                 |
+| `IndirectAttacks`                 | `true`                             | The guardrail's indirect attack filter; not relied on for evidence or your tools' output ([why](#which-setting-catches-indirect-attacks)) |
+| `CheckBlocklists`                 | `false`                            | Checks each run's question and evidence against `Blocklists` in the app (see below)                                                       |
+| `ScanPrompts`                     | `false`                            | Scans each run's question with Prompt Shields before it's sent (see below)                                                                |
+| `ScanEvidence`                    | `false`                            | Scans each run's evidence with Prompt Shields before it's sent (see below)                                                                |
+| `ScanToolOutput`                  | `false`                            | Scans the output of each tool your app runs with Prompt Shields before the model reads it (see below)                                     |
+| `ContentSafetyEndpoint`           | The Foundry resource's own         | The Content Safety endpoint `ScanPrompts`, `ScanEvidence` and `ScanToolOutput` call                                                       |
+| `ProtectedMaterial`               | `true`                             | Blocks answers that reproduce protected text or code                                                                                      |
+| `Blocklists`                      | None                               | Your own blocked terms and patterns (see below)                                                                                           |
+| `RequireAtStartup`                | `true`                             | Fails startup when a deployment or agent version lacks the guardrail                                                                      |
+| `FailWhenUnreachable`             | `false`                            | Fails startup when the guardrail can't be checked, e.g. Resource Manager is unreachable                                                   |
+| `Authentication`                  | The default identity               | A separate identity for Resource Manager (or `agents.UseGuardrailsCredential(...)` in code)                                               |
+
+## Blocklists
+
+Block your own terms, such as project code names or case reference formats:
+
+```json
+"Blocklists": {
+  "case-references": { "Terms": [ "Project Falcon" ], "Patterns": [ "CASE-\\d{6}" ] }
+}
+```
+
+`ApplyAsync` creates each blocklist with exactly these entries, for prompts and answers. The startup check reports a
+blocklist that's detached or missing entries, by count only. Load sensitive terms from Key Vault, not appsettings.json.
+
+## When a guardrail blocks something
+
+The run fails with an inner `AgentGuardrailException` (`Stage`: `prompt`, `answer`, `evidence` or `tool_output`), counted by
+`dfe.ai_agents.guardrail.blocks`. In parallel and sequential runs, the agent gets a fallback result instead. Core
+reports blocks with or without this package.
+
+## Which setting catches indirect attacks
+
+An indirect attack is an instruction planted in material the agent reads, e.g. a search result telling it to reveal
+data. Where it can come from decides what catches it:
+
+| Planted in                                                         | Caught by                           | Why not the guardrail's `IndirectAttacks`                                                                                                                                                                                                             |
+| ------------------------------------------------------------------ | ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Evidence you pass, e.g. search results, documents, earlier answers | `ScanEvidence`                      | Evidence is sent in Foundry's `<documents>` format, but Foundry documents scanning that format only for model calls, not for agents' input, so it isn't relied on                                                                                     |
+| Output of tools your app runs, e.g. MCP servers, `AddTools`        | `ScanToolOutput`                    | Foundry scans tool responses only for its own tools, e.g. Azure AI Search or Bing Grounding, in preview ([intervention points](https://learn.microsoft.com/azure/ai-foundry/guardrails/intervention-points)), never the output of tools your app runs |
+| Any input, for a model behind your own gateway                     | `ScanEvidence` and `ScanToolOutput` | No Foundry guardrail runs there at all                                                                                                                                                                                                                |
+
+- **So, for indirect attack detection, turn on `ScanEvidence` and, if agents call tools, `ScanToolOutput`.** Keep
+  `IndirectAttacks` on too: it covers Foundry's own tools, and the startup check refuses a guardrail with it turned off.
+- **Prove it:** a release-gate test case with planted instructions in its evidence and `"guardrailMustBlock": true`
+  passes only when your configuration blocks it.
+
+## Checking input in the app
+
+A Foundry guardrail isn't relied on to scan evidence (see above), and doesn't apply at all to a model behind your own
+gateway ([Bring your own model](https://learn.microsoft.com/azure/foundry/agents/how-to/ai-gateway)). So the app can
+check each run's input itself, after redaction and before anything is sent. A match blocks the run like a guardrail
+block, with the reason in `AgentGuardrailException.Reason`:
+
+| Setting           | Checks                                             | How                                                                                                                   | Blocks with `Stage`    |
+| ----------------- | -------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- | ---------------------- |
+| `CheckBlocklists` | The question and the evidence against `Blocklists` | In the app, no call to Azure; first                                                                                   | `prompt` or `evidence` |
+| `ScanPrompts`     | The question, for jailbreak attempts               | [Prompt Shields](https://learn.microsoft.com/azure/ai-services/content-safety/concepts/jailbreak-detection), one call | `prompt`               |
+| `ScanEvidence`    | The evidence, for planted instructions             | Prompt Shields, one call per 9,000 characters, up to 4 at a time                                                      | `evidence`             |
+| `ScanToolOutput`  | Each tool's output, for planted instructions       | Prompt Shields, as evidence; a round's outputs side by side, after capping and redaction, before the model reads them | `tool_output`          |
+
+- **Endpoint:** `https://<resource>.cognitiveservices.azure.com/`, unless `ContentSafetyEndpoint` is set.
+- **Cost:** the question and evidence scans run side by side, about 100–200 ms for a typical run; `ScanToolOutput` adds
+  about as much to each round of tool calls. Blocklists cost nothing.
+- **Fails closed:** if input or tool output can't be scanned, e.g. because the role is missing, the run fails rather than
+  sending it.
+- **Release gate:** test cases with `"guardrailMustBlock": true` prove each check works.
+- **Your own:** register an `IInputShield` for other checks of the question and evidence, or an `IToolOutputShield` for
+  tool output.
+
+## Not included
+
+**PII filtering:** Foundry's PII filter is in preview model, and this package uses GA APIs only. If you need it, turn it
+on in the Foundry portal; the startup check leaves it alone. Currently, managing with regular expressions by creating a blocklist.

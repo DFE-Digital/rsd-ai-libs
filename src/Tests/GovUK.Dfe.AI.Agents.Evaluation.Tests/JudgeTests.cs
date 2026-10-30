@@ -1,0 +1,460 @@
+using System.ClientModel.Primitives;
+using System.ClientModel;
+using Azure.AI.Extensions.OpenAI;
+using Azure.Core;
+using GovUK.Dfe.AI.Agents.Builders;
+using GovUK.Dfe.AI.Agents.Diagnostics.Interfaces;
+using GovUK.Dfe.AI.Agents.Evaluation.Clients;
+using GovUK.Dfe.AI.Agents.Evaluation.QualityGates;
+using GovUK.Dfe.AI.Agents.Quality.Interfaces;
+using GovUK.Dfe.AI.Agents.Services.Interfaces;
+using GovUK.Dfe.AI.Agents.Tests.Integration.Fakes;
+using GovUK.Dfe.AI.Agents.ValueObjects;
+using Microsoft.Extensions.AI.Evaluation.Quality;
+using Microsoft.Extensions.AI.Evaluation;
+using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using NSubstitute;
+using OpenAI.Responses;
+using Xunit;
+
+namespace GovUK.Dfe.AI.Agents.Evaluation.Tests;
+
+/// <summary>The Foundry judge, and how its scores (or why there are none) reach the release gate and live sampling.</summary>
+public sealed class JudgeTests
+{
+    private static readonly CompletedAgentRun Sample = new()
+    {
+        AgentName = "ofsted-agent", AgentVersion = "3", Model = "gpt-4o", Prompt = "Summarise.", Evidence = "Rated Good.", Output = "Rated Good.",
+    };
+
+    private static (FoundryJudgeChatClient Judge, Func<CreateResponseOptions?> Sent) Judge(ResponseResult reply)
+    {
+        CreateResponseOptions? sent = null;
+        var responses = Substitute.For<ProjectResponsesClient>();
+        responses.CreateResponseAsync(Arg.Do<CreateResponseOptions>(options => sent = options), Arg.Any<CancellationToken>())
+            .Returns(ClientResult.FromValue(reply, Substitute.For<PipelineResponse>()));
+        var project = Substitute.For<ProjectOpenAIClient>();
+        project.GetProjectResponsesClient().Returns(responses);
+        return (new FoundryJudgeChatClient(project, "myconnection/gpt-5.1"), () => sent);
+    }
+
+    [Fact]
+    public void AddQualityEvaluation_WithAJudgeModel_JudgesThroughThisAppsFoundryProject()
+    {
+        using var provider = Build(agents => agents.AddQualityEvaluation());
+
+        Assert.IsType<ExtensionsAiEvaluator>(provider.GetRequiredService<IAgentRunEvaluator>());
+    }
+
+    [Fact]
+    public async Task Judge_CallsTheModelThroughFoundry_SendingOnlyTheModelAndMessages_SoReasoningModelsAcceptIt()
+    {
+        var (judge, sent) = Judge(FoundryResponses.Completed("r1", "{\"score\": 4}", totalTokens: 50));
+
+        var response = await judge.GetResponseAsync([new(ChatRole.System, "You grade answers."), new(ChatRole.User, "Grade this.")],
+            new ChatOptions { Temperature = 0, TopP = 1, MaxOutputTokens = 800 }, cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Equal("{\"score\": 4}", response.Text);
+        Assert.Equal(50, response.Usage!.TotalTokenCount);
+        Assert.Equal("myconnection/gpt-5.1", sent()!.Model);
+        Assert.False(sent()!.StoredOutputEnabled);   // the run's prompt, evidence and answer aren't kept in Foundry
+        Assert.Equal(2, sent()!.InputItems.Count);
+        Assert.Null(sent()!.Temperature);
+        Assert.Null(sent()!.TopP);
+        Assert.Null(sent()!.MaxOutputTokenCount);
+    }
+
+    [Fact]
+    public async Task AJudgeCalledOnItsDeployment_IsRecordedInTokenAndCostTelemetry_AsTheJudge()
+    {
+        var telemetry = Substitute.For<IModelCallTelemetry>();
+        var call = Substitute.For<IModelCall>();
+        (string? Model, TokenUsage Usage)? completed = null;
+        call.When(c => c.Completed(Arg.Any<string?>(), Arg.Any<TokenUsage>()))
+            .Do(info => completed = (info.ArgAt<string?>(0), info.ArgAt<TokenUsage>(1)));
+        telemetry.Start(Arg.Any<string>()).Returns(call);
+        var responses = Substitute.For<ProjectResponsesClient>();
+        responses.CreateResponseAsync(Arg.Any<CreateResponseOptions>(), Arg.Any<CancellationToken>())
+            .Returns(ClientResult.FromValue(FoundryResponses.Completed("r1", "{\"score\": 4}", totalTokens: 50, cachedTokens: 4),
+                Substitute.For<PipelineResponse>()));
+        var project = Substitute.For<ProjectOpenAIClient>();
+        project.GetProjectResponsesClient().Returns(responses);
+
+        await new FoundryJudgeChatClient(project, "myconnection/gpt-5.1", telemetry)
+            .GetResponseAsync([new(ChatRole.User, "Grade this.")], cancellationToken: TestContext.Current.CancellationToken);
+
+        telemetry.Received(1).Start("answer-judge");
+        Assert.Equal(("gpt-4o", new TokenUsage(10, 40, 50) { CachedInputTokens = 4 }), completed);
+        call.Received(1).Dispose();
+    }
+
+    [Fact]
+    public async Task AFailedJudgeCallOnItsDeployment_IsStillRecorded()
+    {
+        var telemetry = Substitute.For<IModelCallTelemetry>();
+        var call = Substitute.For<IModelCall>();
+        telemetry.Start(Arg.Any<string>()).Returns(call);
+        var failure = new InvalidOperationException("429");
+        var responses = Substitute.For<ProjectResponsesClient>();
+        responses.CreateResponseAsync(Arg.Any<CreateResponseOptions>(), Arg.Any<CancellationToken>())
+            .Returns<Task<ClientResult<ResponseResult>>>(_ => throw failure);
+        var project = Substitute.For<ProjectOpenAIClient>();
+        project.GetProjectResponsesClient().Returns(responses);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => new FoundryJudgeChatClient(project, "myconnection/gpt-5.1", telemetry)
+            .GetResponseAsync([new(ChatRole.User, "Grade this.")], cancellationToken: TestContext.Current.CancellationToken));
+
+        call.Received(1).Failed(failure);
+        call.Received(1).Dispose();
+    }
+
+    [Theory]
+    [InlineData("incomplete")]
+    [InlineData("failed")]
+    public async Task AnUnfinishedJudgeReply_IsntScored_ButIsStillRecordedAsBilled(string status)
+    {
+        var telemetry = Substitute.For<IModelCallTelemetry>();
+        var call = Substitute.For<IModelCall>();
+        telemetry.Start(Arg.Any<string>()).Returns(call);
+        // Cut short, yet holding what would read as a score.
+        var reply = FoundryResponses.WithOutputItems("r1",
+            [ResponseItem.CreateAssistantMessageItem("<S2>5</S2>", (IEnumerable<ResponseMessageAnnotation>?)null)], totalTokens: 50, status: status);
+        var responses = Substitute.For<ProjectResponsesClient>();
+        responses.CreateResponseAsync(Arg.Any<CreateResponseOptions>(), Arg.Any<CancellationToken>())
+            .Returns(ClientResult.FromValue(reply, Substitute.For<PipelineResponse>()));
+        var project = Substitute.For<ProjectOpenAIClient>();
+        project.GetProjectResponsesClient().Returns(responses);
+        var judge = new FoundryJudgeChatClient(project, "myconnection/gpt-5.1", telemetry);
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => judge.GetResponseAsync([new(ChatRole.User, "Grade this.")],
+            cancellationToken: TestContext.Current.CancellationToken));
+        var scores = await new ExtensionsAiEvaluator(new CompositeEvaluator(new GroundednessEvaluator()), new ChatConfiguration(judge))
+            .EvaluateAsync(Sample, cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Contains($"status '{status}'", ex.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Empty(scores);
+        call.Received().Completed("gpt-4o", Arg.Is<TokenUsage>(usage => usage.TotalTokens == 50));
+        call.Received().Failed(Arg.Any<InvalidOperationException>());
+    }
+
+    [Fact]
+    public async Task WithOneEvaluator_AFailedJudgeCall_LeavesItUnscored_RatherThanFailingTheEvaluation()
+    {
+        var judge = Substitute.For<IChatClient>();
+        judge.GetResponseAsync(Arg.Any<IEnumerable<ChatMessage>>(), Arg.Any<ChatOptions?>(), Arg.Any<CancellationToken>())
+            .Returns<Task<ChatResponse>>(_ => throw new InvalidOperationException("The judge didn't finish its reply."));
+        var logs = new CollectingLoggerProvider();
+        using var provider = Build(agents => agents.AddQualityEvaluation(new GroundednessEvaluator()), builder => builder.AddProvider(logs),
+            services: services => services.AddSingleton(JudgeAgentThatThrows()));
+
+        var scores = await provider.GetRequiredService<IAgentRunEvaluator>().EvaluateAsync(Sample, cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Empty(scores);
+        Assert.Contains(logs.AtLevel(LogLevel.Warning), log => log.Message.StartsWith("No Groundedness score", StringComparison.Ordinal));
+    }
+
+    /// <summary>A runner whose judge agent run fails, as an unfinished reply makes it.</summary>
+    private static IAgentRunnerService JudgeAgentThatThrows()
+    {
+        var runner = Substitute.For<IAgentRunnerService>();
+        runner.RunFromSpecAsync(Arg.Any<AgentSpec>(), Arg.Any<string>(), Arg.Any<string?>(), Arg.Any<ToolCallResolver?>(),
+                Arg.Any<Func<AgentResult, string?>?>(), Arg.Any<CancellationToken>())
+            .Returns<Task<AgentResult>>(_ => throw new InvalidOperationException("Agent 'answer-judge-groundedness' response r1 did not complete."));
+        return runner;
+    }
+
+    [Fact]
+    public async Task AScoreTheEvaluatorReportsAnErrorWith_IsntUsed()
+    {
+        var metric = new NumericMetric("Groundedness", 3);
+        metric.AddDiagnostics(EvaluationDiagnostic.Error("The judge's reply was cut short."));
+        var evaluator = Substitute.For<IEvaluator>();
+        evaluator.EvaluateAsync(Arg.Any<IEnumerable<ChatMessage>>(), Arg.Any<ChatResponse>(), Arg.Any<ChatConfiguration?>(),
+                Arg.Any<IEnumerable<EvaluationContext>?>(), Arg.Any<CancellationToken>())
+            .Returns(new EvaluationResult(metric, new NumericMetric("Relevance", 5)));
+
+        var scores = await new ExtensionsAiEvaluator(evaluator, new ChatConfiguration(Substitute.For<IChatClient>()))
+            .EvaluateAsync(Sample, cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Equal(new Dictionary<string, double> { ["Relevance"] = 5 }, scores);
+    }
+
+    [Fact]
+    public void AddQualityEvaluation_GivesTheDeploymentJudgeTheLibrarysTelemetry()
+    {
+        using var provider = Build(agents => agents.AddQualityEvaluation());
+
+        Assert.NotNull(provider.GetService<IModelCallTelemetry>());
+    }
+
+    [Fact]
+    public async Task TheJudgeIsGivenTheAgentsInstructions_SoAnAnswerDoingItsJobIsntScoredAgainstThePromptAlone()
+    {
+        // Microsoft's evaluators read only the user's message: a system message never reaches the judge.
+        var judge = new RecordingJudge();
+        var run = Sample with { Instructions = "List the trust's concerns as a table.", Prompt = "Analyse Example Learning Trust." };
+
+        await new ExtensionsAiEvaluator(new RelevanceEvaluator(), new ChatConfiguration(judge))
+            .EvaluateAsync(run, cancellationToken: TestContext.Current.CancellationToken);
+
+        var sent = string.Join("\n", judge.Messages.Select(message => message.Text));
+        Assert.Contains("List the trust's concerns as a table.", sent, StringComparison.Ordinal);
+        Assert.Contains("Analyse Example Learning Trust.", sent, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void WithoutInstructions_TheJudgesQuestionIsThePrompt()
+        => Assert.Equal(Sample.Prompt, ExtensionsAiEvaluator.QuestionFor(Sample));
+
+    /// <summary>A judge that records what it's sent and gives a score of 4.</summary>
+    private sealed class RecordingJudge : IChatClient
+    {
+        public List<ChatMessage> Messages { get; } = [];
+
+        public Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null,
+            CancellationToken cancellationToken = default)
+        {
+            Messages.AddRange(messages);
+            return Task.FromResult(new ChatResponse(new ChatMessage(ChatRole.Assistant, "<S0>x</S0><S1>y</S1><S2>4</S2>")));
+        }
+
+        public IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null,
+            CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+        public object? GetService(Type serviceType, object? serviceKey = null) => null;
+
+        public void Dispose()
+        {
+            // Nothing to release.
+        }
+    }
+
+    [Fact]
+    public async Task ExtensionsAiEvaluator_PassesTheRunAsAChat_WithTheEvidenceAsGroundingContext_AndReturnsNumericScores()
+    {
+        var evaluator = Substitute.For<IEvaluator>();
+        IEnumerable<EvaluationContext>? context = null;
+        evaluator.EvaluateAsync(Arg.Any<IEnumerable<ChatMessage>>(), Arg.Any<ChatResponse>(), Arg.Any<ChatConfiguration?>(),
+                Arg.Do<IEnumerable<EvaluationContext>?>(c => context = c), Arg.Any<CancellationToken>())
+            .Returns(new EvaluationResult(new NumericMetric("Groundedness", 4), new NumericMetric("Relevance", 5), new BooleanMetric("Unscored")));
+
+        var scores = await new ExtensionsAiEvaluator(evaluator, new ChatConfiguration(Substitute.For<IChatClient>())).EvaluateAsync(Sample, cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Equal(new Dictionary<string, double> { ["Groundedness"] = 4, ["Relevance"] = 5 }, scores);
+        Assert.IsType<GroundednessEvaluatorContext>(Assert.Single(context!));
+    }
+
+    [Fact]
+    public async Task AnAnswerWithNoEvidence_IsScoredWithoutGroundingContext()
+    {
+        var evaluator = Substitute.For<IEvaluator>();
+        IEnumerable<EvaluationContext>? context = null;
+        evaluator.EvaluateAsync(Arg.Any<IEnumerable<ChatMessage>>(), Arg.Any<ChatResponse>(), Arg.Any<ChatConfiguration?>(),
+                Arg.Do<IEnumerable<EvaluationContext>?>(c => context = c), Arg.Any<CancellationToken>())
+            .Returns(new EvaluationResult(new NumericMetric("Relevance", 4)));
+
+        var scores = await new ExtensionsAiEvaluator(evaluator, new ChatConfiguration(Substitute.For<IChatClient>()))
+            .EvaluateAsync(Sample with { Evidence = null }, cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Empty(context!);
+        Assert.Equal(new Dictionary<string, double> { ["Relevance"] = 4 }, scores);
+    }
+
+    [Fact]
+    public async Task ATeamsOwnEvaluator_ReplacesTheDefaultMetrics_AndAMetricLeftUnscoredIsStillReported()
+    {
+        var own = Substitute.For<IEvaluator>();
+        own.EvaluateAsync(Arg.Any<IEnumerable<ChatMessage>>(), Arg.Any<ChatResponse>(), Arg.Any<ChatConfiguration?>(),
+                Arg.Any<IEnumerable<EvaluationContext>?>(), Arg.Any<CancellationToken>())
+            .Returns(new EvaluationResult(new NumericMetric("Accuracy", 3), new NumericMetric("Tone")));
+        var logs = new CollectingLoggerProvider();
+        using var provider = Build(agents => agents.AddQualityEvaluation(evaluator: own),
+            builder => builder.AddProvider(logs));
+
+        var scores = await provider.GetRequiredService<IAgentRunEvaluator>().EvaluateAsync(Sample, cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Equal(new Dictionary<string, double> { ["Accuracy"] = 3 }, scores);
+        Assert.Contains(logs.AtLevel(LogLevel.Warning), log => log.Message == "No Tone score for ofsted-agent: the evaluator gave no reason");
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData(" ")]
+    public async Task WithoutAJudgeModel_TheJudgeUsesTheDefaultModel(string? judgeModel)
+    {
+        var (runner, specs) = JudgeAgent("&lt;S2>4&lt;/S2>");
+        using var provider = Build(agents => agents.AddQualityEvaluation(new GroundednessEvaluator()),
+            settings: new() { ["AiAgents:Foundry:DefaultModel"] = "myconnection/gpt-4o", ["AiAgents:Evaluation:JudgeModel"] = judgeModel },
+            services: services => services.AddSingleton(runner));
+
+        await provider.GetRequiredService<IAgentRunEvaluator>().EvaluateAsync(Sample, cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Equal("myconnection/gpt-4o", Assert.Single(specs).Model);
+    }
+
+    /// <summary>A runner standing in for Foundry: records each judge agent's spec and answers with <paramref name="output"/>.</summary>
+    private static (IAgentRunnerService Runner, List<AgentSpec> Specs) JudgeAgent(string output)
+    {
+        var specs = new List<AgentSpec>();
+        var runner = Substitute.For<IAgentRunnerService>();
+        runner.RunFromSpecAsync(Arg.Do<AgentSpec>(spec => { lock (specs) { specs.Add(spec); } }), Arg.Any<string>(), Arg.Any<string?>(),
+                Arg.Any<ToolCallResolver?>(), Arg.Any<Func<AgentResult, string?>?>(), Arg.Any<CancellationToken>())
+            .Returns(new AgentResult { AgentName = "answer-judge", Output = output, TotalTokens = 90 });
+        return (runner, specs);
+    }
+
+    [Theory]
+    [InlineData("-0.1")]
+    [InlineData("1.5")]
+    public void ASampleRateOutsideZeroToOne_FailsStartup(string sampleRate)
+    {
+        var ex = Assert.Throws<InvalidOperationException>(() => Build(agents => agents.AddQualityEvaluation(),
+            settings: new() { ["AiAgents:Evaluation:SampleRate"] = sampleRate }));
+
+        Assert.Contains("AiAgents:Evaluation:SampleRate (from 0 to 1)", ex.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AJudgeCalledThroughStreaming_ReturnsItsWholeAnswer_AndKeepsEachMessagesRole()
+    {
+        var (judge, sent) = Judge(FoundryResponses.Completed("r1", "{\"score\": 5}"));
+
+        var updates = await judge.GetStreamingResponseAsync([new(ChatRole.System, "You grade answers."),
+            new(ChatRole.Assistant, "Rated Good."), new(ChatRole.User, "Grade the answer above.")],
+            cancellationToken: TestContext.Current.CancellationToken).ToListAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal("{\"score\": 5}", string.Concat(updates.Select(update => update.Text)));
+        Assert.Equal([MessageRole.System, MessageRole.Assistant, MessageRole.User],
+            sent()!.InputItems.OfType<MessageResponseItem>().Select(item => item.Role));
+    }
+
+    [Fact]
+    public async Task OnAModelConnection_TheJudgeRunsAsAnAgent_OnTheConnectionModel_AndItsScoresAreRead()
+    {
+        // As the runner returns it: the HTML-like score tags shown as text.
+        var (runner, specs) = JudgeAgent("&lt;S0>Checked.&lt;/S0>&lt;S1>Grounded.&lt;/S1>&lt;S2>4&lt;/S2>");
+        using var provider = Build(agents => agents.AddQualityEvaluation(new GroundednessEvaluator()),
+            services: services => services.AddSingleton(runner));
+
+        var scores = await provider.GetRequiredService<IAgentRunEvaluator>().EvaluateAsync(Sample, cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Equal(new Dictionary<string, double> { ["Groundedness"] = 4 }, scores);
+        var spec = Assert.Single(specs);
+        Assert.Equal("answer-judge-groundedness", spec.Name);
+        Assert.Equal("myconnection/gpt-5.1", spec.Model);
+        Assert.Empty(spec.Tools);
+        Assert.False(string.IsNullOrWhiteSpace(spec.Instructions));
+    }
+
+    [Fact]
+    public async Task EachMetric_KeepsOneJudgeAgent_NamedAfterWhatItScores_ReusedForEveryAnswer()
+    {
+        var (runner, specs) = JudgeAgent("&lt;S2>4&lt;/S2>");
+        using var provider = Build(agents => agents.AddQualityEvaluation(), services: services => services.AddSingleton(runner));
+        var evaluator = provider.GetRequiredService<IAgentRunEvaluator>();
+
+        await evaluator.EvaluateAsync(Sample, cancellationToken: TestContext.Current.CancellationToken);
+        await evaluator.EvaluateAsync(Sample with { Prompt = "Who inspected it?", Evidence = "Inspected by J Smith.", Output = "J Smith." },
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        // Each metric sends the same instructions every time, so its agent keeps one unchanging spec and is reused.
+        Assert.Equal(4, specs.Count);
+        var perMetric = specs.GroupBy(spec => spec.Name).OrderBy(group => group.Key, StringComparer.Ordinal).ToList();
+        Assert.Equal(["answer-judge-groundedness", "answer-judge-relevance"], perMetric.Select(group => group.Key));
+        Assert.All(perMetric, group => Assert.Single(group.DistinctBy(spec => spec.Instructions)));
+    }
+
+    [Theory]
+    [InlineData("gpt-5.1")]
+    [InlineData("otherconnection/gpt-5.1")]
+    public void AJudgeModelOffTheDefaultModelsConnection_FailsStartup(string judgeModel)
+    {
+        var ex = Assert.Throws<InvalidOperationException>(() => Build(agents => agents.AddQualityEvaluation(),
+            settings: new() { ["AiAgents:Evaluation:JudgeModel"] = judgeModel }));
+
+        Assert.Contains("AiAgents:Evaluation:JudgeModel (must be on the connection in Foundry:DefaultModel, as myconnection/<model>)",
+            ex.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>Registers with a judge model under <c>AiAgents:Evaluation</c>; <paramref name="settings"/> override it (null removes one).</summary>
+    /// <param name="services">Replaces services after registration, e.g. with a fake.</param>
+    private static ServiceProvider Build(Action<AgentsBuilder> configure, Action<ILoggingBuilder>? logging = null,
+        Dictionary<string, string?>? settings = null, Action<IServiceCollection>? services = null)
+    {
+        var all = new Dictionary<string, string?>
+        {
+            ["AiAgents:Foundry:Endpoint"] = "https://example.services.ai.azure.com/api/projects/briefings",
+            ["AiAgents:Foundry:DefaultModel"] = "myconnection/gpt-5.1",
+            ["AiAgents:Evaluation:JudgeModel"] = "myconnection/gpt-5.1",
+        };
+        foreach (var (key, value) in settings ?? [])
+        {
+            if (value is null)
+            {
+                all.Remove(key);
+            }
+            else
+            {
+                all[key] = value;
+            }
+        }
+        var collection = new ServiceCollection();
+        collection.AddLogging(builder => logging?.Invoke(builder));
+        collection.AddAgents(new ConfigurationBuilder().AddInMemoryCollection(all).Build(), agents =>
+        {
+            agents.UseCredential(Substitute.For<TokenCredential>());
+            configure(agents);
+        });
+        services?.Invoke(collection);
+        return collection.BuildServiceProvider();
+    }
+
+    [Fact]
+    public async Task AnUnreadableJudgeReply_IsLoggedWithItsReason_WithoutTheStackTrace()
+    {
+        var metric = new NumericMetric("Groundedness");
+        metric.AddDiagnostics(EvaluationDiagnostic.Error("Judge call failed: 400 Unsupported parameter 'temperature'.\n   at Some.Stack.Frame()"));
+        var evaluator = Substitute.For<IEvaluator>();
+        evaluator.EvaluateAsync(Arg.Any<IEnumerable<ChatMessage>>(), Arg.Any<ChatResponse>(), Arg.Any<ChatConfiguration?>(),
+                Arg.Any<IEnumerable<EvaluationContext>?>(), Arg.Any<CancellationToken>())
+            .Returns(new EvaluationResult(metric, new NumericMetric("Relevance", 5)));
+        var logs = new CollectingLoggerProvider();
+        using var loggers = LoggerFactory.Create(builder => builder.AddProvider(logs));
+
+        var scores = await new ExtensionsAiEvaluator(evaluator, new ChatConfiguration(Substitute.For<IChatClient>()),
+            loggers.CreateLogger<ExtensionsAiEvaluator>()).EvaluateAsync(Sample, cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Equal(new Dictionary<string, double> { ["Relevance"] = 5 }, scores);
+        var warning = Assert.Single(logs.AtLevel(LogLevel.Warning));
+        Assert.Contains("No Groundedness score for ofsted-agent: Judge call failed: 400 Unsupported parameter 'temperature'.",
+            warning.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("Some.Stack.Frame", warning.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AFailedJudgeCall_IsLoggedForEachMetric_WithoutTheStackTrace()
+    {
+        var judge = Substitute.For<IChatClient>();
+        judge.GetResponseAsync(Arg.Any<IEnumerable<ChatMessage>>(), Arg.Any<ChatOptions?>(), Arg.Any<CancellationToken>())
+            .Returns<Task<ChatResponse>>(_ => throw new InvalidOperationException("Status: 404 (Not Found) The model 'x' does not exist."));
+        var logs = new CollectingLoggerProvider();
+        using var loggers = LoggerFactory.Create(builder => builder.AddProvider(logs));
+
+        var scores = await new ExtensionsAiEvaluator(new CompositeEvaluator(new GroundednessEvaluator(), new RelevanceEvaluator()),
+            new ChatConfiguration(judge), loggers.CreateLogger<ExtensionsAiEvaluator>()).EvaluateAsync(Sample, cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Empty(scores);
+        var warnings = logs.AtLevel(LogLevel.Warning).ToList();
+        Assert.Equal(2, warnings.Count);
+        Assert.Contains(warnings, warning => warning.Message.StartsWith("No Groundedness score", StringComparison.Ordinal));
+        Assert.Contains(warnings, warning => warning.Message.StartsWith("No Relevance score", StringComparison.Ordinal));
+        Assert.All(warnings, warning =>
+        {
+            Assert.Contains("does not exist", warning.Message, StringComparison.Ordinal);
+            Assert.DoesNotContain("   at ", warning.Message, StringComparison.Ordinal);
+        });
+    }
+}

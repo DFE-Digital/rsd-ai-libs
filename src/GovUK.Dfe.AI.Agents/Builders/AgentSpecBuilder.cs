@@ -1,0 +1,79 @@
+using GovUK.Dfe.AI.Agents.Prompts.Interfaces;
+using GovUK.Dfe.AI.Agents.Providers.Interfaces;
+using GovUK.Dfe.AI.Agents.Tools;
+using GovUK.Dfe.AI.Agents.Tools.Interfaces;
+using GovUK.Dfe.AI.Agents.ValueObjects;
+
+namespace GovUK.Dfe.AI.Agents.Builders;
+
+/// <summary>
+/// Builds an <see cref="AgentDefinition"/>'s spec the same way everywhere: from its system prompt and tool
+/// bindings, or from its custom provider. The definition's allowed tools and output schema apply either way.
+/// </summary>
+internal sealed class AgentSpecBuilder(IPromptProvider promptProvider, IEnumerable<AgentToolBinding>? toolBindings = null,
+    IEnumerable<IManagedAgentProvider>? customProviders = null)
+{
+    private readonly Dictionary<string, IManagedAgentProvider> _customProviders =
+        (customProviders ?? []).ToDictionary(static provider => provider.AgentName);
+
+    /// <summary>Each agent's bound tool providers, by agent name.</summary>
+    public IReadOnlyDictionary<string, List<IAgentToolProvider>> ToolProviders { get; } = AgentToolResolver.GroupByAgentName(toolBindings);
+
+    public bool IsExternallyManaged(AgentDefinition definition)
+        => _customProviders.TryGetValue(definition.Name, out var provider) && !provider.CreatesAgent;
+
+    public IManagedAgentProvider? CustomProviderFor(AgentDefinition definition)
+        => _customProviders.GetValueOrDefault(definition.Name);
+
+    /// <summary>
+    /// The agent's instructions, as its prompt files give them, for evaluators. Null for an agent from a custom provider,
+    /// whose instructions are its own, or when its prompt file can't be read: scoring never fails a run.
+    /// </summary>
+    public string? InstructionsFor(AgentDefinition definition)
+    {
+        if (_customProviders.ContainsKey(definition.Name))
+        {
+            return null;
+        }
+
+        try
+        {
+            return promptProvider.GetSystemPrompt(definition.SystemPromptKey);
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or IOException)
+        {
+            return null;
+        }
+    }
+
+    /// <returns>The spec, or <see langword="null"/> for an externally managed agent.</returns>
+    public async Task<AgentSpec?> BuildAsync(AgentDefinition definition, CancellationToken cancellationToken)
+    {
+        if (_customProviders.TryGetValue(definition.Name, out var provider))
+        {
+            var custom = await provider.BuildSpecAsync(cancellationToken).ConfigureAwait(false);
+            if (custom is null)
+            {
+                return null;
+            }
+
+            // The agent's bindings (MCP servers, web search) apply to a custom provider's agent too: their calls run in this app.
+            var bound = await AgentToolResolver.ResolveAsync(ToolProviders, definition.Name, cancellationToken).ConfigureAwait(false);
+            return custom with
+            {
+                Tools = AgentToolResolver.FilterToAllowed(AgentToolResolver.Merge(custom.Tools, bound), definition),
+                OutputSchema = custom.OutputSchema ?? definition.OutputSchema,
+                Guardrail = custom.Guardrail ?? definition.Guardrail,
+            };
+        }
+
+        return new AgentSpec
+        {
+            Name = definition.Name,
+            Instructions = promptProvider.GetSystemPrompt(definition.SystemPromptKey),
+            Tools = await AgentToolResolver.ResolveAsync(ToolProviders, definition, cancellationToken).ConfigureAwait(false),
+            OutputSchema = definition.OutputSchema,
+            Guardrail = definition.Guardrail,
+        };
+    }
+}

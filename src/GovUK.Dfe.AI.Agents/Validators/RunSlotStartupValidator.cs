@@ -16,7 +16,10 @@ internal sealed class RunSlotStartupValidator(BlobRunSlotStore store, ILogger<Ru
         {
             await store.EnsureAccessAsync(cancellationToken).ConfigureAwait(false);
         }
-        catch (Exception ex) when (ex is not InvalidOperationException and not OperationCanceledException)
+        // A timeout is also an OperationCanceledException: only a cancelled startup is rethrown, so a slow account is
+        // treated like an unreachable one.
+        catch (Exception ex) when (ex is not InvalidOperationException
+                                   && (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested))
         {
             logger.LogWarning(ex, "Couldn't check the run slot container {Container} at startup; runs will retry it", store.ContainerUri);
         }

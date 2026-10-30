@@ -22,6 +22,9 @@ internal sealed class InMemoryBlobContainer : BlobContainerClient
     /// <summary>Every call fails as if the account can't be reached.</summary>
     public bool Unreachable { get; set; }
 
+    /// <summary>Every call times out, as the SDK reports it: a <see cref="TaskCanceledException"/> nobody asked for.</summary>
+    public bool TimesOut { get; set; }
+
     public PublicAccessType? CreatedWith { get; private set; }
 
     public IReadOnlyCollection<string> BlobNames { get { lock (_lock) { return [.. _blobs.Keys]; } } }
@@ -70,6 +73,11 @@ internal sealed class InMemoryBlobContainer : BlobContainerClient
         if (Unreachable)
         {
             throw new RequestFailedException("No such host is known.");
+        }
+
+        if (TimesOut)
+        {
+            throw new TaskCanceledException("The request was canceled due to the configured timeout.", new TimeoutException());
         }
 
         if (Denied)

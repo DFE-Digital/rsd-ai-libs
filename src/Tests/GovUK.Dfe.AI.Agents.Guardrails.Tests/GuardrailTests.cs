@@ -227,6 +227,40 @@ public sealed class GuardrailTests
     }
 
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task AResourceManagerThatTimesOut_IsTreatedAsUnreachable_WarningOrFailingAsFailWhenUnreachableSays(bool failWhenUnreachable)
+    {
+        var timeout = new TaskCanceledException("The request was canceled due to the configured timeout.", new TimeoutException());
+        _store.Failure = timeout;
+        var settings = Settings();
+        settings.FailWhenUnreachable = failWhenUnreachable;
+
+        var ex = await Record.ExceptionAsync(() => StartupCheck(settings).StartAsync(CancellationToken.None));
+
+        if (failWhenUnreachable)
+        {
+            Assert.Same(timeout, Assert.IsType<InvalidOperationException>(ex).InnerException);
+        }
+        else
+        {
+            Assert.Null(ex);
+            Assert.Single(_logs.AtLevel(LogLevel.Warning));
+        }
+    }
+
+    [Fact]
+    public async Task ACancelledStartup_IsRethrown_EvenWithoutFailWhenUnreachable()
+    {
+        _store.Failure = new TaskCanceledException();
+        using var cancelled = new CancellationTokenSource();
+        await cancelled.CancelAsync();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => StartupCheck(Settings()).StartAsync(cancelled.Token));
+        Assert.Empty(_logs.AtLevel(LogLevel.Warning));
+    }
+
+    [Theory]
     [InlineData(GuardrailSeverity.Low, true, false, true, "case-references")]
     [InlineData(GuardrailSeverity.High, false, true, false, null)]
     public void TheRaiPolicyWritten_ReadsBackAsTheSameGuardrail(GuardrailSeverity blockFrom, bool promptShields, bool indirectAttacks,

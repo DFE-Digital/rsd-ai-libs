@@ -45,7 +45,19 @@ internal sealed class PinnedAgentVersionDriftValidator(IAgentDefinitionProvider 
 
         // Built exactly as a run would build it - including custom providers' specs - so a pin is compared
         // against what the code would deploy today. Externally managed agents have no spec here to compare.
-        var spec = await _specs.BuildAsync(definition, cancellationToken).ConfigureAwait(false);
+        AgentSpec? spec;
+        try
+        {
+            spec = await _specs.BuildAsync(definition, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not InvalidOperationException && IsUnavailable(ex, cancellationToken))
+        {
+            // Building lists the agent's bound tools, e.g. from an MCP server that may be down: only a warning, like the rest.
+            // A configuration mistake (InvalidOperationException), e.g. an allowed tool nothing offers, still fails startup.
+            _logger.LogWarning(ex, "Could not build agent '{AgentName}' to check its pinned version for drift.", definition.Name);
+            return;
+        }
+
         if (spec is null)
         {
             _logger.SkippingPinnedDriftCheck(definition.Name);
@@ -70,7 +82,7 @@ internal sealed class PinnedAgentVersionDriftValidator(IAgentDefinitionProvider 
                     pinnedVersion, agentName);
             }
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex) when (IsUnavailable(ex, cancellationToken))
         {
             _logger.LogWarning(ex, "Could not check pinned version drift for agent '{AgentName}' version '{Version}'.",
                 agentName, pinnedVersion);
@@ -94,10 +106,17 @@ internal sealed class PinnedAgentVersionDriftValidator(IAgentDefinitionProvider 
                     agentName, pinnedVersion, latest.Version);
             }
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex) when (IsUnavailable(ex, cancellationToken))
         {
             _logger.LogWarning(ex, "Could not resolve the latest version for agent '{AgentName}' while checking pinned version drift.",
                 agentName);
         }
     }
+
+    /// <summary>
+    /// Any failure but a cancelled startup. A timeout is also an <see cref="OperationCanceledException"/> (e.g. HttpClient's
+    /// <see cref="TaskCanceledException"/>), so a slow service only warns, like an unreachable one.
+    /// </summary>
+    private static bool IsUnavailable(Exception exception, CancellationToken cancellationToken)
+        => exception is not OperationCanceledException || !cancellationToken.IsCancellationRequested;
 }

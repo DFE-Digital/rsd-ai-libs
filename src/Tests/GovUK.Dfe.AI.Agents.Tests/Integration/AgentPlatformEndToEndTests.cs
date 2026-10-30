@@ -822,7 +822,8 @@ public sealed partial class AgentPlatformEndToEndTests : IDisposable
         Assert.Empty(provisioned.For("synthesis-agent"));
     }
 
-    private ServiceProvider BuildConsumingApp(string[] allowedTools, bool bindTools = true)
+    /// <param name="tools">The app's binding for the agent; the performance tools when not given.</param>
+    private ServiceProvider BuildConsumingApp(string[] allowedTools, bool bindTools = true, GovUK.Dfe.AI.Agents.Tools.Interfaces.IAgentToolProvider? tools = null)
     {
         _definitions.Add(new AgentDefinition("ofsted-agent", "NotUsedHere") { AllowedTools = allowedTools });
         return Build(services =>
@@ -831,14 +832,14 @@ public sealed partial class AgentPlatformEndToEndTests : IDisposable
                 "ofsted-agent", sp.GetRequiredService<IAgentFactory>(), sp.GetRequiredService<IAgentRuntimeService>()));
             if (bindTools)
             {
-                services.AddSingleton(new AgentToolBinding("ofsted-agent", PerformanceTools()));
+                services.AddSingleton(new AgentToolBinding("ofsted-agent", tools ?? PerformanceTools()));
             }
         });
     }
 
-    private static Task StartToolCheckAsync(ServiceProvider provider)
+    private static Task StartToolCheckAsync(ServiceProvider provider, CancellationToken startup)
         => provider.GetServices<Microsoft.Extensions.Hosting.IHostedService>().OfType<AgentToolCompatibilityValidator>().Single()
-            .StartAsync(CancellationToken.None);
+            .StartAsync(startup);
 
     [Fact]
     public async Task ACentralAgent_UsedByAppsWithDifferentTools_RunsItsOneVersion_AndNoAppCreatesAnother()
@@ -869,7 +870,7 @@ public sealed partial class AgentPlatformEndToEndTests : IDisposable
         _foundry.Seed("ofsted-agent", DefaultModel, "Provisioned centrally.", PerformanceTool());
         using var app = BuildConsumingApp(["get_performance_data"]);
 
-        Assert.Null(await Record.ExceptionAsync(() => StartToolCheckAsync(app)));
+        Assert.Null(await Record.ExceptionAsync(() => StartToolCheckAsync(app, cancellationToken)));
     }
 
     [Fact]
@@ -878,7 +879,7 @@ public sealed partial class AgentPlatformEndToEndTests : IDisposable
         _foundry.Seed("ofsted-agent", DefaultModel, "Provisioned centrally.", PerformanceTool());
         using var app = BuildConsumingApp(allowedTools: []);
 
-        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => StartToolCheckAsync(app));
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => StartToolCheckAsync(app, cancellationToken));
 
         Assert.Contains("ofsted-agent", ex.Message, StringComparison.Ordinal);
         Assert.Contains("get_performance_data", ex.Message, StringComparison.Ordinal);
@@ -890,7 +891,7 @@ public sealed partial class AgentPlatformEndToEndTests : IDisposable
         _foundry.Seed("ofsted-agent", DefaultModel, "Provisioned centrally.", PerformanceTool());
         using var app = BuildConsumingApp(["get_performance_data"], bindTools: false);
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => StartToolCheckAsync(app));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => StartToolCheckAsync(app, cancellationToken));
     }
 
     [Fact]
@@ -898,8 +899,34 @@ public sealed partial class AgentPlatformEndToEndTests : IDisposable
     {
         using var app = BuildConsumingApp(["get_performance_data"]);   // never provisioned
 
-        Assert.Null(await Record.ExceptionAsync(() => StartToolCheckAsync(app)));
+        Assert.Null(await Record.ExceptionAsync(() => StartToolCheckAsync(app, cancellationToken)));
         Assert.Contains(_logs.AtLevel(LogLevel.Warning), log => log.Message.Contains("Couldn't check the tools", StringComparison.Ordinal));
+    }
+
+    private static FakeToolServer ToolServerThatTimesOut() => new("get_performance_data")
+    {
+        ListFailure = new TaskCanceledException("The request was canceled due to the configured timeout.", new TimeoutException()),
+    };
+
+    [Fact]
+    public async Task ToolCheck_OnlyWarns_WhenAToolServerTimesOutAtStartup_LikeWhenItsUnreachable()
+    {
+        _foundry.Seed("ofsted-agent", DefaultModel, "Provisioned centrally.", PerformanceTool());
+        using var app = BuildConsumingApp(["get_performance_data"], tools: ToolServerThatTimesOut());
+
+        Assert.Null(await Record.ExceptionAsync(() => StartToolCheckAsync(app, cancellationToken)));
+        Assert.Contains(_logs.AtLevel(LogLevel.Warning), log => log.Message.Contains("Couldn't check the tools", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task ToolCheck_RethrowsACancelledStartup()
+    {
+        _foundry.Seed("ofsted-agent", DefaultModel, "Provisioned centrally.", PerformanceTool());
+        using var app = BuildConsumingApp(["get_performance_data"], tools: ToolServerThatTimesOut());
+        using var cancelled = new CancellationTokenSource();
+        await cancelled.CancelAsync();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => StartToolCheckAsync(app, cancelled.Token));
     }
 
     // ===================== Evidence (RAG) =====================

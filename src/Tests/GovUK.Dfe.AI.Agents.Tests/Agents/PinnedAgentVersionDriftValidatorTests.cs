@@ -152,4 +152,55 @@ public sealed class PinnedAgentVersionDriftValidatorTests
         Assert.Null(exception);
     }
 
+    private static TaskCanceledException Timeout() => new("The request was canceled due to the configured timeout.", new TimeoutException());
+
+    [Fact]
+    public async Task StartAsync_DoesNotThrow_WhenFoundryTimesOut_LikeWhenItsUnreachable()
+    {
+        _definitionProvider.Definitions = [Pinned];
+        _agentFactory.MatchesDeployedVersionAsync(Arg.Any<AgentSpec>(), "3", Arg.Any<CancellationToken>()).ThrowsAsync(Timeout());
+        _agentFactory.ResolveLatestAsync(Pinned.Name, Arg.Any<CancellationToken>()).ThrowsAsync(Timeout());
+
+        var exception = await Record.ExceptionAsync(() => CreateSut().StartAsync(cancellationToken));
+
+        Assert.Null(exception);
+    }
+
+    [Fact]
+    public async Task StartAsync_DoesNotThrow_WhenABoundToolServerIsUnreachableOrTimesOut()
+    {
+        _definitionProvider.Definitions = [Pinned with { AllowedTools = ["get_performance_data"] }];
+        var unreachable = new FakeToolServer("get_performance_data") { ListFailure = new HttpRequestException("No such host is known.") };
+        var slow = new FakeToolServer("get_performance_data") { ListFailure = Timeout() };
+
+        foreach (var tools in new[] { unreachable, slow })
+        {
+            var exception = await Record.ExceptionAsync(() =>
+                CreateSut(toolBindings: [new AgentToolBinding(Pinned.Name, tools)]).StartAsync(cancellationToken));
+            Assert.Null(exception);
+        }
+
+        await _agentFactory.DidNotReceiveWithAnyArgs().MatchesDeployedVersionAsync(default!, default!, cancellationToken);
+    }
+
+    [Fact]
+    public async Task StartAsync_StillFails_OnAConfigurationMistake_EvenThoughItOnlyWarnsAboutOutages()
+    {
+        // The definition allows a tool no binding offers: a mistake in the app, not an outage.
+        _definitionProvider.Definitions = [Pinned with { AllowedTools = ["get_performance_data"] }];
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => CreateSut().StartAsync(cancellationToken));
+    }
+
+    [Fact]
+    public async Task StartAsync_RethrowsACancelledStartup()
+    {
+        _definitionProvider.Definitions = [Pinned];
+        using var cancelled = new CancellationTokenSource();
+        await cancelled.CancelAsync();
+        _agentFactory.MatchesDeployedVersionAsync(Arg.Any<AgentSpec>(), "3", Arg.Any<CancellationToken>())
+            .ThrowsAsync(new OperationCanceledException(cancelled.Token));
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => CreateSut().StartAsync(cancelled.Token));
+    }
 }

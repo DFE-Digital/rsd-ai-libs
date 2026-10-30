@@ -21,7 +21,10 @@ internal sealed class GuardrailStartupValidator(IFoundryGuardrailsService guardr
         {
             report = await guardrails.CheckAsync(cancellationToken).ConfigureAwait(false);
         }
-        catch (Exception ex) when (ex is not InvalidOperationException and not OperationCanceledException)
+        // A timeout is also an OperationCanceledException (e.g. HttpClient's TaskCanceledException): only a cancelled
+        // startup is rethrown, so a slow Resource Manager is treated like an unreachable one.
+        catch (Exception ex) when (ex is not InvalidOperationException
+                                   && (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested))
         {
             if (settings.FailWhenUnreachable)
             {

@@ -87,6 +87,27 @@ public sealed class BlobRunSlotStoreTests
     }
 
     [Fact]
+    public async Task AtStartup_AnAccountThatTimesOut_OnlyWarns_LikeAnUnreachableOne()
+    {
+        _container.TimesOut = true;
+
+        await StartupCheck().StartAsync(CancellationToken.None);
+
+        Assert.Single(_logs.AtLevel(LogLevel.Warning));
+    }
+
+    [Fact]
+    public async Task AtStartup_ACancelledStartup_IsRethrown_NotWarnedAbout()
+    {
+        _container.TimesOut = true;
+        using var cancelled = new CancellationTokenSource();
+        await cancelled.CancelAsync();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => StartupCheck().StartAsync(cancelled.Token));
+        Assert.Empty(_logs.AtLevel(LogLevel.Warning));
+    }
+
+    [Fact]
     public async Task ASlot_IsHeldByOneRunAtATime_AndFreeAgainOnceReleased()
     {
         _container.ContainerExists = true;

@@ -81,7 +81,9 @@ internal sealed class AgentToolCompatibilityValidator(IServiceProvider services,
             var offered = await AgentToolResolver.ResolveAsync(_toolProviders, definition.Name, cancellationToken).ConfigureAwait(false);
             offeredTools = [.. offered.Select(static tool => tool.FunctionName).OfType<string>()];
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        // A timeout is also an OperationCanceledException: only a cancelled startup is rethrown, so a slow service is
+        // treated like an unreachable one.
+        catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
         {
             _logger.LogWarning(ex, "Couldn't check the tools of agent {AgentName} at startup; they'll be checked on each call instead", definition.Name);
             return null;

@@ -94,7 +94,7 @@ Severity is the default; change it with `Checks:<id>:Severity`.
 | --- | --- | --- | --- |
 | `scenario` | The case's own | A test case's facts are wrong, its run fails, or an attack isn't blocked | The case's own (default High; Critical for `guardrail/`) |
 | `fairness.group-outcome-parity` | Fairness | One user group's cases pass less often than another's, by more than `MaxGroupPassRateGap` | High |
-| `fairness.group-score-parity` | Fairness | One group's judge scores trail another's by more than `MaxGroupScoreGap` | High |
+| `fairness.group-score-parity` | Fairness | For any judge metric, one group's score trails another's by more than `MaxGroupScoreGap`. One result per metric | High |
 | `fairness.group-sample-size` | Fairness | A group has too few cases to compare (High if fewer than two groups are tested) | Medium |
 | `reliability.judge-score` | Reliability and safety | Groundedness or relevance averages below its minimum, or isn't scored | High |
 | `reliability.judge-confidence` | Reliability and safety | Some answers weren't scored, or an average is barely above its minimum | Medium |

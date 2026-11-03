@@ -1,3 +1,4 @@
+using GovUK.Dfe.AI.Agents.Builders.Interfaces;
 using GovUK.Dfe.AI.Agents.Evaluation.Constants;
 using GovUK.Dfe.AI.Agents.Evaluation.Metrics;
 using GovUK.Dfe.AI.Agents.Evaluation.Options;
@@ -17,6 +18,8 @@ internal sealed class AgentReleaseGate(
     ReleaseGateSettings settings,
     ReleaseGateMetrics metrics,
     IEnumerable<IGuardrailCheck> guardrailChecks,
+    IAgentSpecCatalog specs,
+    IAgentSpecSnapshots snapshots,
     ILogger<AgentReleaseGate> logger) : IAgentReleaseGate
 {
     // The open run in this async flow, so EvaluateAsync inside a BeginRun uses it rather than opening another.
@@ -24,7 +27,7 @@ internal sealed class AgentReleaseGate(
 
     public IReleaseRun BeginRun()
     {
-        var run = new ReleaseRun(Guid.CreateVersion7().ToString("N"), metrics);
+        var run = new ReleaseRun(Guid.CreateVersion7().ToString("N"), metrics, snapshots.BeginSnapshot());
         logger.ReleaseRunStarted(run.Id);
         return run;
     }
@@ -50,6 +53,8 @@ internal sealed class AgentReleaseGate(
     internal async Task<IReadOnlyList<AgentGateResult>> RunChecksAsync(IReadOnlyCollection<AgentDefinition> definitions,
         CancellationToken cancellationToken)
     {
+        await TakeSpecsAsync(definitions, cancellationToken);
+
         // Nothing is tested without its guardrail: the results would show only how the agents behave unprotected.
         var guardrailProblems = await CheckGuardrailsAsync(cancellationToken);
         return guardrailProblems.Count == 0
@@ -62,7 +67,27 @@ internal sealed class AgentReleaseGate(
     {
         ArgumentNullException.ThrowIfNull(definitions);
         using var ownRun = CurrentRun.Value is null ? BeginRun() : null;
+        await TakeSpecsAsync(definitions, cancellationToken);
         return await evaluator.EvaluateAsync(definitions, followConventions: false, cancellationToken);
+    }
+
+    /// <summary>
+    /// Builds each agent's spec into the run's snapshot before anything is tested, so every test, the quality gate and
+    /// provisioning inside the run use that one spec. One that can't be built is left to fail its tests, which say why.
+    /// </summary>
+    private async Task TakeSpecsAsync(IReadOnlyCollection<AgentDefinition> definitions, CancellationToken cancellationToken)
+    {
+        foreach (var definition in definitions)
+        {
+            try
+            {
+                await specs.GetSpecAsync(definition, cancellationToken);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                logger.SpecNotTaken(ex, definition.Name);
+            }
+        }
     }
 
     /// <summary>Every guardrail check's problems; one that can't run is a problem too, so a release never skips it.</summary>
@@ -151,11 +176,14 @@ internal sealed class AgentReleaseGate(
         private readonly IDisposable _scope;
         private readonly string? _outer;
 
-        public ReleaseRun(string id, ReleaseGateMetrics metrics)
+        private readonly IDisposable _specs;
+
+        public ReleaseRun(string id, ReleaseGateMetrics metrics, IDisposable specs)
         {
             Id = id;
             _outer = CurrentRun.Value;
             _scope = metrics.Run(id);
+            _specs = specs;
             CurrentRun.Value = id;
         }
 
@@ -165,6 +193,7 @@ internal sealed class AgentReleaseGate(
         {
             CurrentRun.Value = _outer;
             _scope.Dispose();
+            _specs.Dispose();
         }
     }
 }

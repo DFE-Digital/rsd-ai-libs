@@ -54,9 +54,7 @@ public sealed class QualityGateTests : IDisposable
 
     private static CancellationToken Token => TestContext.Current.CancellationToken;
 
-    private static readonly Dictionary<string, string?> Policy = new()
-    {
-    };
+    private static readonly Dictionary<string, string?> Policy = [];
 
     [Fact]
     public async Task Passes_and_permits_release_when_every_principle_is_evidenced_and_writes_a_machine_readable_report()

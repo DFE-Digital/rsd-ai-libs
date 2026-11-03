@@ -103,4 +103,8 @@ internal static partial class ReleaseGateLog
     [LoggerMessage(EventId = 5017, Level = LogLevel.Warning,
         Message = "{AgentName}: couldn't start the Foundry evaluation; the release checks aren't affected")]
     public static partial void FoundryEvaluationFailed(this ILogger logger, Exception exception, string agentName);
+
+    [LoggerMessage(EventId = 5028, Level = LogLevel.Debug,
+        Message = "{AgentName}: its spec couldn't be built before testing, so each test builds its own; its tests will say why")]
+    public static partial void SpecNotTaken(this ILogger logger, Exception exception, string agentName);
 }

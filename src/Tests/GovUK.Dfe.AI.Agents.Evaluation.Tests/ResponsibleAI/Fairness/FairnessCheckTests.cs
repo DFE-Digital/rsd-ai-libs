@@ -57,7 +57,7 @@ public sealed class FairnessCheckTests
         var context = CheckContext([Passing("a1", "academy", score: 4.8), Passing("s1", "special", score: 3.2)],
             releaseGate: new ReleaseGateSettings { MaxGroupGap = 1.0 });
 
-        var result = await OnlyAsync(new GroupScoreParityCheck(), context);
+        var result = (await RunAsync(new GroupScoreParityCheck(), context)).Single(r => r.Subject == "Groundedness");
 
         Assert.Equal(CheckOutcome.Failed, result.Outcome);
         Assert.StartsWith("Groundedness: special 3.2, academy 4.8", result.Summary, StringComparison.Ordinal);
@@ -70,7 +70,24 @@ public sealed class FairnessCheckTests
         var context = CheckContext([Passing("a1", "academy", score: 4.5), Passing("s1", "special", score: 4.0)],
             new QualityGatePolicy { MaxGroupScoreGap = 0.3 }, new ReleaseGateSettings { MaxGroupGap = 1.0 });
 
-        Assert.Equal(CheckOutcome.Failed, (await OnlyAsync(new GroupScoreParityCheck(), context)).Outcome);
+        Assert.All(await RunAsync(new GroupScoreParityCheck(), context), r => Assert.Equal(CheckOutcome.Failed, r.Outcome));
+    }
+
+    [Fact]
+    public async Task Compares_groups_metric_by_metric_so_a_gap_in_one_is_its_own_finding()
+    {
+        var academy = Passing("a1", "academy");
+        var special = Passing("s1", "special");
+        var context = CheckContext(
+        [
+            (academy.Item1, academy.Item2 with { Scores = new Dictionary<string, double> { ["Groundedness"] = 4.5, ["Relevance"] = 4.5 } }),
+            (special.Item1, special.Item2 with { Scores = new Dictionary<string, double> { ["Groundedness"] = 4.4, ["Relevance"] = 3.0 } }),
+        ], releaseGate: new ReleaseGateSettings { MaxGroupGap = 1.0 });
+
+        var results = await RunAsync(new GroupScoreParityCheck(), context);
+
+        Assert.Equal([("Groundedness", CheckOutcome.Passed), ("Relevance", CheckOutcome.Failed)],
+            results.Select(r => (r.Subject!, r.Outcome)).OrderBy(r => r.Item1, StringComparer.Ordinal));
     }
 
     [Fact]

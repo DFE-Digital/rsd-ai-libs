@@ -195,8 +195,8 @@ internal sealed class QualityCheckRunner(
         QualityCheckIds.JudgeScore => finding.Subject is { } metric
             && (problem.StartsWith($"{metric}: averaged ", StringComparison.Ordinal) || problem == $"{metric}: not scored"),
         QualityCheckIds.BaselineRegression => finding.Subject is { } metric && problem.StartsWith($"{metric}: fell from ", StringComparison.Ordinal),
-        QualityCheckIds.GroupScoreParity => problem.LastIndexOf(GapSuffix, StringComparison.Ordinal) is > 0 and var end
-            && finding.Summary.Contains(problem[..end], StringComparison.Ordinal),
+        QualityCheckIds.GroupScoreParity => finding.Subject is { } metric && problem.StartsWith($"{metric}: ", StringComparison.Ordinal)
+            && problem.Contains(GapSuffix, StringComparison.Ordinal),
         _ => finding.Evidence.Contains(problem),
     };
 }

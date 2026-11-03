@@ -129,8 +129,8 @@ fenced as data so it can't act as an instruction.
 | `.Extensions`                                    | `ReadOutputAs<T>()`, `ToTokenUsageSummary()`                                                             |
 | `.Tools` / `.Tools.Interfaces`                   | `AgentTool` / `IAgentToolProvider`, `IToolCallApprover`                                                  |
 | `.Privacy`                                       | `PatternRedactor`, `IAgentInputRedactor`                                                                 |
-| `.ReleaseTesting` / `.ReleaseTesting.Interfaces` | `AgentTestCase`, `AgentEvaluationReport`, `ReleaseSections` / `IAgentTestRunner`                         |
-| `.Quality.Interfaces`                            | `IAgentRunEvaluator`, which scores answers, live and in the release gate                                 |
+| `.Quality` / `.Options`                          | `AgentTestCase`, `AgentEvaluationReport` / `ReleaseSections`                                             |
+| `.Quality.Interfaces`                            | `IAgentRunEvaluator`, which scores answers, live and in the release gate; `IAgentTestRunner`             |
 | `.Context` / `.Extensibility.Interfaces`         | `AgentContext`, `IContextRetriever` / `IAgentRunObserver`, `IAgentsPackage`, `IGuardrailCheck`           |
 
 ## What happens in a run
@@ -275,7 +275,7 @@ Test cases are JSON files under `TestCases/<agent>/`, in one of two folders:
 }
 ```
 
-- **Check your files in a unit test** (`GovUK.Dfe.AI.Agents.ReleaseTesting`), so a wrong one fails the build, not a release:
+- **Check your files in a unit test** (`GovUK.Dfe.AI.Agents.Quality` and `.Options`), so a wrong one fails the build, not a release:
 
   ```csharp
   var cases = await AgentTestCase.LoadAsync("TestCases/ofsted-agent");

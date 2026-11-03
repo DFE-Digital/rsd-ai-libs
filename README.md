@@ -11,7 +11,7 @@ and versions are stored in Foundry.
 | `GovUK.Dfe.AI.Agents`            | Core: define, version and run agents          | [readme](src/GovUK.Dfe.AI.Agents/Readme.md)            |
 | `GovUK.Dfe.AI.Agents.Mcp`        | Tools from your own MCP servers               | [readme](src/GovUK.Dfe.AI.Agents.Mcp/Readme.md)        |
 | `GovUK.Dfe.AI.Agents.AISearch`   | Evidence from Azure AI Search, with citations | [readme](src/GovUK.Dfe.AI.Agents.AISearch/Readme.md)   |
-| `GovUK.Dfe.AI.Agents.Evaluation` | A judge model that scores answers             | [readme](src/GovUK.Dfe.AI.Agents.Evaluation/Readme.md) |
+| `GovUK.Dfe.AI.Agents.Evaluation` | A judge model that scores answers, and the Responsible AI release gate | [readme](src/GovUK.Dfe.AI.Agents.Evaluation/Readme.md) |
 | `GovUK.Dfe.AI.Agents.Guardrails` | Foundry guardrails on your models or agents   | [readme](src/GovUK.Dfe.AI.Agents.Guardrails/Readme.md) |
 
 Install core plus only the add-ons you need. Each package is released, and can be upgraded, on its own.
@@ -33,7 +33,9 @@ var evidence = await search.GetContextAsync("ofsted_index", $"URN {urn}", filter
 var result = await agents.RunAsync(BriefingAgents.Ofsted, "Summarise the latest inspection.", evidence, ct);
 ```
 
-Start with the [core readme](src/GovUK.Dfe.AI.Agents/Readme.md): configuration, agents and runs.
+**New to the library?** Follow [Ship an agent](docs/ShipAnAgent.md): build, protect, prove, release and watch an
+agent, with a production checklist. The [core readme](src/GovUK.Dfe.AI.Agents/Readme.md) has every detail of
+configuration, agents and runs.
 
 ## Docs
 
@@ -41,11 +43,13 @@ Guides that cover every package:
 
 | Guide                                     | What's in it                                                                                   |
 | ----------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| [Ship an agent](docs/ShipAnAgent.md)      | **Start here:** from an empty project to a protected, tested, monitored agent in production    |
 | [Access](docs/Access.md)                  | How each package signs in to Azure, and the roles each identity needs                          |
 | [Telemetry](docs/Telemetry.md)            | Every metric the packages record, and standard Application Insights queries to use in your app |
 | [Limits](docs/Limits.md)                  | The limits a run works within, set by the library and by Azure AI Foundry                      |
 | [Settings](docs/Settings.md)              | Every `AiAgents` setting in the core package, with its default                                 |
 | [Responsible AI](docs/ResponsibleAI.md)   | How the library supports the UK Government AI Playbook                                         |
+| [Quality gate](docs/QualityGate.md)       | The Responsible AI release standard: checks by principle, the Pass/Warning/Fail decision, policy, CI/CD |
 | [Security review](docs/SecurityReview.md) | Each trust boundary, what to check in your deployment, and a sign-off checklist                |
 
 ## UK Government AI Playbook

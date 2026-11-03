@@ -6,7 +6,7 @@
     <Nullable>enable</Nullable>
     <PackageReadmeFile>Readme.md</PackageReadmeFile>
     <Title>GovUK.Dfe.AI.Agents.Evaluation</Title>
-    <Description>Answer scoring for GovUK.Dfe.AI.Agents: a Foundry judge model scores groundedness and relevance, live and in release gates.</Description>
+    <Description>Answer scoring and release gates for GovUK.Dfe.AI.Agents: a Foundry judge model scores groundedness and relevance, live and in release gates, and a Responsible AI quality gate decides each release by principle and policy.</Description>
     <Authors>DFE-Digital</Authors>
     <NoWarn>$(NoWarn);OPENAI001</NoWarn>
   </PropertyGroup>

@@ -155,7 +155,13 @@ internal sealed class AgentReleaseEvaluator(
         var result = new AgentGateResult(agentName,
             [.. broken.Where(static b => b.Guardrail).Select(static b => b.Problem), .. gated.CaseFailures(ReleaseSections.Guardrail)],
             [.. broken.Where(static b => !b.Guardrail).Select(static b => b.Problem), .. gated.CaseFailures(ReleaseSections.Evaluation),
-                .. gated.ScoreFailuresAgainst(Gate(), baseline)]);
+                .. gated.ScoreFailuresAgainst(Gate(), baseline)])
+        {
+            TestCases = suite.Cases,
+            Report = gated,
+            Baseline = baseline,
+            ReportPath = reportPath,
+        };
         metrics.Agent(agentName, result.Passed);
         if (result.Passed)
         {

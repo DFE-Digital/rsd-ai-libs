@@ -52,7 +52,7 @@ builder.Services.AddAgents(builder.Configuration, agents => agents
     .AddAgents(BriefingAgents.All)
     .AddGuardrails()                 // the guardrail the check requires
     .AddQualityEvaluation()          // optional: judge scores
-    .AddReleaseGate(gate => gate.RefusalPhrases.Add("outside what I can answer")));
+    .AddReleaseGate());
 
 var releaseGate = services.GetRequiredService<IAgentReleaseGate>();
 using var run = releaseGate.BeginRun();     // one id on the release's metrics, provisioning's included
@@ -84,14 +84,44 @@ One folder per agent under `TestCasesDirectory`, with the cases in two folders:
 | `evaluation/` | No guardrail flag                             | The answer has the right facts and scores. A block fails it as the guardrail's mistake |
 
 `CheckReleaseAsync` fails a case that breaks these rules. Check them in a unit test too, so a wrong file fails the build
-(`GovUK.Dfe.AI.Agents.ReleaseTesting`): `Assert.Empty(cases.SelectMany(ReleaseSections.Problems))`.
+(`GovUK.Dfe.AI.Agents.Quality` and `.Options`): `Assert.Empty(cases.SelectMany(ReleaseSections.Problems))`.
 
-- **Refusals:** a case whose `mustMention` includes one of `RefusalPhrases` is checked by that sentence and not scored,
-  as relevance marks any refusal as irrelevant.
+- **"I don't know" answers:** give the case `"expectsUncertainty": true`, with the sentence the agent should use in
+  `mustMention`. The sentence checks it, and the judge doesn't score it, as relevance marks any refusal as irrelevant.
+  (`RefusalPhrases` does the same from a list of sentences, for existing apps.)
 - **Reports and baselines:** each run writes `ReportsDirectory/<agent>.json`. Copy a passing one into
   `BaselinesDirectory` to set the bar for the next release.
 - **Clean-up:** test agents are deleted afterwards, even when the check throws; ones left by a killed run go next time, if `RunTimeout` is set.
 - **`EvaluateAsync`** runs the cases without the guardrail check, conventions or logs, for tools that only score agents.
+
+### Responsible AI quality gate
+
+The release gate says whether each agent's cases passed. The quality gate builds on it to make the release decision
+against a shared standard: **Pass**, **Warning** or **Fail**, with reasons, evidence and recommendations filed under
+the six Responsible AI principles (fairness, reliability and safety, privacy and security, inclusiveness, transparency,
+accountability), a risk-based policy, risk acceptances and human attestations, and a JSON and Markdown report.
+
+```csharp
+builder.Services.AddAgents(builder.Configuration, agents => agents
+    .AddAgents(BriefingAgents.All)
+    .AddGuardrails()
+    .AddResponsibleAiQualityGate());   // adds the judge and the release gate too
+
+using var run = services.GetRequiredService<IAgentReleaseGate>().BeginRun();
+var report = await services.GetRequiredService<IResponsibleAiQualityGate>().DecideReleaseAsync(BriefingAgents.All, ct);
+return report.ExitCode;   // 0: release permitted; 1: blocked
+```
+
+Settings go in `appsettings.json`; code takes only your own checks and judge:
+`AddResponsibleAiQualityGate(gate => gate.AddCheck<MyCheck>().WithoutJudge())`.
+
+It runs each case once, through the release gate, so groundedness and relevance are scored once; its checks read the
+results. It adds no second guardrail: it reads the guardrail check and attack results, and scans answers with the
+guardrail's own blocklists. No aggregate score: a high relevance score never makes up for a privacy, security,
+fairness or safety failure. Each team chooses what to evaluate: `"Principles": [ "ReliabilityAndSafety",
+"PrivacyAndSecurity" ]` runs only those principles' checks, and any check can be turned off or re-weighted. See the [quality gate guide](https://github.com/DFE-Digital/rsd-ai-libs/blob/main/docs/QualityGate.md) for the
+standard, the decision model, the policy settings under `AiAgents:Evaluation:QualityGate`, test case conventions,
+your own checks, and running it in a pipeline.
 
 ### Results in Foundry
 
@@ -118,7 +148,7 @@ Settings, under `AiAgents:Evaluation:ReleaseGate`, e.g. `{ "MinimumScore": 3.5, 
 | `MaxGroupGap`         | Off                     | Largest gap between case groups                                 |
 | `Repeats`             | `1`                     | Runs per case; scores are averaged                              |
 | `MaxParallelTestRuns` | `4`                     | Cases run at once                                               |
-| `RefusalPhrases`      | None                    | Fixed refusals whose cases aren't scored                        |
+| `RefusalPhrases`      | None                    | Older alternative to `expectsUncertainty`: refusals not scored  |
 | `PublishToFoundry`    | `false`                 | Also sends answers to a Foundry evaluation                      |
 | `RequireGuardrail`    | `true`                  | `CheckReleaseAsync` fails every agent without a guardrail check |
 
@@ -133,6 +163,8 @@ Recorded under `AgentTelemetry.SourceName`, so the core package's OpenTelemetry 
 | `dfe.ai_agents.release_gate.score`         | Each agent's average score per release-gate run, by `gen_ai.evaluation.name`                    |
 | `dfe.ai_agents.release_gate.test_cases`    | Release-gate cases, by test case, group and outcome: `passed`, `failed`, `blocked_by_guardrail` |
 | `dfe.ai_agents.release_gate.agents`        | Agents through the release gate, by outcome: `passed` or `failed`                               |
+| `dfe.ai_agents.quality_gate.decisions`     | Agents through the quality gate, by decision and whether release is permitted                   |
+| `dfe.ai_agents.quality_gate.findings`      | Quality gate check results, by principle, check, severity and disposition                       |
 
 The release-gate metrics carry the run's `dfe.ai_agents.release_gate.run_id`, as do the guardrail check and the versions
 provisioned inside `BeginRun()`. See [Release metrics](https://github.com/DFE-Digital/rsd-ai-libs/blob/main/docs/Telemetry.md#release-metrics)

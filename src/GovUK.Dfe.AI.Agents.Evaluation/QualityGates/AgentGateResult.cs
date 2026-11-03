@@ -1,4 +1,5 @@
 using GovUK.Dfe.AI.Agents.Options;
+using GovUK.Dfe.AI.Agents.Quality;
 
 namespace GovUK.Dfe.AI.Agents.Evaluation.QualityGates;
 
@@ -15,6 +16,21 @@ public sealed record AgentGateResult(string AgentName, IReadOnlyList<string> Gua
 
     /// <summary>False when the guardrail wasn't in place, so its test cases weren't run.</summary>
     public bool Evaluated { get; init; } = true;
+
+    /// <summary>The agent's test cases, in the order they ran; empty when none ran.</summary>
+    public IReadOnlyList<AgentTestCase> TestCases { get; init; } = [];
+
+    /// <summary>
+    /// The results the gate was applied to: every case's answer and failures, without scores for cases expecting a
+    /// refusal. Null when no case ran.
+    /// </summary>
+    public AgentEvaluationReport? Report { get; init; }
+
+    /// <summary>The baseline the scores were compared with, without the same scores; null when there's none.</summary>
+    public AgentEvaluationReport? Baseline { get; init; }
+
+    /// <summary>Where the agent's report was written, with every answer, score and failure; null when no case ran.</summary>
+    public string? ReportPath { get; init; }
 
     /// <summary>Every problem, the guardrail's first.</summary>
     public IReadOnlyList<string> Problems => [.. GuardrailProblems, .. EvaluationProblems];

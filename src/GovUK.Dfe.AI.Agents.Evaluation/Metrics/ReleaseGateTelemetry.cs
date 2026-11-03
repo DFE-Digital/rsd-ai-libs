@@ -28,4 +28,31 @@ public static class ReleaseGateTelemetry
 
     /// <summary>The judge's metric, e.g. "Groundedness", as OpenTelemetry's generative AI conventions name it.</summary>
     public const string EvaluationNameTag = "gen_ai.evaluation.name";
+
+    /// <summary>Agents through the Responsible AI quality gate, by <see cref="DecisionTag"/> and <see cref="ReleasePermittedTag"/>.</summary>
+    public const string QualityGateDecisionsMetric = "dfe.ai_agents.quality_gate.decisions";
+
+    /// <summary>
+    /// Quality gate check results, by <see cref="PrincipleTag"/>, <see cref="CheckTag"/>, <see cref="SeverityTag"/> and
+    /// <see cref="DispositionTag"/>.
+    /// </summary>
+    public const string QualityGateFindingsMetric = "dfe.ai_agents.quality_gate.findings";
+
+    /// <summary>Pass, Warning or Fail.</summary>
+    public const string DecisionTag = "dfe.ai_agents.quality_gate.decision";
+
+    /// <summary>"true" or "false".</summary>
+    public const string ReleasePermittedTag = "dfe.ai_agents.quality_gate.release_permitted";
+
+    /// <summary>The Responsible AI principle, e.g. "PrivacyAndSecurity".</summary>
+    public const string PrincipleTag = "dfe.ai_agents.quality_gate.principle";
+
+    /// <summary>The check id, e.g. "privacy.sensitive-data-leakage".</summary>
+    public const string CheckTag = "dfe.ai_agents.quality_gate.check";
+
+    /// <summary>Low, Medium, High or Critical.</summary>
+    public const string SeverityTag = "dfe.ai_agents.quality_gate.severity";
+
+    /// <summary>Passed, NotApplicable, Warning, RiskAccepted or Blocking.</summary>
+    public const string DispositionTag = "dfe.ai_agents.quality_gate.disposition";
 }

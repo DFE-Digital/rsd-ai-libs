@@ -14,6 +14,10 @@ using NSubstitute;
 using NSubstitute.Extensions;
 using GovUK.Dfe.AI.Agents.Quality;
 using GovUK.Dfe.AI.Agents.Models;
+using GovUK.Dfe.AI.Agents.Builders;
+using GovUK.Dfe.AI.Agents.Evaluation.ResponsibleAI;
+using GovUK.Dfe.AI.Agents.Evaluation.ResponsibleAI.Interfaces;
+using GovUK.Dfe.AI.Agents.Evaluation.ResponsibleAI.Reporting;
 
 namespace GovUK.Dfe.AI.Agents.Evaluation.Tests.ReleaseGate;
 
@@ -57,11 +61,11 @@ internal sealed class ReleaseGateTestHost : IDisposable
     private string BaselinesDirectory => Path.Combine(_root, "baselines");
 
     public void AnswerWith(string output) =>
-        AgentService.Configure().RunAsync(default!, default!, default, default).ReturnsForAnyArgs(call =>
+        AgentService.Configure().RunAsync(default!, default!, default, Arg.Any<CancellationToken>()).ReturnsForAnyArgs(call =>
             new AgentResult { AgentName = call.Arg<AgentDefinition>().Name, Output = output });
 
     public void JudgeScores(double score) =>
-        Judge.EvaluateAsync(default!, default).ReturnsForAnyArgs(JudgeMetrics.All.ToDictionary(metric => metric, _ => score));
+        Judge.EvaluateAsync(default!, Arg.Any<CancellationToken>()).ReturnsForAnyArgs(JudgeMetrics.All.ToDictionary(metric => metric, _ => score));
 
     /// <param name="blocking">Whether a guardrail may, or must, block the case: its <c>guardrailMayBlock</c> or <c>guardrailMustBlock</c>.</param>
     public void AddCase(string agentName, string caseName = "case", string prompt = "What was the outcome?",
@@ -111,10 +115,58 @@ internal sealed class ReleaseGateTestHost : IDisposable
         File.WriteAllText(Path.Combine(BaselinesDirectory, $"{agentName}.json"), "{ not json");
     }
 
+    /// <summary>The quality gate's governance file, which <see cref="SaveGovernance"/> writes.</summary>
+    public string GovernanceFile => Path.Combine(_root, "governance.json");
+
+    /// <summary>The day the quality gate thinks it is, for risk acceptances' dates.</summary>
+    public DateTimeOffset Now { get; set; } = new(2026, 11, 3, 9, 0, 0, TimeSpan.Zero);
+
+    /// <summary>Writes a test case file as given, for fields <see cref="AddCase"/> doesn't take, e.g. a principle or planted data.</summary>
+    public void AddCaseFile(string agentName, string caseName, object content)
+    {
+        var path = Path.Combine(TestCasesDirectory, agentName, $"{caseName}.json");
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllText(path, JsonSerializer.Serialize(content));
+    }
+
+    public void SaveGovernance(object records) => File.WriteAllText(GovernanceFile, JsonSerializer.Serialize(records, ReportJson));
+
+    /// <summary>The Responsible AI quality gate on top of the release gate, with a judge by default.</summary>
+    /// <param name="policy">Extra <c>AiAgents:Evaluation:QualityGate</c> settings, by name.</param>
+    public IResponsibleAiQualityGate BuildQualityGate(bool judge = true, Dictionary<string, string?>? settings = null,
+        Dictionary<string, string?>? policy = null, Action<QualityGateBuilder>? configure = null)
+    {
+        var values = new Dictionary<string, string?> { ["AiAgents:Evaluation:QualityGate:GovernanceFile"] = GovernanceFile };
+
+        // Each agent's system prompt, so the manifest can fingerprint it.
+        foreach (var agent in Agents)
+        {
+            var prompt = Path.Combine(_root, "prompts", $"{agent.SystemPromptKey}.md");
+            Directory.CreateDirectory(Path.GetDirectoryName(prompt)!);
+            File.WriteAllText(prompt, $"You brief ministers on {agent.SystemPromptKey} records.");
+            values[$"AiAgents:PromptFiles:SystemPrompts:{agent.SystemPromptKey}"] = prompt;
+        }
+
+        foreach (var (name, value) in policy ?? [])
+        {
+            values[$"AiAgents:Evaluation:QualityGate:{name}"] = value;
+        }
+
+        _provider = Provider(judge, settings, null, values, agents => agents.AddResponsibleAiQualityGate(configure));
+        return _provider.GetRequiredService<IResponsibleAiQualityGate>();
+    }
+
     /// <param name="judge">Whether an evaluator is registered, so answers are scored.</param>
     /// <param name="settings">Extra <c>AiAgents:Evaluation:ReleaseGate</c> settings, by name.</param>
     public IAgentReleaseGate Build(bool judge = false, Dictionary<string, string?>? settings = null,
         Action<ReleaseGateSettings>? configure = null)
+    {
+        _provider = Provider(judge, settings, configure, [], _ => { });
+        return _provider.GetRequiredService<IAgentReleaseGate>();
+    }
+
+    private ServiceProvider Provider(bool judge, Dictionary<string, string?>? settings, Action<ReleaseGateSettings>? configure,
+        Dictionary<string, string?> extra, Action<AgentsBuilder> addMore)
     {
         var values = new Dictionary<string, string?>
         {
@@ -131,6 +183,11 @@ internal sealed class ReleaseGateTestHost : IDisposable
             values[$"AiAgents:Evaluation:ReleaseGate:{name}"] = value;
         }
 
+        foreach (var (name, value) in extra)
+        {
+            values[name] = value;
+        }
+
         var services = new ServiceCollection();
         services.AddLogging(logging => logging.AddProvider(new ListLoggerProvider(Logs, LogFields)));
         services.AddAgents(new ConfigurationBuilder().AddInMemoryCollection(values).Build(), agents =>
@@ -140,14 +197,24 @@ internal sealed class ReleaseGateTestHost : IDisposable
             {
                 agents.AddCustomQualityEvaluation(_ => Judge);
             }
+
+            addMore(agents);
         });
         services.AddSingleton(AgentService);
         services.AddSingleton(Runtime);
         services.AddSingleton(FoundryEvaluations.Client());
         GuardrailChecks.ForEach(check => services.AddSingleton(check));
 
-        _provider = services.BuildServiceProvider();
-        return _provider.GetRequiredService<IAgentReleaseGate>();
+        // Not the pipeline's: a test run in GitHub Actions mustn't write to the job's summary.
+        services.AddSingleton<TimeProvider>(new FixedTime(Now));
+        services.AddSingleton(new QualityGateReportWriter(_ => null));
+
+        return services.BuildServiceProvider();
+    }
+
+    private sealed class FixedTime(DateTimeOffset now) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => now;
     }
 
     public void Dispose()

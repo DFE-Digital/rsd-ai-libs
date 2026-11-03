@@ -29,20 +29,32 @@ internal sealed class AgentReleaseGate(
         return run;
     }
 
+    /// <summary>The open release run's id in this async flow, or null outside one.</summary>
+    internal static string? CurrentRunId => CurrentRun.Value;
+
     public async Task<IReadOnlyList<AgentGateResult>> CheckReleaseAsync(IReadOnlyCollection<AgentDefinition> definitions,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(definitions);
         using var ownRun = CurrentRun.Value is null ? BeginRun() : null;
 
-        // Nothing is tested without its guardrail: the results would show only how the agents behave unprotected.
-        var guardrailProblems = await CheckGuardrailsAsync(cancellationToken);
-        var results = guardrailProblems.Count == 0
-            ? await evaluator.EvaluateAsync(definitions, followConventions: true, cancellationToken)
-            : [.. definitions.Select(definition => NotEvaluated(definition.Name, guardrailProblems))];
-
+        var results = await RunChecksAsync(definitions, cancellationToken);
         LogDecision(results);
         return results;
+    }
+
+    /// <summary>
+    /// <see cref="CheckReleaseAsync"/> without logging a decision, for a gate that makes the decision itself, e.g. the
+    /// Responsible AI quality gate. Call it inside a run.
+    /// </summary>
+    internal async Task<IReadOnlyList<AgentGateResult>> RunChecksAsync(IReadOnlyCollection<AgentDefinition> definitions,
+        CancellationToken cancellationToken)
+    {
+        // Nothing is tested without its guardrail: the results would show only how the agents behave unprotected.
+        var guardrailProblems = await CheckGuardrailsAsync(cancellationToken);
+        return guardrailProblems.Count == 0
+            ? await evaluator.EvaluateAsync(definitions, followConventions: true, cancellationToken)
+            : [.. definitions.Select(definition => NotEvaluated(definition.Name, guardrailProblems))];
     }
 
     public async Task<IReadOnlyList<AgentGateResult>> EvaluateAsync(IReadOnlyCollection<AgentDefinition> definitions,

@@ -24,27 +24,56 @@ public static class QualityEvaluationExtensions
 {
     private const string SectionName = "Evaluation";
 
+    /// <summary>Stands for groundedness and relevance, so choosing them twice isn't two judges.</summary>
+    private static readonly object BuiltInJudge = new();
+
+    /// <summary>Groundedness and relevance: the judge the quality gate adds unless the app chooses another.</summary>
+    private static readonly JudgeChoice DefaultJudge = Judged(evaluator: null);
+
     /// <summary>
     /// Scores answers with the <c>AiAgents:Evaluation:JudgeModel</c> (default: <c>Foundry:DefaultModel</c>): every
     /// <c>IAgentTestRunner</c> case, and a <c>SampleRate</c> share of live runs in the background.
     /// </summary>
     /// <param name="evaluator">Default: groundedness and relevance, each scored 1–5.</param>
+    /// <remarks>Call it before or after <c>AddResponsibleAiQualityGate()</c>: your choice of judge is kept either way.</remarks>
     public static AgentsBuilder AddQualityEvaluation(this AgentsBuilder agents, IEvaluator? evaluator = null)
     {
         ArgumentNullException.ThrowIfNull(agents);
 
-        IEvaluator[] scoring = evaluator is null ? [new GroundednessEvaluator(), new RelevanceEvaluator()] : [evaluator];
-        return agents.AddPackage(new EvaluationPackage((judgeModel, asAgent) => sp => asAgent
-            ? JudgedByAgents(scoring, sp.GetRequiredService<IAgentRunnerService>(), judgeModel!, sp)
-            : new ExtensionsAiEvaluator(Combined(scoring),
-                new ChatConfiguration(new FoundryJudgeChatClient(sp.GetRequiredService<ProjectOpenAIClient>(), judgeModel!,
-                    sp.GetService<IModelCallTelemetry>())),
-                sp.GetService<ILogger<ExtensionsAiEvaluator>>()), needsJudge: true));
+        EvaluationSetup.For(agents.Services).Choose(evaluator is null ? DefaultJudge : Judged(evaluator));
+        return agents.AddPackage(new EvaluationPackage());
     }
 
-    /// <summary>
-    /// One evaluator as it is, as a team's own may not list its metric names, which <c>CompositeEvaluator</c> requires.
-    /// </summary>
+    /// <summary>Groundedness and relevance unless the app chooses its own judge, in any call, in any order.</summary>
+    internal static AgentsBuilder AddDefaultQualityEvaluation(this AgentsBuilder agents)
+    {
+        EvaluationSetup.For(agents.Services).DefaultJudgeRequested = true;
+        return agents.AddPackage(new EvaluationPackage());
+    }
+
+    /// <summary>No judge, as the app chose; any other judge choice then contradicts it.</summary>
+    internal static AgentsBuilder AddNoQualityEvaluation(this AgentsBuilder agents)
+    {
+        EvaluationSetup.For(agents.Services).Choose(JudgeChoice.None);
+        return agents;
+    }
+
+    /// <summary>A judge model scoring with <paramref name="evaluator"/>, or with groundedness and relevance when it's null.</summary>
+    private static JudgeChoice Judged(IEvaluator? evaluator)
+    {
+        IEvaluator[] scoring = evaluator is null ? [new GroundednessEvaluator(), new RelevanceEvaluator()] : [evaluator];
+        return new JudgeChoice(
+            evaluator is null ? "AddQualityEvaluation()" : $"AddQualityEvaluation({evaluator.GetType().Name})",
+            (object?)evaluator ?? BuiltInJudge,
+            (judgeModel, asAgent) => sp => asAgent
+                ? JudgedByAgents(scoring, sp.GetRequiredService<IAgentRunnerService>(), judgeModel!, sp)
+                : new ExtensionsAiEvaluator(Combined(scoring),
+                    new ChatConfiguration(new FoundryJudgeChatClient(sp.GetRequiredService<ProjectOpenAIClient>(), judgeModel!,
+                        sp.GetService<IModelCallTelemetry>())),
+                    sp.GetService<ILogger<ExtensionsAiEvaluator>>()),
+            NeedsJudgeModel: true);
+    }
+
     /// <summary>
     /// A <see cref="CompositeEvaluator"/>, even for one: it reports a failed judge call as an unscored metric with the reason,
     /// where a lone evaluator would throw it out of the evaluation. It needs each evaluator's metric names, so a lone
@@ -77,21 +106,29 @@ public static class QualityEvaluationExtensions
         ArgumentNullException.ThrowIfNull(agents);
         ArgumentNullException.ThrowIfNull(evaluator);
 
-        return agents.AddPackage(new EvaluationPackage((_, _) => evaluator, needsJudge: false));
+        EvaluationSetup.For(agents.Services).Choose(
+            new JudgeChoice("AddCustomQualityEvaluation(...)", evaluator, (_, _) => evaluator, NeedsJudgeModel: false));
+        return agents.AddPackage(new EvaluationPackage());
     }
 
-    /// <summary>One package whichever way it's added, so scoring is registered once.</summary>
-    /// <param name="evaluatorFor">The evaluator, given the judge model and whether the judge runs as a temporary agent.</param>
-    private sealed class EvaluationPackage(Func<string?, bool, Func<IServiceProvider, IAgentRunEvaluator>> evaluatorFor, bool needsJudge)
-        : IAgentsPackage
+    /// <summary>
+    /// One package however scoring is added, so it's registered once, with the judge every call chose between them
+    /// (<see cref="EvaluationSetup"/>): a later call's choice is never lost.
+    /// </summary>
+    private sealed class EvaluationPackage : IAgentsPackage
     {
         public string Name => "Evaluation";
 
         public void Register(AgentsPackageContext context)
         {
+            if (EvaluationSetup.For(context.Services).Judge(DefaultJudge) is not { EvaluatorFor: { } evaluatorFor } judge)
+            {
+                return;
+            }
+
             var settings = context.Section.GetSection(SectionName).Get<EvaluationSettings>() ?? new EvaluationSettings();
             var foundry = context.Options.Foundry;
-            var problems = settings.Problems(needsJudge, foundry).ToList();
+            var problems = settings.Problems(judge.NeedsJudgeModel, foundry).ToList();
             problems.ForEach(problem => context.ReportProblem($"{SectionName}:{problem}"));
             if (problems.Count > 0)
             {

@@ -20,7 +20,7 @@ public static class ReleaseGateTelemetry
     /// <summary>Passed, failed or blocked_by_guardrail: see <c>AgentOutcomes</c>.</summary>
     public const string OutcomeTag = "dfe.ai_agents.release_gate.outcome";
 
-    /// <summary>The test case's name, with its folder, e.g. "evaluation/ks2-trend".</summary>
+    /// <summary>The test case's name, with its section and principle, e.g. "evaluation/fairness/FAIR-001".</summary>
     public const string TestCaseTag = "dfe.ai_agents.release_gate.test_case";
 
     /// <summary>The test case's group, e.g. "academy"; empty when it has none.</summary>

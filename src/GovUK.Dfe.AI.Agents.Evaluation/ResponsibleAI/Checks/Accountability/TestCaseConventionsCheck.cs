@@ -6,8 +6,8 @@ namespace GovUK.Dfe.AI.Agents.Evaluation.ResponsibleAI.Checks.Accountability;
 
 /// <summary>
 /// Every test case says what it tests and how it passes, so a result can be understood and audited: the release gate's
-/// folder conventions (<c>ReleaseSections</c>), and with <c>RequireScenarioMetadata</c>, its principle, risk and an explicit
-/// expectation (<see cref="ScenarioMetadata.Problems"/>).
+/// section conventions (<c>ReleaseSections</c>), a file type that's a principle, and with <c>RequireScenarioMetadata</c>, its
+/// risk and an explicit expectation (<see cref="ScenarioMetadata.Problems"/>).
 /// </summary>
 public sealed class TestCaseConventionsCheck : QualityCheck
 {

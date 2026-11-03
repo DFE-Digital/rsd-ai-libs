@@ -41,6 +41,9 @@ internal static class ErrorMessages
     public const string AgentAnswerInvalid = "Agent '{0}' gave an invalid answer twice: {1}";
     public const string StreamedAnswerInvalid = "Agent '{0}' gave an invalid answer: {1}";
     public const string TestCaseWithoutPrompt = "Test case {0} has no \"prompt\".";
+    public const string TestFileNotStandard = "Test file {0} must hold the tests for one Responsible AI principle: {{ \"type\": \"fairness\", \"description\": \"...\", \"tests\": [ {{ \"id\": \"FAIR-001\", \"prompt\": \"...\", ... }} ] }}.";
+    public const string TestWithoutId = "Test {0} in {1} has no \"id\", e.g. \"FAIR-001\".";
+    public const string DuplicateTestCase = "Test case {0} is defined more than once: give each test a unique \"id\" for its agent.";
 
     public const string GuardrailDidNotBlock =
         "Not blocked by the guardrail, which this case requires (\"guardrailMustBlock\"). A Foundry guardrail isn't relied on to check evidence, and checks no input to a model behind your own gateway, so turn on AiAgents:Guardrails:ScanEvidence for planted instructions in evidence, and ScanPrompts and CheckBlocklists for a gateway model.";

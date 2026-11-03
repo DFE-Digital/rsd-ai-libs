@@ -37,11 +37,11 @@ public sealed class ReleaseGateTests : IDisposable
     [Fact]
     public async Task Fails_an_agent_whose_answer_misses_a_fact()
     {
-        _host.AddCaseForEveryAgent(caseName: "outcome", mustMention: ["Outstanding"]);
+        _host.AddCaseForEveryAgent(id: "outcome", mustMention: ["Outstanding"]);
 
         var results = await _host.Build().EvaluateAsync(ReleaseGateTestHost.Agents, Token);
 
-        Assert.All(results, r => Assert.Contains("Case outcome: Doesn't mention \"Outstanding\"", r.Problems));
+        Assert.All(results, r => Assert.Contains("Case evaluation/reliability-and-safety/outcome: Doesn't mention \"Outstanding\"", r.Problems));
     }
 
     [Fact]
@@ -55,8 +55,8 @@ public sealed class ReleaseGateTests : IDisposable
     [Fact]
     public async Task Runs_cases_in_parallel_up_to_the_limit_and_each_the_configured_number_of_times()
     {
-        _host.AddCaseForEveryAgent(caseName: "a");
-        _host.AddCaseForEveryAgent(caseName: "b");
+        _host.AddCaseForEveryAgent(id: "a");
+        _host.AddCaseForEveryAgent(id: "b");
         var running = 0;
         var mostAtOnce = 0;
         _host.AgentService.Configure().RunAsync(default!, default!, default, Arg.Any<CancellationToken>()).ReturnsForAnyArgs(async call =>
@@ -79,14 +79,14 @@ public sealed class ReleaseGateTests : IDisposable
     [Fact]
     public async Task A_block_the_case_allows_passes_and_is_logged_as_the_guardrail_doing_its_job()
     {
-        _host.AddCaseForEveryAgent(caseName: "injected-instruction", blocking: GuardrailBlocking.May);
+        _host.AddCaseForEveryAgent(id: "injected-instruction", blocking: GuardrailBlocking.May);
         _host.AgentService.Configure().RunAsync(default!, default!, default, Arg.Any<CancellationToken>()).ThrowsAsyncForAnyArgs(call =>
             new AgentGuardrailException(call.Arg<AgentDefinition>().Name, AgentGuardrailException.PromptStage));
 
         var results = await _host.Build().EvaluateAsync(ReleaseGateTestHost.Agents, Token);
 
         Assert.All(results, r => Assert.True(r.Passed));
-        Assert.Contains((LogLevel.Information, "ofsted-agent / injected-instruction: blocked by the guardrail, as this case allows"), _host.Logs);
+        Assert.Contains((LogLevel.Information, "ofsted-agent / evaluation/reliability-and-safety/injected-instruction: blocked by the guardrail, as this case allows"), _host.Logs);
     }
 
     [Fact]
@@ -110,7 +110,7 @@ public sealed class ReleaseGateTests : IDisposable
     {
         const string Weather = "What will the weather be?";
         _host.AddCaseForEveryAgent(mustMention: ["Good"]);
-        _host.AddCaseForEveryAgent(caseName: "out-of-scope", prompt: Weather, mustMention: [Outside]);
+        _host.AddCaseForEveryAgent(id: "out-of-scope", prompt: Weather, mustMention: [Outside]);
         _host.AnswerWith($"This is {Outside}. Rated Good [Evidence 1].");
         _host.Judge.EvaluateAsync(default!, Arg.Any<CancellationToken>()).ReturnsForAnyArgs(call =>
             JudgeMetrics.All.ToDictionary(m => m, _ => call.Arg<CompletedAgentRun>().Prompt == Weather ? 1.0 : 5.0));
@@ -126,8 +126,8 @@ public sealed class ReleaseGateTests : IDisposable
     public async Task Fails_when_one_group_scores_much_worse_than_another()
     {
         const string Special = "What about the special school?";
-        _host.AddCaseForEveryAgent(caseName: "academy", group: "academy");
-        _host.AddCaseForEveryAgent(caseName: "special", prompt: Special, group: "special-school");
+        _host.AddCaseForEveryAgent(id: "academy", group: "academy");
+        _host.AddCaseForEveryAgent(id: "special", prompt: Special, group: "special-school");
         _host.Judge.EvaluateAsync(default!, Arg.Any<CancellationToken>()).ReturnsForAnyArgs(call =>
             JudgeMetrics.All.ToDictionary(m => m, _ => call.Arg<CompletedAgentRun>().Prompt == Special ? 3.6 : 4.8));
 
@@ -185,12 +185,12 @@ public sealed class ReleaseGateTests : IDisposable
     [Fact]
     public async Task Logs_each_case_and_agent()
     {
-        _host.AddCaseForEveryAgent(caseName: "outcome", mustMention: ["Outstanding"]);
+        _host.AddCaseForEveryAgent(id: "outcome", mustMention: ["Outstanding"]);
 
         await _host.Build().EvaluateAsync(ReleaseGateTestHost.Agents, Token);
 
         Assert.Contains(_host.Logs, l => l.Level == LogLevel.Warning
-            && l.Message.StartsWith("ofsted-agent / outcome: failed", StringComparison.Ordinal));
+            && l.Message.StartsWith("ofsted-agent / evaluation/reliability-and-safety/outcome: failed", StringComparison.Ordinal));
         Assert.Contains(_host.Logs, l => l.Message.StartsWith("trust-agent failed 1 release checks", StringComparison.Ordinal));
     }
 

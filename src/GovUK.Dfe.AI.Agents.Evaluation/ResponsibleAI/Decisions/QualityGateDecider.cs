@@ -90,7 +90,7 @@ public static class QualityGateDecider
                 Outcome = CheckOutcome.Failed,
                 Subject = principle.ToString(),
                 Summary = $"No check evaluated {principle}, so the agent isn't shown to meet it",
-                Recommendation = $"Add test cases under evaluation/{principle}/ or a check for {principle}; if it truly doesn't apply, leave it out of QualityGate:Principles.",
+                Recommendation = $"Add tests to the agent's file for {principle}, or a check for it; if it truly doesn't apply, leave it out of QualityGate:Principles.",
             });
 
     private static DecidedFinding DispositionOf(string agentName, QualityCheckResult result, QualityGatePolicy policy,

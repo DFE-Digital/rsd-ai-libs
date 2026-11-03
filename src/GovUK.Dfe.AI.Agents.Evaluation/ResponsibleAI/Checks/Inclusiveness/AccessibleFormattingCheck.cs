@@ -29,22 +29,20 @@ public sealed partial class AccessibleFormattingCheck : QualityCheck
             yield break;
         }
 
-        var failing = 0;
-        foreach (var scenario in answered)
-        {
-            var problems = Problems(scenario.Result.Output!);
-            if (problems.Count > 0)
-            {
-                failing++;
-                yield return Failed($"{problems.Count} accessibility problem(s) in the answer's formatting",
-                    "Tell the agent to use headings in order without skipping a level, descriptive link text, and alternative text for images.",
-                    problems, scenario.Name);
-            }
-        }
-
-        if (failing == 0)
+        var failing = answered.Select(static s => (s.Name, Problems: Problems(s.Result.Output!)))
+            .Where(static s => s.Problems.Count > 0)
+            .ToList();
+        if (failing.Count == 0)
         {
             yield return Passed($"No formatting problems in {answered.Count} answers");
+            yield break;
+        }
+
+        foreach (var (name, problems) in failing)
+        {
+            yield return Failed($"{problems.Count} accessibility problem(s) in the answer's formatting",
+                "Tell the agent to use headings in order without skipping a level, descriptive link text, and alternative text for images.",
+                problems, name);
         }
     }
 
@@ -52,10 +50,10 @@ public sealed partial class AccessibleFormattingCheck : QualityCheck
     {
         var problems = new List<string>();
         var previous = 0;
-        foreach (Match heading in Heading().Matches(markdown))
+        foreach (var groups in Heading().Matches(markdown).Select(static heading => heading.Groups))
         {
-            var level = heading.Groups[1].Value.Length;
-            var text = heading.Groups[2].Value.Trim();
+            var level = groups[1].Value.Length;
+            var text = groups[2].Value.Trim();
             if (text.Length == 0)
             {
                 problems.Add("An empty heading");

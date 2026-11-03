@@ -22,7 +22,7 @@ public sealed class FoundryEvaluationTests : IDisposable
     public async Task Sends_each_agent_s_answers_to_an_evaluation_scored_by_the_judge_model()
     {
         _host.AddCaseForEveryAgent(mustMention: ["Good"]);
-        _host.AddCaseForEveryAgent(caseName: "out-of-scope", prompt: "Weather?", mustMention: [Outside]);
+        _host.AddCaseForEveryAgent(id: "out-of-scope", prompt: "Weather?", mustMention: [Outside]);
         _host.AnswerWith($"This is {Outside}. Rated Good [Evidence 1].");
         _host.JudgeScores(4.5);
 

@@ -104,7 +104,7 @@ public sealed class QualityGatePolicy
         ApprovalRequiredToolPrefixes.Count == 0 ? DefaultApprovalRequiredToolPrefixes : ApprovalRequiredToolPrefixes;
 
     /// <summary>
-    /// On by default: every test case must name its principle (by folder or <c>"principle"</c>), its <c>"risk"</c>, and
+    /// On by default: every test case must be in a file for one principle, say its risk (<c>"description"</c>), and
     /// at least one explicit expectation, so each case says what it tests and how it passes.
     /// </summary>
     public bool RequireScenarioMetadata { get; set; } = true;

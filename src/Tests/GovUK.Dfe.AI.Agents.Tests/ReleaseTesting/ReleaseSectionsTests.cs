@@ -13,10 +13,10 @@ public sealed class ReleaseSectionsTests
     [Theory]
     [InlineData("guardrail/jailbreak-prompt", false, ReleaseSections.Guardrail)]
     [InlineData("evaluation/ks2-trend", false, ReleaseSections.Evaluation)]
-    [InlineData("ks2-trend", false, ReleaseSections.Evaluation)]                       // no folder: an evaluation case
-    [InlineData("evaluation/guardrail-wording", false, ReleaseSections.Evaluation)]    // by folder, not by wording
+    [InlineData("ks2-trend", false, ReleaseSections.Evaluation)]                       // no section: an evaluation case
+    [InlineData("evaluation/guardrail-wording", false, ReleaseSections.Evaluation)]    // by section, not by wording
     [InlineData("evaluation/ks2-trend", true, ReleaseSections.Guardrail)]              // blocked by mistake
-    public void A_results_section_is_its_cases_folder_or_the_guardrails_when_wrongly_blocked(string caseName, bool wronglyBlocked, string section) =>
+    public void A_results_section_is_its_cases_or_the_guardrails_when_wrongly_blocked(string caseName, bool wronglyBlocked, string section) =>
         Assert.Equal(section, ReleaseSections.Of(new AgentTestResult(caseName, null, ["failed"], NoScores) { BlockedByGuardrailInError = wronglyBlocked }));
 
     [Theory]
@@ -25,7 +25,7 @@ public sealed class ReleaseSectionsTests
     [InlineData("guardrail/jailbreak", false, true, null, 1)]          // only allowing the block proves nothing
     [InlineData("guardrail/jailbreak", true, false, "academy", 1)]     // guardrail cases aren't scored
     [InlineData("evaluation/outcome", false, true, null, 1)]           // a block there is the guardrail's mistake
-    [InlineData("outcome", false, false, null, 1)]                     // not in a section's folder
+    [InlineData("outcome", false, false, null, 1)]                     // no section in its name
     public void Every_apps_cases_follow_the_same_conventions(string name, bool mustBlock, bool mayBlock, string? group, int problems) =>
         Assert.Equal(problems, ReleaseSections.Problems(new AgentTestCase(name, "What was the outcome?")
         {

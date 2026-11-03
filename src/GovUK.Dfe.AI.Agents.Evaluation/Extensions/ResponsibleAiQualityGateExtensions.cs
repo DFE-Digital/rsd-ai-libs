@@ -100,6 +100,8 @@ public static class ResponsibleAiQualityGateExtensions
             services.AddSingleton(sp => new ReleaseManifestBuilder(sources, policy, sp.GetRequiredService<ReleaseGateSettings>(),
                 sp.GetRequiredService<ReleaseGateJudge>(), sp.GetRequiredService<TimeProvider>(), Environment.GetEnvironmentVariable));
             services.AddSingleton(_ => new QualityGateReportWriter(Environment.GetEnvironmentVariable));
+            services.AddSingleton<QualityCheckRunner>();
+            services.AddSingleton<QualityGateRecorder>();
             services.AddSingleton<IResponsibleAiQualityGate, ResponsibleAiQualityGate>();
         }
     }

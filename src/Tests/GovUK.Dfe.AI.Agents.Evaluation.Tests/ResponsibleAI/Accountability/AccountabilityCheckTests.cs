@@ -71,9 +71,9 @@ public sealed class AccountabilityCheckTests
         Assert.Equal(principle, ScenarioMetadata.For(Case(name)).Principle);
 
     [Fact]
-    public void Lets_a_cases_principle_field_file_it_when_it_is_not_in_a_principle_folder()
+    public void Files_a_test_under_its_files_type_at_its_own_severity()
     {
-        var metadata = ScenarioMetadata.For(Case("evaluation/x", extra: new { principle = "Inclusiveness", severity = "medium" }));
+        var metadata = ScenarioMetadata.For(Case("evaluation/inclusiveness/INC-001", extra: new { severity = "medium" }));
 
         Assert.Equal((ResponsibleAiPrinciple.Inclusiveness, CheckSeverity.Medium), (metadata.Principle, metadata.Severity));
     }
@@ -81,35 +81,36 @@ public sealed class AccountabilityCheckTests
     [Fact]
     public async Task Fails_test_cases_that_do_not_say_what_they_test_or_how_they_pass()
     {
-        var vague = Case("evaluation/vague", mustMention: [], extra: new { severity = "Severe" });
-        var mismatched = Case("evaluation/Fairness/mismatch", extra: new { principle = "Transparency", risk = "x" });
-        var unknown = Case("evaluation/Fairness/unknown", extra: new { principle = "Kindness", risk = "x" });
-        var context = CheckContext([(vague, Result(vague.Name)), (mismatched, Result(mismatched.Name)), (unknown, Result(unknown.Name))]);
+        var vague = Case("evaluation/fairness/vague", mustMention: [], extra: new { severity = "Severe" });
+        var unknown = Case("evaluation/kindness/KIND-001", extra: new { description = "x" });
+        var context = CheckContext([(vague, Result(vague.Name)), (unknown, Result(unknown.Name))]);
 
         var result = await OnlyAsync(new TestCaseConventionsCheck(), context);
 
         Assert.Equal(CheckOutcome.Failed, result.Outcome);
         Assert.Equal(
         [
-            "Test case evaluation/vague has \"severity\": \"Severe\", which isn't one of Low, Medium, High, Critical.",
-            "Test case evaluation/vague must be in a principle's folder, e.g. evaluation/Fairness/, or set \"principle\".",
-            "Test case evaluation/vague must say what risk it tests in \"risk\".",
-            "Test case evaluation/vague has no explicit pass condition: give \"mustMention\", \"mustNotMention\" or \"sensitiveData\".",
-            "Test case evaluation/Fairness/mismatch is in the Fairness folder but its \"principle\" is Transparency.",
-            "Test case evaluation/Fairness/unknown has \"principle\": \"Kindness\", which isn't one of Fairness, ReliabilityAndSafety, PrivacyAndSecurity, Inclusiveness, Transparency, Accountability.",
+            "Test case evaluation/fairness/vague has \"severity\": \"Severe\", which isn't one of Low, Medium, High, Critical.",
+            "Test case evaluation/fairness/vague must say what risk it tests in \"description\" or \"risk\".",
+            "Test case evaluation/fairness/vague has no explicit pass condition: give \"mustMention\", \"mustNotMention\" or \"sensitiveData\".",
+            "Test case evaluation/kindness/KIND-001 must be in a file whose \"type\" is a Responsible AI principle: one of fairness, reliability-and-safety, privacy-and-security, inclusiveness, transparency, accountability.",
         ], result.Evidence);
     }
 
     [Fact]
-    public async Task Requires_only_the_release_gates_conventions_when_metadata_is_not_required()
+    public async Task Requires_only_the_section_and_type_when_metadata_is_not_required()
     {
-        var bare = Case("evaluation/bare");
+        var bare = Case("evaluation/fairness/bare");
         var outside = Case("loose");
         var context = CheckContext([(bare, Result(bare.Name)), (outside, Result(outside.Name))], new QualityGatePolicy { RequireScenarioMetadata = false });
 
         var result = await OnlyAsync(new TestCaseConventionsCheck(), context);
 
-        Assert.Equal(["Test case loose must be in its agent's guardrail/ or evaluation/ folder."], result.Evidence);
+        Assert.Equal(
+        [
+            "Test case loose must be named guardrail/... or evaluation/..., as its agent's test files name it.",
+            "Test case loose must be in a file whose \"type\" is a Responsible AI principle: one of fairness, reliability-and-safety, privacy-and-security, inclusiveness, transparency, accountability.",
+        ], result.Evidence);
     }
 
     [Fact]

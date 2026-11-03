@@ -47,12 +47,18 @@ public sealed partial class ReadabilityCheck : QualityCheck
                 .Select(static s => string.Create(CultureInfo.InvariantCulture, $"Hardest: {s.Name} reading ease {s.Readability.Ease:0}, {s.Readability.WordsPerSentence:0.#} words a sentence")),
         ];
 
-        var tooHard = ease < minimumEase;
-        var tooLong = sentenceWords > maxWords;
-        yield return tooHard || tooLong
-            ? Failed(tooHard
-                    ? string.Create(CultureInfo.InvariantCulture, $"Answers average a reading ease of {ease:0}, below {minimumEase:0}")
-                    : string.Create(CultureInfo.InvariantCulture, $"Sentences average {sentenceWords:0.#} words, more than {maxWords:0.#}"),
+        string? problem = null;
+        if (ease < minimumEase)
+        {
+            problem = string.Create(CultureInfo.InvariantCulture, $"Answers average a reading ease of {ease:0}, below {minimumEase:0}");
+        }
+        else if (sentenceWords > maxWords)
+        {
+            problem = string.Create(CultureInfo.InvariantCulture, $"Sentences average {sentenceWords:0.#} words, more than {maxWords:0.#}");
+        }
+
+        yield return problem is not null
+            ? Failed(problem,
                 "Tell the agent to write in plain English: short sentences, common words, one idea a sentence, and to explain acronyms.",
                 evidence, measured: ease, threshold: minimumEase)
             : Passed(string.Create(CultureInfo.InvariantCulture, $"Answers average a reading ease of {ease:0} and {sentenceWords:0.#} words a sentence"), evidence,

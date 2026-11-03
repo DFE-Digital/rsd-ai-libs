@@ -37,12 +37,13 @@ public sealed class ToolAuthorisationCheck : QualityCheck
             .Select(static tool => $"{tool} changes data but runs without a person's approval")
             .ToList();
 
+        var needApproval = approved.Count == 0 ? "none" : string.Join(", ", approved);
         yield return problems.Count > 0
             ? Failed($"{problems.Count} tool(s) change data without approval",
                 "Add each tool that changes data to the agent's ToolsRequiringApproval, with an IToolCallApprover (agents.AddToolApprover<T>()).",
                 problems)
             : Passed($"{agent.AllowedTools.Count} allowed tool(s); {approved.Count} need approval",
-                [$"Allowed: {string.Join(", ", agent.AllowedTools)}", $"Need approval: {(approved.Count == 0 ? "none" : string.Join(", ", approved))}"]);
+                [$"Allowed: {string.Join(", ", agent.AllowedTools)}", $"Need approval: {needApproval}"]);
     }
 
     /// <summary>Whether the name's first word is one of the prefixes, e.g. "update" in update_case, update-case or updateCase.</summary>

@@ -63,7 +63,7 @@ public sealed class EvaluationDatasetCheck : QualityCheck
         if (context.Scenarios.Count == 0)
         {
             yield return Failed("No test case ran",
-                $"Add the agent's test cases under the release gate's TestCasesDirectory, in {context.Agent.Name}/evaluation/<Principle>/ and {context.Agent.Name}/guardrail/<Principle>/.",
+                $"Add the agent's test cases under the release gate's TestCasesDirectory, in {context.Agent.Name}/, one file per Responsible AI principle, e.g. fairness.json, starting from the templates in docs/templates/TestCases.",
                 context.ReleaseGateProblems);
             yield break;
         }

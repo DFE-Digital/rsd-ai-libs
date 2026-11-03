@@ -12,6 +12,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using NSubstitute;
 using NSubstitute.Extensions;
+using GovUK.Dfe.AI.Agents.Options;
 using GovUK.Dfe.AI.Agents.Quality;
 using GovUK.Dfe.AI.Agents.Models;
 using GovUK.Dfe.AI.Agents.Builders;
@@ -67,32 +68,50 @@ internal sealed class ReleaseGateTestHost : IDisposable
     public void JudgeScores(double score) =>
         Judge.EvaluateAsync(default!, Arg.Any<CancellationToken>()).ReturnsForAnyArgs(JudgeMetrics.All.ToDictionary(metric => metric, _ => score));
 
+    /// <summary>The principle the release gate's own tests are filed under.</summary>
+    public const string Type = "reliability-and-safety";
+
+    /// <summary>A test's name as the loader gives it: its section, its file's type and its id.</summary>
+    public static string NameOf(string id, bool attack = false) =>
+        $"{(attack ? ReleaseSections.Guardrail : ReleaseSections.Evaluation)}/{Type}/{id}";
+
+    /// <summary>Adds one test, in its own file in the standard format: <c>{ "type", "description", "tests": [ ... ] }</c>.</summary>
+    /// <param name="id">The test's id; its name is <see cref="NameOf"/>.</param>
     /// <param name="blocking">Whether a guardrail may, or must, block the case: its <c>guardrailMayBlock</c> or <c>guardrailMustBlock</c>.</param>
-    public void AddCase(string agentName, string caseName = "case", string prompt = "What was the outcome?",
+    public void AddCase(string agentName, string id = "case", string prompt = "What was the outcome?",
         string[]? mustMention = null, string[]? mustNotMention = null, string? group = null,
         GuardrailBlocking blocking = GuardrailBlocking.None)
     {
-        // A case name can include its folder, e.g. "guardrail/jailbreak-prompt".
-        var path = Path.Combine(TestCasesDirectory, agentName, $"{caseName}.json");
+        var path = Path.Combine(TestCasesDirectory, agentName, $"{id}.json");
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         File.WriteAllText(path, JsonSerializer.Serialize(new
         {
-            prompt,
-            evidence = "--- ofsted_index Evidence 1 ---\noutcome: Good",
-            mustMention = mustMention ?? [],
-            mustNotMention = mustNotMention ?? [],
-            group,
-            guardrailMayBlock = blocking == GuardrailBlocking.May,
-            guardrailMustBlock = blocking == GuardrailBlocking.Must,
+            type = Type,
+            description = "The release gate's own tests.",
+            tests = new[]
+            {
+                new
+                {
+                    id,
+                    description = "Gets the outcome wrong",
+                    prompt,
+                    evidence = "--- ofsted_index Evidence 1 ---\noutcome: Good",
+                    mustMention = mustMention ?? [],
+                    mustNotMention = mustNotMention ?? [],
+                    group,
+                    guardrailMayBlock = blocking == GuardrailBlocking.May,
+                    guardrailMustBlock = blocking == GuardrailBlocking.Must,
+                },
+            },
         }));
     }
 
-    public void AddCaseForEveryAgent(string caseName = "case", string prompt = "What was the outcome?",
+    public void AddCaseForEveryAgent(string id = "case", string prompt = "What was the outcome?",
         string[]? mustMention = null, string? group = null, GuardrailBlocking blocking = GuardrailBlocking.None)
     {
         foreach (var agent in Agents)
         {
-            AddCase(agent.Name, caseName, prompt, mustMention, group: group, blocking: blocking);
+            AddCase(agent.Name, id, prompt, mustMention, group: group, blocking: blocking);
         }
     }
 
@@ -103,7 +122,7 @@ internal sealed class ReleaseGateTestHost : IDisposable
         foreach (var agent in Agents)
         {
             var report = new AgentEvaluationReport(agent.Name,
-                [new AgentTestResult("case", "Rated Good [Evidence 1].", [], JudgeMetrics.All.ToDictionary(m => m, _ => score))]);
+                [new AgentTestResult(NameOf("case"), "Rated Good [Evidence 1].", [], JudgeMetrics.All.ToDictionary(m => m, _ => score))]);
             File.WriteAllText(Path.Combine(BaselinesDirectory, $"{agent.Name}.json"),
                 JsonSerializer.Serialize(report, ReportJson));
         }

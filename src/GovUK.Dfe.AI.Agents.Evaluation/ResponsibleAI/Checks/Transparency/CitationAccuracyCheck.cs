@@ -39,21 +39,20 @@ public sealed partial class CitationAccuracyCheck : QualityCheck
             yield break;
         }
 
-        var failing = 0;
-        foreach (var (name, evidence, output) in cited)
-        {
-            if (Check(output, evidence) is { } problem)
-            {
-                failing++;
-                yield return Failed(problem,
-                    "Tell the agent to cite the record behind every fact as [Evidence n], using only the numbers it's given.",
-                    [string.Create(CultureInfo.InvariantCulture, $"Evidence given: [Evidence 1] to [Evidence {evidence}]")], name);
-            }
-        }
-
-        if (failing == 0)
+        var failing = cited.Select(static s => (s.Name, s.Evidence, Problem: Check(s.Output, s.Evidence)))
+            .Where(static s => s.Problem is not null)
+            .ToList();
+        if (failing.Count == 0)
         {
             yield return Passed($"All {cited.Count} answers cite their evidence accurately");
+            yield break;
+        }
+
+        foreach (var (name, evidence, problem) in failing)
+        {
+            yield return Failed(problem!,
+                "Tell the agent to cite the record behind every fact as [Evidence n], using only the numbers it's given.",
+                [string.Create(CultureInfo.InvariantCulture, $"Evidence given: [Evidence 1] to [Evidence {evidence}]")], name);
         }
     }
 

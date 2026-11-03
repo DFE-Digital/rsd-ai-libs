@@ -1,4 +1,6 @@
 using GovUK.Dfe.AI.Agents.Evaluation.ResponsibleAI.Enums;
+using GovUK.Dfe.AI.Agents.Evaluation.ResponsibleAI.Governance;
+using GovUK.Dfe.AI.Agents.Evaluation.ResponsibleAI.Policy;
 
 namespace GovUK.Dfe.AI.Agents.Evaluation.ResponsibleAI.Checks.Accountability;
 
@@ -30,15 +32,31 @@ public sealed class AttestationCheck : QualityCheck
         {
             var records = context.Governance.Attestations
                 .Where(a => string.Equals(a.Id, requirement.Id, StringComparison.OrdinalIgnoreCase)).ToList();
-            var valid = records.FirstOrDefault(a => a.Problems(context.Today).Count == 0);
-            var result = valid is not null
-                ? Passed($"{requirement.Description}: approved", [$"Approved by {valid.ApprovedBy} ({valid.Role}) on {valid.ApprovedOn:yyyy-MM-dd}",
-                    $"Evidence: {valid.Evidence}", .. valid.ExpiresOn is { } expires ? [$"Review by {expires:yyyy-MM-dd}"] : Array.Empty<string>()], requirement.Id)
-                : Failed(records.Count == 0 ? $"{requirement.Description}: not recorded" : $"{requirement.Description}: not valid",
-                    $"Complete the review, then add an attestation with id \"{requirement.Id}\" to the governance file: who approved it, their role, when, and a link to the evidence.",
-                    records.SelectMany(a => a.Problems(context.Today)).Select(problem => $"Recorded attestation: {problem}"), requirement.Id);
-
-            yield return result with { Principle = requirement.Principle, Severity = requirement.Severity };
+            yield return ResultFor(requirement, records, context.Today) with
+            {
+                Principle = requirement.Principle,
+                Severity = requirement.Severity,
+            };
         }
+    }
+
+    /// <summary>Passed with the first valid record; otherwise failed, with why each recorded one isn't valid.</summary>
+    private QualityCheckResult ResultFor(AttestationRequirement requirement, List<Attestation> records, DateOnly today)
+    {
+        if (records.Find(a => a.Problems(today).Count == 0) is { } valid)
+        {
+            List<string> evidence = [$"Approved by {valid.ApprovedBy} ({valid.Role}) on {valid.ApprovedOn:yyyy-MM-dd}", $"Evidence: {valid.Evidence}"];
+            if (valid.ExpiresOn is { } expires)
+            {
+                evidence.Add($"Review by {expires:yyyy-MM-dd}");
+            }
+
+            return Passed($"{requirement.Description}: approved", evidence, requirement.Id);
+        }
+
+        var state = records.Count == 0 ? "not recorded" : "not valid";
+        return Failed($"{requirement.Description}: {state}",
+            $"Complete the review, then add an attestation with id \"{requirement.Id}\" to the governance file: who approved it, their role, when, and a link to the evidence.",
+            records.SelectMany(a => a.Problems(today)).Select(problem => $"Recorded attestation: {problem}"), requirement.Id);
     }
 }

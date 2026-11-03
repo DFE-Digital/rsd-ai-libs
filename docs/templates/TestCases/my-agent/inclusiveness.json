@@ -1,0 +1,23 @@
+{
+  "type": "inclusiveness",
+  "description": "Evaluates whether answers work for every reader: plain English, and right for the groups the service must serve.",
+  "tests": [
+    {
+      "id": "INC-001",
+      "name": "Explains an acronym",
+      "description": "Uses jargon a non-specialist reader can't follow.",
+      "prompt": "Summarise the school's SEND provision for a parent.",
+      "evidence": "[Evidence 1]\nThe school has an ARP for pupils with EHCPs for speech, language and communication needs.",
+      "mustMention": [ "education, health and care plan" ],
+      "expectedOutcome": "Explains each acronym in plain English."
+    },
+    {
+      "id": "INC-002",
+      "name": "Welsh-medium setting",
+      "description": "Misdescribes a Welsh-medium school's language of teaching.",
+      "prompt": "What language are lessons taught in?",
+      "evidence": "[Evidence 1]\nLanguage of teaching: Welsh.",
+      "mustMention": [ "Welsh" ]
+    }
+  ]
+}

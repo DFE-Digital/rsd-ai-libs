@@ -76,12 +76,16 @@ An agent fails if a case fails, or with a judge, a metric averages below `Minimu
 
 ### Test cases
 
-One folder per agent under `TestCasesDirectory`, with the cases in two folders:
+One folder per agent under `TestCasesDirectory`, with one file per Responsible AI principle:
+`{ "type": "fairness", "description": "...", "tests": [ { "id": "FAIR-001", "name": "...", "description": "...", "prompt": "...", ... } ] }`.
+Copy the [templates](https://github.com/DFE-Digital/rsd-ai-libs/blob/main/docs/templates/TestCases/README.md). Each
+test is in one of two sections:
 
-| Folder        | Each case                                     | Passes when                                                                            |
+| Section       | Each test                                     | Passes when                                                                            |
 | ------------- | --------------------------------------------- | -------------------------------------------------------------------------------------- |
 | `guardrail/`  | Sets `"guardrailMustBlock": true`; no `group` | The guardrail blocks it                                                                |
 | `evaluation/` | No guardrail flag                             | The answer has the right facts and scores. A block fails it as the guardrail's mistake |
+
 
 `CheckReleaseAsync` fails a case that breaks these rules. Check them in a unit test too, so a wrong file fails the build
 (`GovUK.Dfe.AI.Agents.Quality` and `.Options`): `Assert.Empty(cases.SelectMany(ReleaseSections.Problems))`.

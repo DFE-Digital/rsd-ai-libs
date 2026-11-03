@@ -23,7 +23,7 @@ public sealed class ReleaseGateMetricsTests : IDisposable
     public async Task Tags_every_metric_in_a_run_with_its_id_and_each_test_case_with_its_name_group_and_outcome()
     {
         AgentDefinition[] agents = [new("run-tagged-agent", "Ofsted")];
-        _host.AddCase("run-tagged-agent", caseName: "evaluation/outcome", mustMention: ["Good"], group: "academy");
+        _host.AddCase("run-tagged-agent", id: "outcome", mustMention: ["Good"], group: "academy");
         using var testCases = new Measurements(ReleaseGateTelemetry.TestCasesMetric);
         using var outcomes = new Measurements(ReleaseGateTelemetry.AgentsMetric);
         var gate = _host.Build();
@@ -39,7 +39,7 @@ public sealed class ReleaseGateMetricsTests : IDisposable
         Assert.Contains(_host.Logs, log => log.Message.Contains(runId, StringComparison.Ordinal));
         var testCase = Assert.Single(testCases.For("run-tagged-agent"));
         Assert.Equal(runId, testCase[ReleaseGateTelemetry.RunIdTag]);
-        Assert.Equal(("evaluation/outcome", "academy", AgentOutcomes.Passed),
+        Assert.Equal(("evaluation/reliability-and-safety/outcome", "academy", AgentOutcomes.Passed),
             (testCase[ReleaseGateTelemetry.TestCaseTag], testCase[ReleaseGateTelemetry.GroupTag], testCase[ReleaseGateTelemetry.OutcomeTag]));
         Assert.False(string.IsNullOrEmpty(testCase[AgentTelemetry.ApplicationTag] as string));
         var outcome = Assert.Single(outcomes.For("run-tagged-agent"));

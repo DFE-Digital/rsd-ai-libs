@@ -29,7 +29,12 @@ public sealed record AgentTestResult(string CaseName, string? Output, IReadOnlyL
     {
         get
         {
-            return Outputs.Count > 0 ? Outputs : Output is { } output ? [output] : [];
+            if (Outputs.Count > 0)
+            {
+                return Outputs;
+            }
+
+            return Output is { } output ? [output] : [];
         }
     }
 

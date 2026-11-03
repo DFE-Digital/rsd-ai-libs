@@ -117,6 +117,25 @@ public sealed class AgentSpecSnapshotTests
     }
 
     [Fact]
+    public async Task The_judge_gets_the_instructions_the_agent_ran_with_inside_a_snapshot_and_the_prompt_files_outside()
+    {
+        var prompts = Substitute.For<IPromptProvider>();
+        prompts.GetSystemPrompt("Ofsted").Returns("tested prompt", "edited prompt");
+        var builder = new AgentSpecBuilder(prompts);
+        var token = TestContext.Current.CancellationToken;
+
+        string? inside;
+        using (builder.BeginSnapshot())
+        {
+            await builder.BuildAsync(Ofsted, token);   // the run's spec, from the prompt as tested
+            inside = await builder.InstructionsForAsync(Ofsted, token);
+        }
+
+        Assert.Equal("tested prompt", inside);
+        Assert.Equal("edited prompt", await builder.InstructionsForAsync(Ofsted, token));
+    }
+
+    [Fact]
     public async Task A_build_that_fails_isnt_kept_so_the_next_caller_tries_again()
     {
         var prompts = Substitute.For<IPromptProvider>();

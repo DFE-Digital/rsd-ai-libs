@@ -101,9 +101,14 @@ internal sealed class AgentTestRunner(IAgentService agents, IAgentRunEvaluator? 
             .. testCase.MustNotMention.Where(fact => output.Contains(fact, StringComparison.OrdinalIgnoreCase)).Select(fact => $"Mentions \"{fact}\""),
         ];
 
-        var scores = evaluator is null
-            ? NoScores
-            : await evaluator.EvaluateAsync(new CompletedAgentRun { AgentName = definition.Name, RunId = result.RunId, CompletedAt = result.CompletedAt, AgentVersion = result.AgentVersion, Model = result.Model, Instructions = specs?.InstructionsFor(definition), Prompt = testCase.Prompt, Evidence = testCase.Evidence, Output = output }, cancellationToken).ConfigureAwait(false);
+        if (evaluator is null)
+        {
+            return new AgentTestResult(testCase.Name, output, failures, NoScores) { Group = testCase.Group };
+        }
+
+        // The instructions the agent ran with, from the release's snapshot when one is open, so the judge scores against them.
+        var instructions = specs is null ? null : await specs.InstructionsForAsync(definition, cancellationToken).ConfigureAwait(false);
+        var scores = await evaluator.EvaluateAsync(new CompletedAgentRun { AgentName = definition.Name, RunId = result.RunId, CompletedAt = result.CompletedAt, AgentVersion = result.AgentVersion, Model = result.Model, Instructions = instructions, Prompt = testCase.Prompt, Evidence = testCase.Evidence, Output = output }, cancellationToken).ConfigureAwait(false);
 
         return new AgentTestResult(testCase.Name, output, failures, scores) { Group = testCase.Group };
     }

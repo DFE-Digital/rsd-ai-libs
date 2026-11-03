@@ -31,10 +31,12 @@ internal sealed class AgentSpecBuilder(IPromptProvider promptProvider, IEnumerab
         => _customProviders.GetValueOrDefault(definition.Name);
 
     /// <summary>
-    /// The agent's instructions, as its prompt files give them, for evaluators. Null for an agent from a custom provider,
-    /// whose instructions are its own, or when its prompt file can't be read: scoring never fails a run.
+    /// The agent's instructions, for evaluators such as a judge. Inside a snapshot, those of the spec it holds, so an answer
+    /// is judged against the instructions the agent ran with, even if a prompt file changed meanwhile; otherwise as its
+    /// prompt files give them. Null for an agent from a custom provider, whose instructions are its own, or when they can't
+    /// be read: scoring never fails a run.
     /// </summary>
-    public string? InstructionsFor(AgentDefinition definition)
+    public async Task<string?> InstructionsForAsync(AgentDefinition definition, CancellationToken cancellationToken)
     {
         if (_customProviders.ContainsKey(definition.Name))
         {
@@ -43,9 +45,11 @@ internal sealed class AgentSpecBuilder(IPromptProvider promptProvider, IEnumerab
 
         try
         {
-            return promptProvider.GetSystemPrompt(definition.SystemPromptKey);
+            return _snapshot.Value is null
+                ? promptProvider.GetSystemPrompt(definition.SystemPromptKey)
+                : (await BuildAsync(definition, cancellationToken).ConfigureAwait(false))?.Instructions;
         }
-        catch (Exception ex) when (ex is InvalidOperationException or IOException)
+        catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
         {
             return null;
         }

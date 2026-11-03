@@ -296,7 +296,7 @@ internal sealed class AgentService(IAgentRunnerService agentRunner, IAgentRuntim
             Notify(new CompletedAgentRun
             {
                 AgentName = definition.Name, RunId = result.RunId, CompletedAt = result.CompletedAt, AgentVersion = result.AgentVersion,
-                Model = result.Model, Instructions = _specs.InstructionsFor(definition),
+                Model = result.Model, Instructions = await _specs.InstructionsForAsync(definition, cancellationToken).ConfigureAwait(false),
                 Prompt = await _runOptions.RedactAsync(prompt, cancellationToken).ConfigureAwait(false),
                 Evidence = evidenceText is null ? null : await _runOptions.RedactAsync(evidenceText, cancellationToken).ConfigureAwait(false),
                 Output = result.Output ?? string.Empty,

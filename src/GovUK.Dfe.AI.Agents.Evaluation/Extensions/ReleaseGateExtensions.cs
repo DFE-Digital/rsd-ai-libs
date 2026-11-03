@@ -5,10 +5,12 @@ using GovUK.Dfe.AI.Agents.Evaluation.Publishers;
 using GovUK.Dfe.AI.Agents.Evaluation.Publishers.Interfaces;
 using GovUK.Dfe.AI.Agents.Evaluation.QualityGates;
 using GovUK.Dfe.AI.Agents.Evaluation.QualityGates.Interfaces;
+using GovUK.Dfe.AI.Agents.Evaluation.ResponsibleAI.Policy;
 using GovUK.Dfe.AI.Agents.Extensibility;
 using GovUK.Dfe.AI.Agents.Extensibility.Interfaces;
 using GovUK.Dfe.AI.Agents.Quality.Interfaces;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using GovUK.Dfe.AI.Agents.Evaluation.ValueObjects;
 using GovUK.Dfe.AI.Agents.Evaluation.Metrics;
@@ -76,6 +78,8 @@ public static class ReleaseGateExtensions
             // Scores only when an evaluator is registered: AddQualityEvaluation() or your own.
             services.AddSingleton(sp => new ReleaseGateJudge(sp.GetService<IAgentRunEvaluator>() is null ? null : judgeModel));
             services.AddSingleton<ReleaseGateMetrics>();
+            services.TryAddSingleton(GuardrailBlocklists.From(context.Section));
+            services.AddSingleton<SensitiveDataMasker>();
             services.AddSingleton<ReleaseReportWriter>();
             services.AddSingleton<AgentReleaseEvaluator>();
             services.AddSingleton<AgentReleaseGate>();

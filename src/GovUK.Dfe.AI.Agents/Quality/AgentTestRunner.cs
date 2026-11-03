@@ -41,7 +41,8 @@ internal sealed class AgentTestRunner(IAgentService agents, IAgentRunEvaluator? 
 
     /// <summary>
     /// One result per case: each metric's average across the runs, every distinct failure from any of them, and every
-    /// run's answer, so none goes unchecked.
+    /// answer, so none goes unchecked. A metric some answered run wasn't scored on is left out, so it shows as unscored
+    /// rather than as the average of the runs that were.
     /// </summary>
     private static AgentTestResult Combine(List<AgentTestResult> runs)
     {
@@ -54,13 +55,15 @@ internal sealed class AgentTestRunner(IAgentService agents, IAgentRunEvaluator? 
         var failures = runs.SelectMany(static run => run.Failures).GroupBy(static failure => failure)
             .Select(group => group.Count() == runs.Count ? group.Key : $"{group.Key} (in {group.Count()} of {runs.Count} runs)")
             .ToList();
-        var scores = runs.SelectMany(static run => run.Scores).GroupBy(static score => score.Key)
+        var answered = runs.Where(static run => run.Output is not null).ToList();
+        var scores = answered.SelectMany(static run => run.Scores).GroupBy(static score => score.Key)
+            .Where(metric => metric.Count() == answered.Count)
             .ToDictionary(static metric => metric.Key, static metric => metric.Average(static score => score.Value));
 
         return new AgentTestResult(first.CaseName, runs[^1].Output, failures, scores)
         {
             Group = first.Group,
-            Outputs = [.. runs.Select(static run => run.Output).OfType<string>()],
+            Outputs = [.. answered.Select(static run => run.Output!)],
             BlockedByGuardrail = runs.Exists(static run => run.BlockedByGuardrail),
             BlockedByGuardrailInError = runs.Exists(static run => run.BlockedByGuardrailInError),
         };

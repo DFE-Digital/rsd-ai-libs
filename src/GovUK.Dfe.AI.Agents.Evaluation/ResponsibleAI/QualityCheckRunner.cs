@@ -30,6 +30,9 @@ internal sealed class QualityCheckRunner(
     /// <summary>Ids the gate adds itself; the policy can't turn them off.</summary>
     private static readonly string[] GateIds = [QualityCheckIds.PrincipleCoverage, QualityCheckIds.ReleaseGateConsistency];
 
+    /// <summary>How the release gate ends a group gap, e.g. "Groundedness: special 3.1, academy 4.4: a gap over 0.5".</summary>
+    private const string GapSuffix = ": a gap over ";
+
     /// <summary>The checks that apply the release gate's own rules, so only their findings can explain its failure.</summary>
     private static readonly HashSet<string> ReleaseGateChecks = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -148,14 +151,22 @@ internal sealed class QualityCheckRunner(
         policy.For(result.CheckId).Severity is { } severity ? result with { Severity = severity } : result;
 
     /// <summary>
-    /// A critical failure when the release gate failed the agent but none of the checks that apply its rules found a
-    /// blocking problem, e.g. one was turned off and only an unrelated or advisory finding remains: the quality gate can be
-    /// stricter than the release gate, never more lenient.
+    /// A critical failure listing each release gate problem that no blocking finding of its own covers, e.g. its check was
+    /// turned off and only an unrelated or advisory finding remains. Each problem needs its own finding, so a risk accepted
+    /// for one finding never waives another failure: the quality gate can be stricter than the release gate, never more
+    /// lenient.
     /// </summary>
     private static IEnumerable<QualityCheckResult> Unexplained(AgentGateResult gateResult, List<QualityCheckResult> results)
     {
-        if (gateResult.Passed || results.Exists(static result => result.NotMet && result.Severity >= CheckSeverity.High
-            && ReleaseGateChecks.Contains(result.CheckId)))
+        if (gateResult.Passed)
+        {
+            yield break;
+        }
+
+        var blocking = results.Where(static result => result.NotMet && result.Severity >= CheckSeverity.High
+            && ReleaseGateChecks.Contains(result.CheckId)).ToList();
+        List<string> uncovered = [.. gateResult.Problems.Where(problem => !blocking.Exists(finding => Covers(finding, problem)))];
+        if (uncovered.Count == 0)
         {
             yield break;
         }
@@ -167,11 +178,27 @@ internal sealed class QualityCheckRunner(
             Severity = CheckSeverity.Critical,
             Method = EvaluationMethod.Deterministic,
             Outcome = CheckOutcome.Failed,
-            Summary = "The release gate failed the agent, but no quality check explains why",
-            Evidence = gateResult.Problems,
+            Summary = $"The release gate failed the agent for {uncovered.Count} reason(s) no blocking quality check covers",
+            Evidence = uncovered,
             Recommendation = "Turn back on the check that covers these problems, or fix them.",
         };
     }
+
+    /// <summary>
+    /// Whether <paramref name="finding"/> is the one for <paramref name="problem"/>, as the release gate words it: a test
+    /// case's for its case, a judge score's or baseline's for its metric, the group gap's for its gap, and otherwise one
+    /// that lists the problem as evidence, e.g. the guardrail's or the test case conventions'.
+    /// </summary>
+    private static bool Covers(QualityCheckResult finding, string problem) => finding.CheckId switch
+    {
+        QualityCheckIds.Scenario => finding.Subject is { } name && problem.StartsWith($"Case {name}: ", StringComparison.Ordinal),
+        QualityCheckIds.JudgeScore => finding.Subject is { } metric
+            && (problem.StartsWith($"{metric}: averaged ", StringComparison.Ordinal) || problem == $"{metric}: not scored"),
+        QualityCheckIds.BaselineRegression => finding.Subject is { } metric && problem.StartsWith($"{metric}: fell from ", StringComparison.Ordinal),
+        QualityCheckIds.GroupScoreParity => problem.LastIndexOf(GapSuffix, StringComparison.Ordinal) is > 0 and var end
+            && finding.Summary.Contains(problem[..end], StringComparison.Ordinal),
+        _ => finding.Evidence.Contains(problem),
+    };
 }
 
 /// <summary>An agent's tools in this app, by name, or why they couldn't be listed.</summary>

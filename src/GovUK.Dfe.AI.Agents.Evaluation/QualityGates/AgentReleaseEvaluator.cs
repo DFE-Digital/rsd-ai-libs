@@ -106,15 +106,17 @@ internal sealed class AgentReleaseEvaluator(
         // Repeats average out the judge's run-to-run noise; the case's facts must be right in every repeat.
         var report = await agentTestRunner.RunAsync(definition, [testCase], AgentTestTarget.Candidate,
             settings.Repeats, cancellationToken);
-        var result = report.Results[0];
+        // Failed if an answer repeats planted data, and masked, before anything logs or reports it.
+        var result = await reports.SecureAsync(testCase, report.Results[0], cancellationToken);
 
         // A case with "guardrailMayBlock": true passes when the Foundry guardrail blocks it, e.g. a planted instruction.
-        // A block on any other case fails it: that's a false positive worth knowing about.
-        if (result.BlockedByGuardrail)
+        // A block on any other case fails it: that's a false positive worth knowing about. Any repeat that answered
+        // instead is kept, so its answer is still checked.
+        if (result.BlockedByGuardrail && result.Passed)
         {
             logger.TestCaseBlockedByGuardrail(definition.Name, result.CaseName);
             metrics.TestCase(definition.Name, result, AgentOutcomes.BlockedByGuardrail);
-            return result with { Output = ReleaseGateMessages.BlockedByGuardrail, Outputs = [] };
+            return result with { Output = ReleaseGateMessages.BlockedByGuardrail };
         }
 
         if (result.Passed)

@@ -31,7 +31,9 @@ internal sealed class ReleaseManifestBuilder(ManifestSources sources, QualityGat
         ?? typeof(ReleaseManifestBuilder).Assembly.GetName().Version?.ToString()
         ?? "unknown";
 
-    public ReleaseManifest Build(string runId, IReadOnlyCollection<AgentDefinition> definitions, IReadOnlyList<AgentGateResult> results) => new()
+    /// <param name="instructions">Each agent's full instructions as a run sends them, by name; null when its spec couldn't be built.</param>
+    public ReleaseManifest Build(string runId, IReadOnlyCollection<AgentDefinition> definitions, IReadOnlyList<AgentGateResult> results,
+        IReadOnlyDictionary<string, string?> instructions) => new()
     {
         RunId = runId,
         ApplicationName = sources.ApplicationName,
@@ -60,10 +62,11 @@ internal sealed class ReleaseManifestBuilder(ManifestSources sources, QualityGat
         UserPromptFingerprints = sources.UserPrompts.OrderBy(static prompt => prompt.Key, StringComparer.Ordinal)
             .ToDictionary(static prompt => prompt.Key, prompt => OfFile(prompt.Value) ?? "unreadable"),
         Agents = [.. definitions.Select(definition => AgentManifestFor(definition,
-            results.FirstOrDefault(result => result.AgentName == definition.Name)?.TestCases ?? []))],
+            results.FirstOrDefault(result => result.AgentName == definition.Name)?.TestCases ?? [],
+            instructions.GetValueOrDefault(definition.Name)))],
     };
 
-    private AgentManifest AgentManifestFor(AgentDefinition definition, IReadOnlyList<AgentTestCase> cases)
+    private AgentManifest AgentManifestFor(AgentDefinition definition, IReadOnlyList<AgentTestCase> cases, string? instructions)
     {
         var promptFile = sources.SystemPrompts.TryGetValue(definition.SystemPromptKey, out var path) ? path : null;
         return new AgentManifest
@@ -71,7 +74,7 @@ internal sealed class ReleaseManifestBuilder(ManifestSources sources, QualityGat
             Name = definition.Name,
             SystemPromptKey = definition.SystemPromptKey,
             SystemPromptFile = promptFile,
-            SystemPromptFingerprint = promptFile is null ? null : OfFile(promptFile),
+            SystemPromptFingerprint = InstructionsFingerprint(instructions, promptFile),
             ConfigurationFingerprint = OfJson(new
             {
                 definition.Name,
@@ -99,6 +102,20 @@ internal sealed class ReleaseManifestBuilder(ManifestSources sources, QualityGat
             })),
             TestCases = cases.Count,
         };
+    }
+
+    /// <summary>
+    /// The agent's full instructions as a run sends them, e.g. with the response format added; without them, its prompt
+    /// file's; null when neither can be read.
+    /// </summary>
+    private static string? InstructionsFingerprint(string? instructions, string? promptFile)
+    {
+        if (instructions is not null)
+        {
+            return Of(System.Text.Encoding.UTF8.GetBytes(instructions));
+        }
+
+        return promptFile is null ? null : OfFile(promptFile);
     }
 
     /// <summary>A link to the run in GitHub Actions or Azure DevOps; null elsewhere.</summary>

@@ -393,6 +393,23 @@ public sealed class ReleaseTestingTests
         => Assert.Empty(Report(4.0, 4.0).FailuresAgainst(Gate));
 
     [Fact]
+    public async Task Repeats_LeaveOutAMetricAnyAnsweredRunWasntScoredOn_SoItShowsAsUnscored()
+    {
+        var agents = Substitute.For<IAgentService>();
+        agents.RunAsync(Arg.Any<AgentDefinition>(), Arg.Any<string>(), Arg.Any<AgentEvidence?>(), Arg.Any<CancellationToken>())
+            .Returns(new AgentResult { AgentName = "ofsted-agent", Output = "Rated good in 2024." });
+        var evaluator = Substitute.For<IAgentRunEvaluator>();
+        evaluator.EvaluateAsync(Arg.Any<CompletedAgentRun>(), Arg.Any<CancellationToken>())
+            .Returns(new Dictionary<string, double> { ["Groundedness"] = 5, ["Relevance"] = 4 }, new Dictionary<string, double> { ["Relevance"] = 4 });
+
+        var report = await new AgentTestRunner(agents, evaluator).RunAsync(Ofsted, [GoodSchool], repeats: 2,
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        var result = Assert.Single(report.Results);
+        Assert.Equal(["Relevance"], result.Scores.Keys);
+    }
+
+    [Fact]
     public async Task Repeats_AverageEachCasesScores_AndAFactWrongInAnyRunFailsTheCase()
     {
         var agents = Substitute.For<IAgentService>();
@@ -409,6 +426,6 @@ public sealed class ReleaseTestingTests
         var result = Assert.Single(report.Results);
         Assert.Equal(4, result.Scores["Groundedness"]);
         Assert.Equal(["Doesn't mention \"2024\" (in 1 of 2 runs)"], result.Failures);
-        Assert.Equal(["Rated good in 2024.", "Rated good."], result.AllOutputs);   // every run's answer, so each can be checked
+        Assert.Equal(["Rated good in 2024.", "Rated good."], result.Answers);   // every answer, so each can be checked
     }
 }

@@ -7,7 +7,7 @@ using GovUK.Dfe.AI.Agents.Evaluation.ResponsibleAI.Policy;
 using GovUK.Dfe.AI.Agents.Evaluation.ResponsibleAI.Reporting;
 using GovUK.Dfe.AI.Agents.Evaluation.ResponsibleAI.Traceability;
 using GovUK.Dfe.AI.Agents.Evaluation.ValueObjects;
-using GovUK.Dfe.AI.Agents.Tools.Interfaces;
+using GovUK.Dfe.AI.Agents.Builders.Interfaces;
 using GovUK.Dfe.AI.Agents.ValueObjects;
 
 namespace GovUK.Dfe.AI.Agents.Evaluation.ResponsibleAI;
@@ -24,9 +24,12 @@ internal sealed class ResponsibleAiQualityGate(
     QualityCheckRunner checks,
     ReleaseManifestBuilder manifests,
     QualityGateRecorder recorder,
-    IAgentToolCatalog tools,
+    IAgentSpecCatalog specs,
     TimeProvider time) : IResponsibleAiQualityGate
 {
+    private const string ExternallyManaged =
+        "the agent is externally managed, so its tools are its provisioned version's: run the gate where it's provisioned";
+
     public async Task<QualityGateReport> DecideReleaseAsync(IReadOnlyCollection<AgentDefinition> definitions,
         CancellationToken cancellationToken = default)
     {
@@ -47,14 +50,23 @@ internal sealed class ResponsibleAiQualityGate(
         recorder.NotRun(notRun);
 
         var gateResults = await releaseGate.RunChecksAsync(definitions, cancellationToken);
-        var manifest = manifests.Build(runId, definitions, gateResults);
+
+        // Each agent's spec as a run builds it: its tools for the checks, and its full instructions for the manifest.
+        var agentSpecs = new Dictionary<string, (AgentSpec? Spec, string? Problem)>(StringComparer.Ordinal);
+        foreach (var definition in definitions)
+        {
+            agentSpecs[definition.Name] = await SpecOfAsync(definition, cancellationToken);
+        }
+
+        var manifest = manifests.Build(runId, definitions, gateResults,
+            agentSpecs.ToDictionary(static agent => agent.Key, static agent => agent.Value.Spec?.Instructions, StringComparer.Ordinal));
 
         var decisions = new List<AgentReleaseDecision>(definitions.Count);
         foreach (var definition in definitions)
         {
             var gateResult = gateResults.First(result => result.AgentName == definition.Name);
-            var agentTools = await ToolsOfAsync(definition, cancellationToken);
-            var results = await checks.RunAsync(definition, agentTools, gateResult, manifest, governance, today, cancellationToken);
+            var results = await checks.RunAsync(definition, ToolsOf(agentSpecs[definition.Name]), gateResult, manifest, governance,
+                today, cancellationToken);
 
             var decision = QualityGateDecider.Decide(definition.Name, results, policy, governance, today, checkCoverage: gateResult.Evaluated);
             recorder.Record(runId, decision);
@@ -73,16 +85,24 @@ internal sealed class ResponsibleAiQualityGate(
         }, runId, cancellationToken);
     }
 
-    /// <summary>The agent's tools as a run gets them, built-in ones included; or why they couldn't be listed, so no tool is missed.</summary>
-    private async Task<AgentToolList> ToolsOfAsync(AgentDefinition definition, CancellationToken cancellationToken)
+    /// <summary>The agent's spec as a run builds it, or why it couldn't be built, e.g. a tool server was unreachable.</summary>
+    private async Task<(AgentSpec? Spec, string? Problem)> SpecOfAsync(AgentDefinition definition, CancellationToken cancellationToken)
     {
         try
         {
-            return new([.. (await tools.GetToolsAsync(definition, cancellationToken)).Select(static tool => tool.Name)], null);
+            return (await specs.GetSpecAsync(definition, cancellationToken), null);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            return new(null, ex.GetBaseException().Message);
+            return (null, ex.GetBaseException().Message);
         }
     }
+
+    /// <summary>Every tool in the agent's spec, its own, bound and built-in ones; or why they couldn't be listed, so none is missed.</summary>
+    private static AgentToolList ToolsOf((AgentSpec? Spec, string? Problem) agent) => agent switch
+    {
+        { Problem: { } problem } => new(null, problem),
+        { Spec: { } spec } => new([.. spec.Tools.Select(static tool => tool.Name)], null),
+        _ => new(null, ExternallyManaged),
+    };
 }

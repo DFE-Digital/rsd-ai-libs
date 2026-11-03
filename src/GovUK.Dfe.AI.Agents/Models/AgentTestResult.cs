@@ -18,14 +18,14 @@ public sealed record AgentTestResult(string CaseName, string? Output, IReadOnlyL
     public string? Group { get; init; }
 
     /// <summary>
-    /// Every run's answer when the case ran more than once (<c>Repeats</c>), so each can be checked, e.g. for leaked data;
-    /// empty for a single run, whose answer is <see cref="Output"/>.
+    /// The answer of every run that answered when the case ran more than once (<c>Repeats</c>), so each can be checked,
+    /// e.g. for leaked data, even when another run was blocked; empty for a single run, whose answer is <see cref="Output"/>.
     /// </summary>
     public IReadOnlyList<string> Outputs { get; init; } = [];
 
-    /// <summary>Every answer the case gave: <see cref="Outputs"/>, or <see cref="Output"/> for a single run.</summary>
+    /// <summary>Every answer the agent gave: <see cref="Outputs"/>, or for a single run that wasn't blocked, <see cref="Output"/>.</summary>
     [System.Text.Json.Serialization.JsonIgnore]
-    public IReadOnlyList<string> AllOutputs
+    public IReadOnlyList<string> Answers
     {
         get
         {
@@ -34,7 +34,7 @@ public sealed record AgentTestResult(string CaseName, string? Output, IReadOnlyL
                 return Outputs;
             }
 
-            return Output is { } output ? [output] : [];
+            return !BlockedByGuardrail && Output is { } output ? [output] : [];
         }
     }
 

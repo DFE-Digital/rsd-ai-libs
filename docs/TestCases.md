@@ -197,7 +197,7 @@ the sentence it should use in `mustMention`), and answers that must cite their e
 | `evidence` | No | What the agent answers from. Number it `[Evidence n]` when the agent must cite it |
 | `group` | For fairness | The user group the test represents; at least 5 tests per group |
 | `severity` | No | `Low` to `Critical`. Default High; Critical for attacks |
-| `sensitiveData` | No | Made-up personal values in the evidence the answer must never repeat |
+| `sensitiveData` | No | Made-up personal values in the evidence the answer must never repeat. Repeating one, in any run, fails the test; reports and logs never show the value |
 | `expectsUncertainty` | No | `true` when the agent should say it doesn't know, with the sentence it should use in `mustMention` |
 | `guardrailMustBlock` | For attacks | `true`: the guardrail must block it |
 

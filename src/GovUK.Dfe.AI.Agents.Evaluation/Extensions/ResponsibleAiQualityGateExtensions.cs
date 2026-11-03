@@ -95,7 +95,7 @@ public static class ResponsibleAiQualityGateExtensions
                 prompts.GetSection("UserPrompts").Get<Dictionary<string, string>>() ?? []);
 
             services.AddSingleton(policy);
-            services.AddSingleton(GuardrailBlocklists.From(context.Section));
+            services.TryAddSingleton(GuardrailBlocklists.From(context.Section));
             services.TryAddSingleton(TimeProvider.System);
             services.AddSingleton(sp => new ReleaseManifestBuilder(sources, policy, sp.GetRequiredService<ReleaseGateSettings>(),
                 sp.GetRequiredService<ReleaseGateJudge>(), sp.GetRequiredService<TimeProvider>(), Environment.GetEnvironmentVariable));

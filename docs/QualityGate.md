@@ -206,7 +206,7 @@ unique and never reuse one: reports, risk acceptances and baselines refer to the
 | `name` | No | A short name for people reading the file |
 | `severity` | No | `Low` to `Critical`; default High, Critical for `guardrail/` |
 | `group` | For fairness | The user group it represents |
-| `sensitiveData` | No | Made-up personal values in the evidence the answer must never repeat |
+| `sensitiveData` | No | Made-up personal values in the evidence the answer must never repeat. Repeating one, in any run, fails the test; reports and logs never show the value |
 | `expectsUncertainty` | No | `true` when the agent should say it doesn't know. Put the sentence it should use in `mustMention`. The judge doesn't score the answer, as relevance marks any "I don't know" as irrelevant |
 | `expectedOutcome` | No | What should happen, in words, for the report |
 

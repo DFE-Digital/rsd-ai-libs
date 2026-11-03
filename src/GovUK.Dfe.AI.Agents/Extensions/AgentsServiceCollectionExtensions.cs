@@ -3,6 +3,7 @@ using Azure.AI.Projects;
 using Azure.Core;
 using Azure.Storage.Blobs;
 using GovUK.Dfe.AI.Agents.Builders;
+using GovUK.Dfe.AI.Agents.Builders.Interfaces;
 using GovUK.Dfe.AI.Agents.Clients.Interfaces;
 using GovUK.Dfe.AI.Agents.Clients;
 using GovUK.Dfe.AI.Agents.Concurrency.Interfaces;
@@ -217,7 +218,7 @@ public static class AgentsServiceCollectionExtensions
         services.AddSingleton<IAgentRuntimeService, AgentRuntimeService>();
         services.AddSingleton(sp => new AgentSpecBuilder(sp.GetRequiredService<IPromptProvider>(),
             sp.GetServices<AgentToolBinding>(), sp.GetServices<IManagedAgentProvider>()));
-        services.AddSingleton<IAgentToolCatalog, AgentToolCatalog>();
+        services.AddSingleton<IAgentSpecCatalog, AgentSpecCatalog>();
         services.AddSingleton(sp => new AgentRunHooks(sp.GetServices<IAgentRunObserver>(), sp.GetService<IToolCallApprover>()));
         services.AddSingleton<IAgentProvisioner, AgentProvisioner>();
         services.AddSingleton<IAgentService, AgentService>();

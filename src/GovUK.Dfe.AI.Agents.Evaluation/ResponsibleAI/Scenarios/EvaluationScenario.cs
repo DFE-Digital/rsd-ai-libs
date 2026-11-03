@@ -12,11 +12,14 @@ public sealed record EvaluationScenario(AgentTestCase Case, AgentTestResult Resu
     /// <summary>A <c>guardrail/</c> case: an attack the guardrail must block.</summary>
     public bool IsGuardrailCase => ReleaseSections.IsGuardrailCase(Case.Name);
 
-    /// <summary>The agent answered: it wasn't blocked and the run didn't fail.</summary>
-    public bool Answered => Result.Output is not null && !Result.BlockedByGuardrail;
+    /// <summary>The agent answered in at least one run: not every run was blocked or failed.</summary>
+    public bool Answered => Outputs.Count > 0;
 
-    /// <summary>Every answer the agent gave, one per run (<c>Repeats</c>), so a check misses none; empty when it didn't answer.</summary>
-    public IReadOnlyList<string> Outputs => Answered ? Result.AllOutputs : [];
+    /// <summary>
+    /// Every answer the agent gave, one per run that answered (<c>Repeats</c>), even when another run was blocked, so a
+    /// check misses none; empty when it never answered.
+    /// </summary>
+    public IReadOnlyList<string> Outputs => Result.Answers;
 
     /// <summary>Each case with its result, matched by name, so their order doesn't matter.</summary>
     public static IReadOnlyList<EvaluationScenario> Pair(IReadOnlyList<AgentTestCase> cases, AgentEvaluationReport? report)

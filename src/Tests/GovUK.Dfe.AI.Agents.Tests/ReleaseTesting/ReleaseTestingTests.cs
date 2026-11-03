@@ -329,6 +329,15 @@ public sealed class ReleaseTestingTests
     }
 
     [Fact]
+    public void Report_MatchesGroups_IgnoringCase()
+    {
+        var report = new AgentEvaluationReport("ofsted-agent", [Scored("Special", 4.0), Scored("special", 3.0), Scored("academies", 4.5)]);
+
+        Assert.Equal(3.5, report.AverageScoresByGroup["special"]["Groundedness"], precision: 6);
+        Assert.Equal(2, report.AverageScoresByGroup.Count);
+    }
+
+    [Fact]
     public async Task TestRunner_KeepsEachCasesGroup_InItsResult()
     {
         var report = await new AgentTestRunner(Answers("Rated good in 2024.")).RunAsync(Ofsted, [GoodSchool with { Group = "rural" }],
@@ -400,5 +409,6 @@ public sealed class ReleaseTestingTests
         var result = Assert.Single(report.Results);
         Assert.Equal(4, result.Scores["Groundedness"]);
         Assert.Equal(["Doesn't mention \"2024\" (in 1 of 2 runs)"], result.Failures);
+        Assert.Equal(["Rated good in 2024.", "Rated good."], result.AllOutputs);   // every run's answer, so each can be checked
     }
 }

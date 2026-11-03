@@ -29,7 +29,7 @@ public sealed partial class AccessibleFormattingCheck : QualityCheck
             yield break;
         }
 
-        var failing = answered.Select(static s => (s.Name, Problems: Problems(s.Result.Output!)))
+        var failing = answered.Select(static s => (s.Name, Problems: (IReadOnlyList<string>)[.. s.Outputs.SelectMany(Problems).Distinct()]))
             .Where(static s => s.Problems.Count > 0)
             .ToList();
         if (failing.Count == 0)

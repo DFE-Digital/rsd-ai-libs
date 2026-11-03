@@ -21,6 +21,12 @@ public sealed class AgentTool
     /// <summary>The function's name, as the model calls it; null for a built-in tool such as web search.</summary>
     public string? FunctionName => (Tool as FunctionTool)?.FunctionName;
 
+    /// <summary>
+    /// The function's name, or for a built-in tool its kind in the same style, e.g. "web_search" or "code_interpreter",
+    /// for reports and checks.
+    /// </summary>
+    public string Name => FunctionName ?? BuiltInName(Tool.GetType().Name);
+
     /// <summary>A function the model can call, which your app runs.</summary>
     /// <param name="name">Letters, digits, '_' and '-', up to 64 characters.</param>
     /// <param name="parametersSchema">The function's arguments, as a JSON schema object.</param>
@@ -47,5 +53,12 @@ public sealed class AgentTool
     {
         ArgumentNullException.ThrowIfNull(tool);
         return new(tool);
+    }
+
+    /// <summary>"WebSearchTool" as "web_search".</summary>
+    private static string BuiltInName(string typeName)
+    {
+        var kind = typeName.EndsWith("Tool", StringComparison.Ordinal) ? typeName[..^4] : typeName;
+        return string.Concat(kind.Select(static (c, i) => i > 0 && char.IsUpper(c) ? $"_{char.ToLowerInvariant(c)}" : char.ToLowerInvariant(c).ToString()));
     }
 }

@@ -88,7 +88,7 @@ public sealed class ReliabilityAndSafetyCheckTests
     [Fact]
     public async Task Does_not_apply_when_the_team_chose_no_judge()
     {
-        var result = await OnlyAsync(new JudgeScoreCheck(), CheckContext([Passing("a")], judge: null));
+        var result = await OnlyAsync(new JudgeScoreCheck(), (CheckContext([Passing("a")]) with { JudgeModel = null }));
 
         Assert.Equal(CheckOutcome.NotApplicable, result.Outcome);
     }
@@ -121,7 +121,7 @@ public sealed class ReliabilityAndSafetyCheckTests
     public async Task Fails_a_metric_that_fell_more_than_the_tolerance_below_the_approved_baseline()
     {
         var baseline = new AgentEvaluationReport(Agent.Name, [Result("a", score: 4.5)]);
-        var context = CheckContext([Passing("a", score: 4.0)], releaseGate: new ReleaseGateSettings { Tolerance = 0.2 }, baseline: baseline);
+        var context = CheckContext([Passing("a", score: 4.0)], releaseGate: new ReleaseGateSettings { Tolerance = 0.2 }) with { Baseline = baseline };
 
         var results = await RunAsync(new BaselineRegressionCheck(), context);
 
@@ -134,7 +134,7 @@ public sealed class ReliabilityAndSafetyCheckTests
     public async Task Fails_when_the_pass_rate_falls_below_the_baselines_and_lists_cases_that_used_to_pass()
     {
         var baseline = new AgentEvaluationReport(Agent.Name, [Result("a"), Result("b")]);
-        var context = CheckContext([Passing("a"), Failing("b")], baseline: baseline);
+        var context = CheckContext([Passing("a"), Failing("b")]) with { Baseline = baseline };
 
         var passRate = (await RunAsync(new BaselineRegressionCheck(), context)).Single(r => r.Subject == "pass-rate");
 
@@ -157,7 +157,7 @@ public sealed class ReliabilityAndSafetyCheckTests
     public async Task Leaves_guardrail_cases_out_of_the_baselines_pass_rate()
     {
         AgentTestResult[] before = [Result("evaluation/a"), new("guardrail/attack", null, ["Not blocked"], new Dictionary<string, double>())];
-        var context = CheckContext([(Case("evaluation/a"), Result("evaluation/a"))], baseline: new AgentEvaluationReport(Agent.Name, before));
+        var context = CheckContext([(Case("evaluation/a"), Result("evaluation/a"))]) with { Baseline = new AgentEvaluationReport(Agent.Name, before) };
 
         var passRate = (await RunAsync(new BaselineRegressionCheck(), context)).Single(r => r.Subject == "pass-rate");
 

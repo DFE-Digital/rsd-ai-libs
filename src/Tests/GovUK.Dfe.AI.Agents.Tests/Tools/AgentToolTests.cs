@@ -28,6 +28,7 @@ public sealed class AgentToolTests
         var tool = AgentTool.WebSearch(WebSearchLocation.ForCity("Leeds"));
 
         Assert.Null(tool.FunctionName);
+        Assert.Equal("web_search", tool.Name);
         var location = Assert.IsType<WebSearchTool>(tool.Tool).UserLocation as WebSearchToolApproximateLocation;
         Assert.Equal("Leeds", location?.City);
     }

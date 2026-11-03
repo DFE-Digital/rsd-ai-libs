@@ -39,7 +39,10 @@ internal sealed class AgentTestRunner(IAgentService agents, IAgentRunEvaluator? 
         return new AgentEvaluationReport(definition.Name, results);
     }
 
-    /// <summary>One result per case: each metric's average across the runs, and every distinct failure from any of them.</summary>
+    /// <summary>
+    /// One result per case: each metric's average across the runs, every distinct failure from any of them, and every
+    /// run's answer, so none goes unchecked.
+    /// </summary>
     private static AgentTestResult Combine(List<AgentTestResult> runs)
     {
         if (runs.Count == 1)
@@ -57,6 +60,7 @@ internal sealed class AgentTestRunner(IAgentService agents, IAgentRunEvaluator? 
         return new AgentTestResult(first.CaseName, runs[^1].Output, failures, scores)
         {
             Group = first.Group,
+            Outputs = [.. runs.Select(static run => run.Output).OfType<string>()],
             BlockedByGuardrail = runs.Exists(static run => run.BlockedByGuardrail),
             BlockedByGuardrailInError = runs.Exists(static run => run.BlockedByGuardrailInError),
         };

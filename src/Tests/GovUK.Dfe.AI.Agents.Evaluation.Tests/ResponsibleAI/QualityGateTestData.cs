@@ -54,11 +54,12 @@ internal static class QualityGateTestData
     public static (AgentTestCase, AgentTestResult) Failing(string name, string? group = null, double? score = 4.5) =>
         (Case(name, group: group, mustMention: ["Outstanding"]), Result(name, failures: ["Doesn't mention \"Outstanding\""], score: score, group: group));
 
+    /// <summary>
+    /// A check's context for <paramref name="scenarios"/>: a judge, one guardrail check and no baseline. Set anything else
+    /// with <c>with</c>, e.g. <c>CheckContext([...]) with { Baseline = baseline }</c>.
+    /// </summary>
     public static QualityCheckContext CheckContext(IEnumerable<(AgentTestCase Case, AgentTestResult Result)> scenarios,
-        QualityGatePolicy? policy = null, ReleaseGateSettings? releaseGate = null, AgentEvaluationReport? baseline = null,
-        AgentDefinition? agent = null, string? judge = Judge, bool evaluated = true, int guardrailChecks = 1,
-        GovernanceRecords? governance = null, ReleaseManifest? manifest = null, IReadOnlyList<string>? guardrailProblems = null,
-        IReadOnlyDictionary<string, string>? blocklists = null)
+        QualityGatePolicy? policy = null, ReleaseGateSettings? releaseGate = null, AgentDefinition? agent = null)
     {
         var pairs = scenarios.ToList();
         var definition = agent ?? Agent;
@@ -68,18 +69,13 @@ internal static class QualityGateTestData
             Agent = definition,
             Policy = policy ?? new QualityGatePolicy(),
             ReleaseGate = releaseGate ?? new ReleaseGateSettings(),
-            Manifest = manifest ?? Manifest(definition.Name),
+            Manifest = Manifest(definition.Name),
             Scenarios = EvaluationScenario.Pair([.. pairs.Select(static p => p.Case)], report),
             Report = report,
-            Baseline = baseline,
             ReportPath = "evaluation-reports/briefing-agent.json",
-            Evaluated = evaluated,
-            GuardrailChecks = guardrailChecks,
-            GuardrailProblems = guardrailProblems ?? [],
-            SensitiveDataPatterns = blocklists ?? new Dictionary<string, string>(),
-            JudgeModel = judge,
+            GuardrailChecks = 1,
+            JudgeModel = Judge,
             JudgeMetrics = JudgeMetrics.All,
-            Governance = governance ?? GovernanceRecords.None,
             Today = Today,
         };
     }

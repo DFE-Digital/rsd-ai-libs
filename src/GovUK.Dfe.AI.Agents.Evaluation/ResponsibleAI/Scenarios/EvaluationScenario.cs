@@ -15,6 +15,9 @@ public sealed record EvaluationScenario(AgentTestCase Case, AgentTestResult Resu
     /// <summary>The agent answered: it wasn't blocked and the run didn't fail.</summary>
     public bool Answered => Result.Output is not null && !Result.BlockedByGuardrail;
 
+    /// <summary>Every answer the agent gave, one per run (<c>Repeats</c>), so a check misses none; empty when it didn't answer.</summary>
+    public IReadOnlyList<string> Outputs => Answered ? Result.AllOutputs : [];
+
     /// <summary>Each case with its result, matched by name, so their order doesn't matter.</summary>
     public static IReadOnlyList<EvaluationScenario> Pair(IReadOnlyList<AgentTestCase> cases, AgentEvaluationReport? report)
     {

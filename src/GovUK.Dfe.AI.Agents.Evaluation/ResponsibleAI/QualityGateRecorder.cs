@@ -39,17 +39,23 @@ internal sealed class QualityGateRecorder(
             metrics.QualityGateFinding(agent, result.Principle.ToString(), result.CheckId, result.Severity.ToString(), finding.Disposition.ToString());
         }
 
-        if (!logger.IsEnabled(LogLevel.Warning))
+        // Each log at its own level, so an app logging only errors still gets every blocking finding.
+        var errors = logger.IsEnabled(LogLevel.Error);
+        var warnings = logger.IsEnabled(LogLevel.Warning);
+        if (!errors && !warnings)
         {
             return;
         }
 
-        foreach (var problem in decision.IgnoredRiskAcceptances)
+        if (warnings)
         {
-            logger.RiskAcceptanceIgnored(agent, problem);
+            foreach (var problem in decision.IgnoredRiskAcceptances)
+            {
+                logger.RiskAcceptanceIgnored(agent, problem);
+            }
         }
 
-        foreach (var finding in decision.Findings.Where(static f => f.Disposition > FindingDisposition.Passed))
+        foreach (var finding in decision.Findings.Where(f => f.Disposition == FindingDisposition.Blocking ? errors : warnings))
         {
             var result = finding.Result;
             switch (finding.Disposition)
@@ -60,7 +66,7 @@ internal sealed class QualityGateRecorder(
                 case FindingDisposition.Warning:
                     logger.FindingWarning(runId, agent, result.Principle.ToString(), result.CheckId, result.Severity.ToString(), finding.Line());
                     break;
-                default:
+                case FindingDisposition.RiskAccepted:
                     logger.FindingRiskAccepted(runId, agent, result.CheckId, finding.Line(), finding.Acceptance?.ToString() ?? string.Empty);
                     break;
             }

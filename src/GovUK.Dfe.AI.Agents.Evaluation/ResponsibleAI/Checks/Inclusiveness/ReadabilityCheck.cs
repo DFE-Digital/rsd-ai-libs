@@ -26,8 +26,9 @@ public sealed partial class ReadabilityCheck : QualityCheck
 
     protected override IEnumerable<QualityCheckResult> Evaluate(QualityCheckContext context)
     {
+        // Every answer, every repeat included, each measured on its own.
         var measured = context.AnsweredScenarios
-            .Select(static s => (s.Name, Readability: Measure(s.Result.Output!)))
+            .SelectMany(static s => s.Outputs.Select(output => (s.Name, Readability: Measure(output))))
             .Where(static s => s.Readability.Words > 0)
             .ToList();
         if (measured.Count == 0)
@@ -101,18 +102,18 @@ public sealed partial class ReadabilityCheck : QualityCheck
     /// <summary>Vowel groups, less a silent final "e": a common estimate, right for most English words.</summary>
     internal static int Syllables(string word)
     {
-        var lower = word.ToLowerInvariant();
-        if (lower.Length <= 3)
+        var upper = word.ToUpperInvariant();
+        if (upper.Length <= 3)
         {
             return 1;
         }
 
-        if (lower.EndsWith('e') && !lower.EndsWith("le", StringComparison.Ordinal))
+        if (upper.EndsWith('E') && !upper.EndsWith("LE", StringComparison.Ordinal))
         {
-            lower = lower[..^1];
+            upper = upper[..^1];
         }
 
-        return Math.Max(1, VowelGroup().Count(lower));
+        return Math.Max(1, VowelGroup().Count(upper));
     }
 
 
@@ -143,6 +144,6 @@ public sealed partial class ReadabilityCheck : QualityCheck
     [GeneratedRegex(@"\p{L}[\p{L}'’-]*", RegexOptions.CultureInvariant, matchTimeoutMilliseconds: 1000)]
     private static partial Regex WordPattern();
 
-    [GeneratedRegex(@"[aeiouy]+", RegexOptions.CultureInvariant, matchTimeoutMilliseconds: 1000)]
+    [GeneratedRegex(@"[AEIOUY]+", RegexOptions.CultureInvariant, matchTimeoutMilliseconds: 1000)]
     private static partial Regex VowelGroup();
 }

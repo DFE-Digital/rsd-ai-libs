@@ -30,8 +30,8 @@ public sealed partial class CitationAccuracyCheck : QualityCheck
 
         var cited = context.AnsweredScenarios
             .Where(s => !context.ExpectsRefusal(s.Case))
-            .Select(static s => (s.Name, Evidence: CountEvidence(s.Case.Evidence), Output: s.Result.Output!))
-            .Where(static s => s.Evidence > 0)
+            .Select(static s => (s.Name, Labels: EvidenceNumbers(s.Case.Evidence), s.Outputs))
+            .Where(static s => s.Labels.Count > 0)
             .ToList();
         if (cited.Count == 0)
         {
@@ -39,7 +39,8 @@ public sealed partial class CitationAccuracyCheck : QualityCheck
             yield break;
         }
 
-        var failing = cited.Select(static s => (s.Name, s.Evidence, Problem: Check(s.Output, s.Evidence)))
+        // Every answer, every repeat included: one bad citation in any run fails the case.
+        var failing = cited.Select(static s => (s.Name, s.Labels, Problem: s.Outputs.Select(output => Check(output, s.Labels)).FirstOrDefault(static p => p is not null)))
             .Where(static s => s.Problem is not null)
             .ToList();
         if (failing.Count == 0)
@@ -48,16 +49,16 @@ public sealed partial class CitationAccuracyCheck : QualityCheck
             yield break;
         }
 
-        foreach (var (name, evidence, problem) in failing)
+        foreach (var (name, labels, problem) in failing)
         {
             yield return Failed(problem!,
                 "Tell the agent to cite the record behind every fact as [Evidence n], using only the numbers it's given.",
-                [string.Create(CultureInfo.InvariantCulture, $"Evidence given: [Evidence 1] to [Evidence {evidence}]")], name);
+                [$"Evidence given: {string.Join(", ", labels.Order().Select(static n => $"[Evidence {n}]"))}"], name);
         }
     }
 
-    /// <summary>Null when the answer cites at least one piece of evidence and only evidence that exists; otherwise why not.</summary>
-    internal static string? Check(string answer, int evidenceCount)
+    /// <summary>Null when the answer cites at least one piece of evidence and only evidence it was given; otherwise why not.</summary>
+    internal static string? Check(string answer, IReadOnlySet<int> labels)
     {
         var numbers = Citation().Matches(answer).Select(static m => int.Parse(m.Groups[1].ValueSpan, CultureInfo.InvariantCulture)).ToHashSet();
         if (numbers.Count == 0)
@@ -65,18 +66,18 @@ public sealed partial class CitationAccuracyCheck : QualityCheck
             return "The answer cites no evidence";
         }
 
-        var unknown = numbers.Where(n => n < 1 || n > evidenceCount).Order().ToList();
+        var unknown = numbers.Where(n => !labels.Contains(n)).Order().ToList();
         return unknown.Count == 0
             ? null
             : $"The answer cites {string.Join(", ", unknown.Select(static n => $"[Evidence {n}]"))}, which doesn't exist";
     }
 
-    /// <summary>The highest evidence number, or 0 when the evidence isn't numbered.</summary>
-    internal static int CountEvidence(string? evidence) =>
+    /// <summary>The evidence numbers the agent was given, e.g. 1 and 3 for two labelled records; empty when it isn't numbered.</summary>
+    internal static IReadOnlySet<int> EvidenceNumbers(string? evidence) =>
         string.IsNullOrEmpty(evidence)
-            ? 0
+            ? new HashSet<int>()
             : EvidenceLabel().Matches(evidence).Select(static m => m.Groups[1].Success ? m.Groups[1] : m.Groups[2])
-                .Select(static g => int.Parse(g.ValueSpan, CultureInfo.InvariantCulture)).DefaultIfEmpty(0).Max();
+                .Select(static g => int.Parse(g.ValueSpan, CultureInfo.InvariantCulture)).ToHashSet();
 
     [GeneratedRegex(@"\[Evidence (\d{1,6})\]", RegexOptions.CultureInvariant, matchTimeoutMilliseconds: 1000)]
     private static partial Regex Citation();

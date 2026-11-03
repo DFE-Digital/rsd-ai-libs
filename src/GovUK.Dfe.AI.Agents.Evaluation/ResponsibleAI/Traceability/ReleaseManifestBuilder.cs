@@ -81,7 +81,7 @@ internal sealed class ReleaseManifestBuilder(ManifestSources sources, QualityGat
                 ToolsRequiringApproval = definition.ToolsRequiringApproval.Order(StringComparer.Ordinal),
                 definition.RequiredCitations,
                 definition.Guardrail,
-                OutputSchema = definition.OutputSchema is not null,
+                OutputSchema = definition.OutputSchema is { } schema ? new { schema.Name, schema.JsonSchema, schema.Description } : null,
                 Validated = definition.Validate is not null,
             }),
             DatasetFingerprint = cases.Count == 0 ? null : OfJson(cases.OrderBy(static c => c.Name, StringComparer.Ordinal).Select(static c => new

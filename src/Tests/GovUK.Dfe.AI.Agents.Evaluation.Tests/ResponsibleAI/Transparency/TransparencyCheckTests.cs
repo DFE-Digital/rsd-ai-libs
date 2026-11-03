@@ -13,12 +13,24 @@ public sealed class TransparencyCheckTests
     private const string TwoRecords = "[Evidence 1]\nname: Example School\n\n[Evidence 2]\nrating: Good";
 
     [Theory]
-    [InlineData("--- index Evidence 1 ---\na\n--- index Evidence 3 ---\nb", 3)]
-    [InlineData(TwoRecords, 2)]
-    [InlineData("No numbered records. See [Evidence 9] inline.", 0)]
-    [InlineData(null, 0)]
-    public void Counts_evidence_numbered_either_way_the_library_numbers_it(string? evidence, int count) =>
-        Assert.Equal(count, CitationAccuracyCheck.CountEvidence(evidence));
+    [InlineData("--- index Evidence 1 ---\na\n--- index Evidence 3 ---\nb", "1,3")]
+    [InlineData(TwoRecords, "1,2")]
+    [InlineData("No numbered records. See [Evidence 9] inline.", "")]
+    [InlineData(null, "")]
+    public void Reads_the_evidence_numbers_given_either_way_the_library_numbers_them(string? evidence, string numbers) =>
+        Assert.Equal(numbers, string.Join(",", CitationAccuracyCheck.EvidenceNumbers(evidence).Order()));
+
+    [Fact]
+    public async Task Fails_an_answer_citing_a_number_skipped_in_its_evidence()
+    {
+        var testCase = Case("evaluation/Transparency/gap", evidence: "[Evidence 1]\nname: Example School\n\n[Evidence 3]\nrating: Good");
+        var context = CheckContext([(testCase, Result(testCase.Name, "Rated Good [Evidence 2]."))]);
+
+        var result = await OnlyAsync(new CitationAccuracyCheck(), context);
+
+        Assert.Equal("The answer cites [Evidence 2], which doesn't exist", result.Summary);
+        Assert.Equal(["Evidence given: [Evidence 1], [Evidence 3]"], result.Evidence);
+    }
 
     [Fact]
     public async Task Fails_an_answer_citing_evidence_that_does_not_exist()
@@ -31,7 +43,7 @@ public sealed class TransparencyCheckTests
         Assert.Equal(CheckOutcome.Failed, result.Outcome);
         Assert.Equal(ResponsibleAiPrinciple.Transparency, result.Principle);
         Assert.Equal("The answer cites [Evidence 7], which doesn't exist", result.Summary);
-        Assert.Equal(["Evidence given: [Evidence 1] to [Evidence 2]"], result.Evidence);
+        Assert.Equal(["Evidence given: [Evidence 1], [Evidence 2]"], result.Evidence);
     }
 
     [Fact]

@@ -30,6 +30,13 @@ internal sealed class QualityCheckRunner(
     /// <summary>Ids the gate adds itself; the policy can't turn them off.</summary>
     private static readonly string[] GateIds = [QualityCheckIds.PrincipleCoverage, QualityCheckIds.ReleaseGateConsistency];
 
+    /// <summary>The checks that apply the release gate's own rules, so only their findings can explain its failure.</summary>
+    private static readonly HashSet<string> ReleaseGateChecks = new(StringComparer.OrdinalIgnoreCase)
+    {
+        QualityCheckIds.Scenario, QualityCheckIds.GuardrailInPlace, QualityCheckIds.JudgeScore, QualityCheckIds.BaselineRegression,
+        QualityCheckIds.GroupScoreParity, QualityCheckIds.TestCaseConventions, QualityCheckIds.EvaluationDataset,
+    };
+
     private readonly IReadOnlyList<IQualityCheck> _checks = [.. checks];
 
     /// <summary>Why the policy can't be applied: two checks share an id, it configures one that doesn't exist, or it's more lenient than the release gate.</summary>
@@ -56,10 +63,11 @@ internal sealed class QualityCheckRunner(
     ];
 
     /// <summary>Every result that counts for the agent, at the policy's severity.</summary>
-    public async Task<IReadOnlyList<QualityCheckResult>> RunAsync(AgentDefinition definition, AgentGateResult gateResult,
-        ReleaseManifest manifest, GovernanceRecords governance, DateOnly today, CancellationToken cancellationToken)
+    /// <param name="tools">The agent's tools in this app, or why they couldn't be listed.</param>
+    public async Task<IReadOnlyList<QualityCheckResult>> RunAsync(AgentDefinition definition, AgentToolList tools,
+        AgentGateResult gateResult, ReleaseManifest manifest, GovernanceRecords governance, DateOnly today, CancellationToken cancellationToken)
     {
-        var context = ContextFor(definition, gateResult, manifest, governance, today);
+        var context = ContextFor(definition, tools, gateResult, manifest, governance, today);
 
         // Every check that's on runs, as its results may name another principle, e.g. a test case's own; only results in
         // scope count.
@@ -74,10 +82,12 @@ internal sealed class QualityCheckRunner(
         return applied;
     }
 
-    private QualityCheckContext ContextFor(AgentDefinition definition, AgentGateResult gateResult, ReleaseManifest manifest,
-        GovernanceRecords governance, DateOnly today) => new()
+    private QualityCheckContext ContextFor(AgentDefinition definition, AgentToolList tools, AgentGateResult gateResult,
+        ReleaseManifest manifest, GovernanceRecords governance, DateOnly today) => new()
         {
             Agent = definition,
+            Tools = tools.Names,
+            ToolsProblem = tools.Problem,
             Policy = policy,
             ReleaseGate = releaseGateSettings,
             Manifest = manifest,
@@ -138,12 +148,14 @@ internal sealed class QualityCheckRunner(
         policy.For(result.CheckId).Severity is { } severity ? result with { Severity = severity } : result;
 
     /// <summary>
-    /// A critical failure when the release gate failed the agent but no check found anything, e.g. a check was turned off:
-    /// the quality gate can be stricter than the release gate, never more lenient.
+    /// A critical failure when the release gate failed the agent but none of the checks that apply its rules found a
+    /// blocking problem, e.g. one was turned off and only an unrelated or advisory finding remains: the quality gate can be
+    /// stricter than the release gate, never more lenient.
     /// </summary>
     private static IEnumerable<QualityCheckResult> Unexplained(AgentGateResult gateResult, List<QualityCheckResult> results)
     {
-        if (gateResult.Passed || results.Exists(static result => result.NotMet))
+        if (gateResult.Passed || results.Exists(static result => result.NotMet && result.Severity >= CheckSeverity.High
+            && ReleaseGateChecks.Contains(result.CheckId)))
         {
             yield break;
         }
@@ -161,3 +173,6 @@ internal sealed class QualityCheckRunner(
         };
     }
 }
+
+/// <summary>An agent's tools in this app, by name, or why they couldn't be listed.</summary>
+internal sealed record AgentToolList(IReadOnlyList<string>? Names, string? Problem);

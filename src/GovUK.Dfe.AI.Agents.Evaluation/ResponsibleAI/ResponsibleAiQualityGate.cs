@@ -7,6 +7,7 @@ using GovUK.Dfe.AI.Agents.Evaluation.ResponsibleAI.Policy;
 using GovUK.Dfe.AI.Agents.Evaluation.ResponsibleAI.Reporting;
 using GovUK.Dfe.AI.Agents.Evaluation.ResponsibleAI.Traceability;
 using GovUK.Dfe.AI.Agents.Evaluation.ValueObjects;
+using GovUK.Dfe.AI.Agents.Tools.Interfaces;
 using GovUK.Dfe.AI.Agents.ValueObjects;
 
 namespace GovUK.Dfe.AI.Agents.Evaluation.ResponsibleAI;
@@ -23,6 +24,7 @@ internal sealed class ResponsibleAiQualityGate(
     QualityCheckRunner checks,
     ReleaseManifestBuilder manifests,
     QualityGateRecorder recorder,
+    IAgentToolCatalog tools,
     TimeProvider time) : IResponsibleAiQualityGate
 {
     public async Task<QualityGateReport> DecideReleaseAsync(IReadOnlyCollection<AgentDefinition> definitions,
@@ -51,7 +53,8 @@ internal sealed class ResponsibleAiQualityGate(
         foreach (var definition in definitions)
         {
             var gateResult = gateResults.First(result => result.AgentName == definition.Name);
-            var results = await checks.RunAsync(definition, gateResult, manifest, governance, today, cancellationToken);
+            var agentTools = await ToolsOfAsync(definition, cancellationToken);
+            var results = await checks.RunAsync(definition, agentTools, gateResult, manifest, governance, today, cancellationToken);
 
             var decision = QualityGateDecider.Decide(definition.Name, results, policy, governance, today, checkCoverage: gateResult.Evaluated);
             recorder.Record(runId, decision);
@@ -68,5 +71,18 @@ internal sealed class ResponsibleAiQualityGate(
             Agents = decisions,
             DisabledChecks = notRun,
         }, runId, cancellationToken);
+    }
+
+    /// <summary>The agent's tools as a run gets them, built-in ones included; or why they couldn't be listed, so no tool is missed.</summary>
+    private async Task<AgentToolList> ToolsOfAsync(AgentDefinition definition, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return new([.. (await tools.GetToolsAsync(definition, cancellationToken)).Select(static tool => tool.Name)], null);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            return new(null, ex.GetBaseException().Message);
+        }
     }
 }

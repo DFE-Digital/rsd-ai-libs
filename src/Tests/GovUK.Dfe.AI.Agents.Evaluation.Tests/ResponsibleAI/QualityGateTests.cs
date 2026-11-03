@@ -189,6 +189,23 @@ public sealed class QualityGateTests : IDisposable
     }
 
     [Fact]
+    public async Task Never_lets_an_advisory_warning_stand_in_for_a_release_gate_failure()
+    {
+        _host.AddCaseFile("ofsted-agent", "wrong-rating", Tests("reliability-and-safety", Test("REL-900", "Outstanding", "Misreports the rating")));
+        Dictionary<string, string?> lenient = new(Policy)
+        {
+            [$"Checks:{QualityCheckIds.Scenario}:Enabled"] = "false",
+            ["MinimumReadingEase"] = "99",   // an unrelated readability failure, made blocking: it doesn't explain the case's failure
+            [$"Checks:{QualityCheckIds.Readability}:Severity"] = nameof(CheckSeverity.High),
+        };
+
+        var report = await _host.BuildQualityGate(policy: lenient).DecideReleaseAsync([ReleaseGateTestHost.Agents[0]], Token);
+
+        Assert.Equal((ReleaseDecision.Fail, false), (report.Decision, report.ReleasePermitted));
+        Assert.Contains(report.Agents[0].With(FindingDisposition.Blocking), f => f.Result.CheckId == QualityCheckIds.ReleaseGateConsistency);
+    }
+
+    [Fact]
     public async Task Evaluates_only_the_principles_a_team_chooses_and_lists_the_rest_as_out_of_scope()
     {
         Dictionary<string, string?> chosen = new(Policy)

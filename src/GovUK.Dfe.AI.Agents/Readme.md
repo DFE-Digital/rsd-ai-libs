@@ -280,7 +280,6 @@ Each test lands in one of two sections, by whether it's an attack:
 | `guardrail/`  | An attack, with `"guardrailMustBlock": true` and no `group` | `guardrail/fairness/FAIR-009`  | The guardrail blocks it                       |
 | `evaluation/` | A question with facts to check; no guardrail flag           | `evaluation/fairness/FAIR-001` | The answer is right, and scores meet the gate |
 
-
 - **Check your files in a unit test** (`GovUK.Dfe.AI.Agents.Quality` and `.Options`), so a wrong one fails the build, not a release:
 
   ```csharp

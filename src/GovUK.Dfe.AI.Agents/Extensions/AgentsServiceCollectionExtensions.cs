@@ -81,6 +81,12 @@ public static class AgentsServiceCollectionExtensions
 
         var runOptions = options.ToRunOptions() with { Redactors = builder.Redactors };
         services.AddSingleton(runOptions);
+
+        // Also as services, so add-ons can mask what they keep, e.g. the release gate's reports.
+        foreach (var redactor in builder.Redactors)
+        {
+            services.AddSingleton(redactor);
+        }
         services.AddSingleton(options.ToVersionPinning());
         services.AddFoundryAgents(_ => new Uri(options.Foundry.Endpoint!), _ => foundryCredential,
             _ => FactoryOptions(options) with { KeepLatestVersions = options.KeepLatestVersions },
@@ -211,6 +217,7 @@ public static class AgentsServiceCollectionExtensions
         services.AddSingleton<IAgentRuntimeService, AgentRuntimeService>();
         services.AddSingleton(sp => new AgentSpecBuilder(sp.GetRequiredService<IPromptProvider>(),
             sp.GetServices<AgentToolBinding>(), sp.GetServices<IManagedAgentProvider>()));
+        services.AddSingleton<IAgentToolCatalog, AgentToolCatalog>();
         services.AddSingleton(sp => new AgentRunHooks(sp.GetServices<IAgentRunObserver>(), sp.GetService<IToolCallApprover>()));
         services.AddSingleton<IAgentProvisioner, AgentProvisioner>();
         services.AddSingleton<IAgentService, AgentService>();

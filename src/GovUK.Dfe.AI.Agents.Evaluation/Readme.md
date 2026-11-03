@@ -86,7 +86,6 @@ test is in one of two sections:
 | `guardrail/`  | Sets `"guardrailMustBlock": true`; no `group` | The guardrail blocks it                                                                |
 | `evaluation/` | No guardrail flag                             | The answer has the right facts and scores. A block fails it as the guardrail's mistake |
 
-
 `CheckReleaseAsync` fails a case that breaks these rules. Check them in a unit test too, so a wrong file fails the build
 (`GovUK.Dfe.AI.Agents.Quality` and `.Options`): `Assert.Empty(cases.SelectMany(ReleaseSections.Problems))`.
 

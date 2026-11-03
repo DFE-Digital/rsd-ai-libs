@@ -29,9 +29,10 @@ internal sealed class AgentReleaseEvaluator(
     ReleaseGateJudge judge,
     ReleaseGateMetrics metrics,
     ILogger<AgentReleaseEvaluator> logger,
-    IFoundryEvaluationPublisher? foundryEvaluations = null)
+    ReleaseReportWriter reports)
 {
-    private static readonly JsonSerializerOptions ReportJson = new(JsonSerializerDefaults.Web) { WriteIndented = true };
+    /// <summary>Reads a baseline, as <see cref="ReleaseReportWriter"/> writes reports.</summary>
+    private static readonly JsonSerializerOptions ReportJson = new(JsonSerializerDefaults.Web);
 
     private static readonly TimeSpan CleanupTimeout = TimeSpan.FromMinutes(1);
 
@@ -113,7 +114,7 @@ internal sealed class AgentReleaseEvaluator(
         {
             logger.TestCaseBlockedByGuardrail(definition.Name, result.CaseName);
             metrics.TestCase(definition.Name, result, AgentOutcomes.BlockedByGuardrail);
-            return result with { Output = ReleaseGateMessages.BlockedByGuardrail };
+            return result with { Output = ReleaseGateMessages.BlockedByGuardrail, Outputs = [] };
         }
 
         if (result.Passed)
@@ -139,13 +140,12 @@ internal sealed class AgentReleaseEvaluator(
         }
 
         var report = new AgentEvaluationReport(agentName, suite.Results);
-        var reportPath = await WriteReportAsync(report, cancellationToken);
-        if (foundryEvaluations is not null)
-        {
-            await foundryEvaluations.PublishAsync(agentName, [.. suite.Cases.Zip(suite.Results)], cancellationToken);
-        }
+        var reportPath = await reports.WriteAsync(agentName, suite.Cases, suite.Results, cancellationToken);
 
-        var (gated, baseline) = judge.HasJudge ? await ScoredAsync(suite, report, cancellationToken) : (report, null);
+        // Without a judge there are no scores to compare, but the baseline still shows which cases used to pass.
+        var (gated, baseline) = judge.HasJudge
+            ? await ScoredAsync(suite, report, cancellationToken)
+            : (report, await LoadBaselineAsync(agentName, cancellationToken));
 
         // Failed test cases by section, and with a judge: each metric averaging below the minimum, not scored, more than
         // the tolerance below the baseline, or scoring one group of cases much worse than another.
@@ -268,17 +268,6 @@ internal sealed class AgentReleaseEvaluator(
     }
 
     /// <returns>Where the report was written.</returns>
-    private async Task<string> WriteReportAsync(AgentEvaluationReport report, CancellationToken cancellationToken)
-    {
-        var directory = Path.GetFullPath(settings.ReportsDirectory);
-        Directory.CreateDirectory(directory);
-
-        var path = Path.Combine(directory, $"{report.AgentName}.json");
-        await using var stream = File.Create(path);
-        await JsonSerializer.SerializeAsync(stream, report, ReportJson, cancellationToken);
-        return path;
-    }
-
     /// <summary>One agent's test cases, and their results in the same order once they have run.</summary>
     private sealed class TestSuite(AgentDefinition definition, string directory, IReadOnlyList<AgentTestCase> cases)
     {

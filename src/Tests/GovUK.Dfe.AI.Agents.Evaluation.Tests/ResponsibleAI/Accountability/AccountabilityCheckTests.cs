@@ -14,6 +14,8 @@ namespace GovUK.Dfe.AI.Agents.Evaluation.Tests.ResponsibleAI.Accountability;
 /// </summary>
 public sealed class AccountabilityCheckTests
 {
+    private static readonly string[] PlantedNames = ["Jamie Example"];
+
     [Fact]
     public async Task Fails_critically_when_no_test_case_ran()
     {
@@ -70,6 +72,17 @@ public sealed class AccountabilityCheckTests
         var result = (await RunAsync(new EvaluationDatasetCheck(), CheckContext([Passing("a")]))).Single(r => r.Subject == subject);
 
         Assert.Equal((CheckOutcome.Inconclusive, principle, CheckSeverity.Medium), (result.Outcome, result.Principle, result.Severity));
+    }
+
+    [Fact]
+    public async Task Counts_planted_sensitive_data_as_tested_only_when_the_agent_answered()
+    {
+        var planted = Case("evaluation/PrivacyAndSecurity/pupil-name", extra: new { sensitiveData = PlantedNames });
+        var context = CheckContext([(planted, Result(planted.Name, output: null, blocked: true))]);
+
+        var result = (await RunAsync(new EvaluationDatasetCheck(), context)).Single(r => r.Subject == "sensitive-data");
+
+        Assert.Equal(CheckOutcome.Inconclusive, result.Outcome);
     }
 
     [Fact]
@@ -157,7 +170,7 @@ public sealed class AccountabilityCheckTests
     [Fact]
     public async Task Fails_traceability_without_a_source_revision_when_the_policy_requires_one()
     {
-        var context = CheckContext([Passing("a")], new QualityGatePolicy { RequireSourceRevision = true }, manifest: Manifest(sourceRevision: null));
+        var context = CheckContext([Passing("a")], new QualityGatePolicy { RequireSourceRevision = true }) with { Manifest = Manifest(sourceRevision: null) };
 
         Assert.Equal("Not traceable to: Source revision", (await OnlyAsync(new TraceabilityCheck(), context)).Summary);
     }
@@ -174,7 +187,7 @@ public sealed class AccountabilityCheckTests
             Attestations = [new() { Id = "DPIA", ApprovedBy = "Dee Pio", Role = "DPO", ApprovedOn = Today.AddDays(-10), Evidence = "https://example.gov.uk/dpia" }],
         };
 
-        var result = await OnlyAsync(new AttestationCheck(), CheckContext([], policy, governance: governance));
+        var result = await OnlyAsync(new AttestationCheck(), (CheckContext([], policy) with { Governance = governance }));
 
         Assert.Equal(CheckOutcome.Passed, result.Outcome);
         Assert.Equal(ResponsibleAiPrinciple.PrivacyAndSecurity, result.Principle);
@@ -198,7 +211,7 @@ public sealed class AccountabilityCheckTests
             Attestations = [new() { Id = "pen-test", ApprovedBy = "Red Team", Role = "ITHC", ApprovedOn = Today.AddYears(-2), ExpiresOn = Today.AddDays(-5), Evidence = "ITHC-9" }],
         };
 
-        var results = await RunAsync(new AttestationCheck(), CheckContext([], policy, governance: governance));
+        var results = await RunAsync(new AttestationCheck(), (CheckContext([], policy) with { Governance = governance }));
 
         Assert.Equal(("Accessibility audit: not recorded", CheckSeverity.Medium), (results[0].Summary, results[0].Severity));
         Assert.Equal(("Penetration test: not valid", CheckSeverity.High), (results[1].Summary, results[1].Severity));

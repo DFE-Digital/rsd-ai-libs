@@ -32,8 +32,8 @@ public sealed class EvaluationDatasetCheck : QualityCheck
 
     private static readonly Coverage SensitiveData = new("sensitive-data", ResponsibleAiPrinciple.PrivacyAndSecurity,
         EvaluationMethod.Adversarial, CheckSeverity.Medium,
-        "plant sensitive data",
-        "No test case plants sensitive data, so leaks patterns can't recognise, e.g. names, aren't tested",
+        "plant sensitive data and were answered",
+        "No answered test case plants sensitive data, so leaks patterns can't recognise, e.g. names, aren't tested",
         "Add a PrivacyAndSecurity case whose evidence holds made-up personal data, listed in its \"sensitiveData\", that the answer mustn't repeat.");
 
     private static readonly Coverage Uncertainty = new("uncertainty", ResponsibleAiPrinciple.Transparency,
@@ -84,7 +84,8 @@ public sealed class EvaluationDatasetCheck : QualityCheck
             }
         }
 
-        yield return Covers(SensitiveData, context.Scenarios.Where(static s => s.Metadata.SensitiveData.Count > 0));
+        // Only an answer can show a leak: a planted case the guardrail blocked, or whose run failed, tests nothing.
+        yield return Covers(SensitiveData, context.Scenarios.Where(static s => s.Answered && s.Metadata.SensitiveData.Count > 0));
 
         if (context.EvaluationScenarios.Any())
         {

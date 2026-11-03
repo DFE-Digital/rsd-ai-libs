@@ -15,6 +15,10 @@ public sealed class QualityGatePolicy
     public static IReadOnlyList<string> DefaultApprovalRequiredToolPrefixes { get; } =
         ["create", "update", "delete", "remove", "send", "submit", "write", "approve", "pay", "transfer"];
 
+    /// <summary>Tool name prefixes that only read, so the tool needs no approval, unless set otherwise.</summary>
+    public static IReadOnlyList<string> DefaultReadOnlyToolPrefixes { get; } =
+        ["get", "list", "search", "find", "read", "lookup", "fetch", "query", "web_search", "file_search"];
+
     /// <summary>
     /// The principles the team evaluates its agents against. Empty (the default): all six. Checks for any other principle
     /// don't run and aren't required. Each listed principle needs at least one evaluated check, so a gap in testing is
@@ -104,6 +108,16 @@ public sealed class QualityGatePolicy
         ApprovalRequiredToolPrefixes.Count == 0 ? DefaultApprovalRequiredToolPrefixes : ApprovalRequiredToolPrefixes;
 
     /// <summary>
+    /// Tool name prefixes that only read, e.g. "get" for <c>get_case</c>, or a built-in tool's kind, e.g.
+    /// "web_search": such a tool needs no approval. A tool matching neither these nor <see cref="ApprovalRequiredToolPrefixes"/>
+    /// can't be assumed safe, so the gate can't pass it. Empty: <see cref="DefaultReadOnlyToolPrefixes"/>.
+    /// </summary>
+    public List<string> ReadOnlyToolPrefixes { get; set; } = [];
+
+    internal IReadOnlyList<string> EffectiveReadOnlyToolPrefixes =>
+        ReadOnlyToolPrefixes.Count == 0 ? DefaultReadOnlyToolPrefixes : ReadOnlyToolPrefixes;
+
+    /// <summary>
     /// On by default: every test case must be in a file for one principle, say its risk (<c>"description"</c>), and
     /// at least one explicit expectation, so each case says what it tests and how it passes.
     /// </summary>
@@ -142,6 +156,7 @@ public sealed class QualityGatePolicy
             (MinimumReadingEase is < 0 or > 100 || double.IsNaN(MinimumReadingEase), "MinimumReadingEase (from 0 to 100)"),
             (!(MaxAverageSentenceWords > 0), "MaxAverageSentenceWords (more than 0)"),
             (ApprovalRequiredToolPrefixes.Exists(string.IsNullOrWhiteSpace), "ApprovalRequiredToolPrefixes"),
+            (ReadOnlyToolPrefixes.Exists(string.IsNullOrWhiteSpace), "ReadOnlyToolPrefixes"),
             (RequiredAttestations.Exists(static a => string.IsNullOrWhiteSpace(a.Id) || string.IsNullOrWhiteSpace(a.Description)),
                 "RequiredAttestations (each needs an Id and a Description)"),
             (RequiredAttestations.GroupBy(static a => a.Id, StringComparer.OrdinalIgnoreCase).Any(static g => g.Count() > 1),

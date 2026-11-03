@@ -76,7 +76,7 @@ public sealed class FairnessCheckTests
     [Fact]
     public async Task Does_not_compare_scores_without_a_judge()
     {
-        var context = CheckContext([Passing("a1", "academy"), Passing("s1", "special")], judge: null);
+        var context = CheckContext([Passing("a1", "academy"), Passing("s1", "special")]) with { JudgeModel = null };
 
         Assert.Equal(CheckOutcome.NotApplicable, (await OnlyAsync(new GroupScoreParityCheck(), context)).Outcome);
     }
@@ -88,6 +88,16 @@ public sealed class FairnessCheckTests
 
         Assert.Equal(CheckOutcome.Inconclusive, result.Outcome);
         Assert.Equal(CheckSeverity.High, result.Severity);
+    }
+
+    [Fact]
+    public async Task Blocks_when_only_one_group_is_tested_however_many_cases_it_has()
+    {
+        var result = await OnlyAsync(new GroupSampleSizeCheck(),
+            CheckContext([Passing("a1", "academy"), Passing("a2", "academy"), Passing("a3", "academy")], TwoPerGroup));
+
+        Assert.Equal((CheckOutcome.Inconclusive, CheckSeverity.High), (result.Outcome, result.Severity));
+        Assert.StartsWith("Only one user group, academy, is tested", result.Summary, StringComparison.Ordinal);
     }
 
     [Fact]

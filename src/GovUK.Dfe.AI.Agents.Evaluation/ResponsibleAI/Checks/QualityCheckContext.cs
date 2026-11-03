@@ -13,7 +13,7 @@ namespace GovUK.Dfe.AI.Agents.Evaluation.ResponsibleAI.Checks;
 /// the baseline, the guardrail check, the policy, the governance records and the manifest. Checks read it; none runs
 /// the agent again.
 /// </summary>
-public sealed class QualityCheckContext
+public sealed record QualityCheckContext
 {
     private static readonly AgentEvaluationReport NoResults = new(string.Empty, []);
 
@@ -49,6 +49,15 @@ public sealed class QualityCheckContext
 
     /// <summary>Every problem the release gate found, as it reports them.</summary>
     public IReadOnlyList<string> ReleaseGateProblems { get; init; } = [];
+
+    /// <summary>
+    /// Every tool the agent is given in this app, by name, built-in ones included, e.g. "web_search". Null: its
+    /// <see cref="AgentDefinition.AllowedTools"/>.
+    /// </summary>
+    public IReadOnlyList<string>? Tools { get; init; }
+
+    /// <summary>Why the agent's tools couldn't be listed, when they couldn't, e.g. a tool server was unreachable.</summary>
+    public string? ToolsProblem { get; init; }
 
     /// <summary>The judge model; null without a judge, when nothing is scored.</summary>
     public string? JudgeModel { get; init; }
@@ -89,5 +98,9 @@ public sealed class QualityCheckContext
     /// Whether the case expects the agent to say it doesn't know (<c>"expectsUncertainty": true</c>, or a release gate
     /// refusal phrase), so the judge doesn't score it: relevance marks any such answer irrelevant, however right.
     /// </summary>
-    public bool ExpectsRefusal(AgentTestCase testCase) => ReleaseGate.ExpectsRefusal(testCase);
+    public bool ExpectsRefusal(AgentTestCase testCase)
+    {
+        ArgumentNullException.ThrowIfNull(testCase);
+        return ReleaseGate.ExpectsRefusal(testCase);
+    }
 }

@@ -77,14 +77,16 @@ An agent fails if a case fails, or with a judge, a metric averages below `Minimu
 ### Test cases
 
 One folder per agent under `TestCasesDirectory`, with one file per Responsible AI principle:
-`{ "type": "fairness", "description": "...", "tests": [ { "id": "FAIR-001", "name": "...", "description": "...", "prompt": "...", ... } ] }`.
+`{ "type": "fairness", "description": "...", "evaluation": [ { "id": "FAIR-001", "name": "...", "description": "...", "prompt": "...", ... } ], "guardrail": [ ... ] }`.
 Copy the examples in the [test case guide](https://github.com/DFE-Digital/rsd-ai-libs/blob/main/docs/TestCases.md). Each
-test is in one of two sections:
+test is in one of two sections, the list it's in:
 
-| Section       | Each test                                     | Passes when                                                                            |
-| ------------- | --------------------------------------------- | -------------------------------------------------------------------------------------- |
-| `guardrail/`  | Sets `"guardrailMustBlock": true`; no `group` | The guardrail blocks it                                                                |
-| `evaluation/` | No guardrail flag                             | The answer has the right facts and scores. A block fails it as the guardrail's mistake |
+| List         | Each test                                     | Passes when                                                                            |
+| ------------ | --------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `guardrail`  | An attack; no `group`, no flag needed         | The guardrail blocks it                                                                |
+| `evaluation` | A question; no guardrail flag                 | The answer has the right facts and scores. A block fails it as the guardrail's mistake |
+
+A single `tests` list, with `"guardrailMustBlock": true` on each attack, still works.
 
 `CheckReleaseAsync` fails a case that breaks these rules. Check them in a unit test too, so a wrong file fails the build
 (`GovUK.Dfe.AI.Agents.Quality` and `.Options`): `Assert.Empty(cases.SelectMany(ReleaseSections.Problems))`.

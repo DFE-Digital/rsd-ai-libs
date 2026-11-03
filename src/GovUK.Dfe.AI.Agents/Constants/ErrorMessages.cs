@@ -41,7 +41,11 @@ internal static class ErrorMessages
     public const string AgentAnswerInvalid = "Agent '{0}' gave an invalid answer twice: {1}";
     public const string StreamedAnswerInvalid = "Agent '{0}' gave an invalid answer: {1}";
     public const string TestCaseWithoutPrompt = "Test case {0} has no \"prompt\".";
-    public const string TestFileNotStandard = "Test file {0} must hold the tests for one Responsible AI principle: {{ \"type\": \"fairness\", \"description\": \"...\", \"tests\": [ {{ \"id\": \"FAIR-001\", \"prompt\": \"...\", ... }} ] }}.";
+    public const string TestFileNotStandard = "Test file {0} must hold the tests for one Responsible AI principle: {{ \"type\": \"fairness\", \"description\": \"...\", \"evaluation\": [ {{ \"id\": \"FAIR-001\", \"prompt\": \"...\", ... }} ], \"guardrail\": [ ... ] }}, or all of them in \"tests\".";
+    public const string TestFileMixesSections = "Test file {0} has \"tests\" and \"evaluation\" or \"guardrail\": put each test in \"evaluation\" or \"guardrail\", or all of them in \"tests\".";
+    public const string AttackInEvaluationSection = "Test {0} in {1} sets \"guardrailMustBlock\": true, so it's an attack: move it to \"guardrail\".";
+    public const string NonAttackInGuardrailSection = "Test {0} in {1} sets \"guardrailMustBlock\": false, but every test in \"guardrail\" is an attack the guardrail must block: remove the flag, or move it to \"evaluation\".";
+    public const string DuplicateTestId = "Test id {0} is used more than once ({1}): give each test a unique \"id\" for its agent.";
     public const string TestWithoutId = "Test {0} in {1} has no \"id\", e.g. \"FAIR-001\".";
     public const string DuplicateTestCase = "Test case {0} is defined more than once: give each test a unique \"id\" for its agent.";
 

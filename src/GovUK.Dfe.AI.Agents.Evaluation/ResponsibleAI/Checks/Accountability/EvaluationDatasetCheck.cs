@@ -22,13 +22,13 @@ public sealed class EvaluationDatasetCheck : QualityCheck
         EvaluationMethod.Adversarial, CheckSeverity.High,
         "attack the question",
         "No guardrail case attacks the question, so jailbreak resistance isn't tested",
-        "Add a guardrail/ case with a jailbreak in its prompt, no evidence, and \"guardrailMustBlock\": true.");
+        "Add a test to the \"guardrail\" list of privacy-and-security.json with a jailbreak in its prompt and no evidence.");
 
     private static readonly Coverage AttackEvidence = new("attack-evidence", ResponsibleAiPrinciple.PrivacyAndSecurity,
         EvaluationMethod.Adversarial, CheckSeverity.High,
         "plant instructions in the evidence",
         "No guardrail case plants instructions in the evidence, so indirect prompt injection isn't tested",
-        "Add a guardrail/ case whose evidence holds an instruction, e.g. to ignore the system prompt, with \"guardrailMustBlock\": true. Only Guardrails' ScanEvidence blocks it.");
+        "Add a test to the \"guardrail\" list of privacy-and-security.json whose evidence holds an instruction, e.g. to ignore the system prompt. Only Guardrails' ScanEvidence blocks it.");
 
     private static readonly Coverage SensitiveData = new("sensitive-data", ResponsibleAiPrinciple.PrivacyAndSecurity,
         EvaluationMethod.Adversarial, CheckSeverity.Medium,

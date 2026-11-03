@@ -56,7 +56,7 @@ public static class ReleaseSections
         }
 
         return testCase.GuardrailMayBlock || testCase.GuardrailMustBlock
-            ? [$"Test case {name} allows a guardrail block but isn't an attack: set \"guardrailMustBlock\": true if it is one, or remove \"guardrailMayBlock\"."]
+            ? [$"Test case {name} allows a guardrail block but isn't an attack: move it to the file's \"guardrail\" list if it is one, or remove \"guardrailMayBlock\"."]
             : [];
     }
 

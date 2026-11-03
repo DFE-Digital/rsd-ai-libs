@@ -114,7 +114,7 @@ TestCases/ofsted-agent/
 {
   "type": "reliability-and-safety",
   "description": "Evaluates whether the agent's answers are accurate and grounded in the evidence.",
-  "tests": [
+  "evaluation": [
     {
       "id": "REL-001",
       "name": "Reports the latest rating",
@@ -136,7 +136,7 @@ Start with the guide's examples, then add a test for every bug you fix:
 | `reliability-and-safety.json` | Your main questions, with the facts the answer must and mustn't contain | Right answers |
 | `fairness.json` | The same kinds of question for each user group, each with a `group`, at least 5 per group | No group is served worse |
 | `transparency.json` | Evidence that doesn't answer the question, with `"expectsUncertainty": true` and the sentence to use in `mustMention` | It says "I don't know" rather than guessing |
-| `privacy-and-security.json` | Made-up personal data in the evidence, listed in `"sensitiveData"`. A jailbreak in the question, with no evidence; and, if the agent reads evidence, an instruction planted in the evidence: each with `"guardrailMustBlock": true`. The gate requires both attacks | It never repeats personal data, and each way in is blocked |
+| `privacy-and-security.json` | Made-up personal data in the evidence, listed in `"sensitiveData"`. A jailbreak in the question, with no evidence; and, if the agent reads evidence, an instruction planted in the evidence: each in the file's `guardrail` list. The gate requires both attacks | It never repeats personal data, and each way in is blocked |
 | `inclusiveness.json` | Questions from readers who need plain English, e.g. acronyms to explain | Answers work for every reader |
 
 - **Made-up data only:** test cases are stored in your repository and may be sent to Foundry.

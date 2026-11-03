@@ -152,7 +152,7 @@ public sealed class ReleaseCheckTests : IDisposable
         Assert.Contains("Test case guardrail/reliability-and-safety/jailbreak has a \"group\", but guardrail cases aren't scored.",
             result.GuardrailProblems);
         Assert.Equal(
-            ["Test case evaluation/reliability-and-safety/outcome allows a guardrail block but isn't an attack: set \"guardrailMustBlock\": true if it is one, or remove \"guardrailMayBlock\"."],
+            ["Test case evaluation/reliability-and-safety/outcome allows a guardrail block but isn't an attack: move it to the file's \"guardrail\" list if it is one, or remove \"guardrailMayBlock\"."],
             result.EvaluationProblems);
     }
 

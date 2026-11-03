@@ -1,16 +1,13 @@
 using GovUK.Dfe.AI.Agents.Evaluation.Options;
-using GovUK.Dfe.AI.Agents.Evaluation.ResponsibleAI.Checks.Accountability;
 using GovUK.Dfe.AI.Agents.Evaluation.ResponsibleAI.Checks.Transparency;
 using GovUK.Dfe.AI.Agents.Evaluation.ResponsibleAI.Enums;
-using GovUK.Dfe.AI.Agents.Evaluation.ResponsibleAI.Policy;
-using GovUK.Dfe.AI.Agents.Evaluation.ResponsibleAI.Scenarios;
 using GovUK.Dfe.AI.Agents.ValueObjects;
 using Xunit;
 using static GovUK.Dfe.AI.Agents.Evaluation.Tests.ResponsibleAI.QualityGateTestData;
 
 namespace GovUK.Dfe.AI.Agents.Evaluation.Tests.ResponsibleAI.Transparency;
 
-/// <summary>Transparency: answers attribute their sources accurately, and say when the agent doesn't know.</summary>
+/// <summary>Transparency: answers attribute their sources accurately.</summary>
 public sealed class TransparencyCheckTests
 {
     private const string TwoRecords = "[Evidence 1]\nname: Example School\n\n[Evidence 2]\nrating: Good";
@@ -56,35 +53,5 @@ public sealed class TransparencyCheckTests
 
         Assert.Equal(CheckOutcome.NotApplicable, (await OnlyAsync(new CitationAccuracyCheck(), refusing)).Outcome);
         Assert.Equal(CheckOutcome.NotApplicable, (await OnlyAsync(new CitationAccuracyCheck(), notCiting)).Outcome);
-    }
-
-    [Fact]
-    public async Task Shows_which_cases_test_that_the_agent_says_when_it_does_not_know()
-    {
-        var unknown = Case("evaluation/Transparency/no-records", evidence: null, mustMention: ["No information available"],
-            extra: new { expectsUncertainty = true, risk = "Invents facts when there are no records" });
-
-        var results = await RunAsync(new EvaluationDatasetCheck(), CheckContext([(unknown, Result(unknown.Name, "No information available."))]));
-
-        var result = results.Single(r => r.Subject == "uncertainty");
-        Assert.Equal((CheckOutcome.Passed, ResponsibleAiPrinciple.Transparency), (result.Outcome, result.Principle));
-        Assert.Equal(["evaluation/Transparency/no-records"], result.Evidence);
-    }
-
-    [Fact]
-    public void Requires_a_case_expecting_uncertainty_to_give_the_sentence_it_expects()
-    {
-        var vague = Case("evaluation/Transparency/no-records", mustMention: [], extra: new { expectsUncertainty = true, risk = "x" });
-
-        Assert.Contains(ScenarioMetadata.Problems(vague, requireMetadata: true), p => p.Contains("put the sentence the agent should use", StringComparison.Ordinal));
-    }
-
-    [Fact]
-    public async Task Warns_when_no_case_tests_that_the_agent_admits_uncertainty()
-    {
-        var result = (await RunAsync(new EvaluationDatasetCheck(), CheckContext([Passing("a")]))).Single(r => r.Subject == "uncertainty");
-
-        Assert.Equal(CheckOutcome.Inconclusive, result.Outcome);
-        Assert.Equal(CheckSeverity.Medium, result.Severity);
     }
 }

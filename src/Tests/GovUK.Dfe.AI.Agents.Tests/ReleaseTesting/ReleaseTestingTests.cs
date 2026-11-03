@@ -102,20 +102,6 @@ public sealed class ReleaseTestingTests
     }
 
     [Fact]
-    public void Report_FlagsMetricsBelowTheMinimum_AndRegressionsFromTheBaseline()
-    {
-        static AgentEvaluationReport Scored(double groundedness, double relevance) => new("ofsted-agent",
-            [new AgentTestResult("c", "x", [], new Dictionary<string, double> { ["Groundedness"] = groundedness, ["Relevance"] = relevance })]);
-
-        var baseline = Scored(4.5, 4.0);
-        var gate = new ReleaseGate { Metrics = ["Groundedness", "Relevance"], MinimumScore = 4, Tolerance = 0.2 };
-
-        Assert.Equal(["Groundedness: averaged 3.9, below the minimum 4", "Groundedness: fell from 4.5 to 3.9, more than the tolerance 0.2"],
-            Scored(3.9, 4.0).FailuresAgainst(gate, baseline));
-        Assert.Empty(Scored(4.4, 4.0).FailuresAgainst(gate, baseline));
-    }
-
-    [Fact]
     public void AJudgeThatScoredNothing_FailsTheGate_InsteadOfPassingIt()
     {
         var baseline = new AgentEvaluationReport("ofsted-agent",

@@ -78,7 +78,7 @@ An agent fails if a case fails, or with a judge, a metric averages below `Minimu
 
 One folder per agent under `TestCasesDirectory`, with one file per Responsible AI principle:
 `{ "type": "fairness", "description": "...", "tests": [ { "id": "FAIR-001", "name": "...", "description": "...", "prompt": "...", ... } ] }`.
-Copy the [templates](https://github.com/DFE-Digital/rsd-ai-libs/blob/main/docs/templates/TestCases/README.md). Each
+Copy the examples in the [test case guide](https://github.com/DFE-Digital/rsd-ai-libs/blob/main/docs/TestCases.md). Each
 test is in one of two sections:
 
 | Section       | Each test                                     | Passes when                                                                            |

@@ -102,8 +102,8 @@ the results into a decision.
 
 ### Write test cases
 
-One JSON file per Responsible AI principle, for each agent. **Copy the [templates](templates/TestCases/README.md)**
-into `TestCases/<your agent>/` and replace the content: they're a complete set that passes the gate's checks as it is.
+One JSON file per Responsible AI principle, for each agent. **Copy the examples in the [test case guide](TestCases.md)**
+into `TestCases/<your agent>/` and replace the content: they follow every rule the gate checks.
 
 ```text
 TestCases/ofsted-agent/
@@ -129,7 +129,7 @@ TestCases/ofsted-agent/
 ```
 
 Each test's `description` is the risk it covers, and its `id` names it in reports, e.g. `evaluation/reliability-and-safety/REL-001`.
-Start with the templates' set, then add a test for every bug you fix:
+Start with the guide's examples, then add a test for every bug you fix:
 
 | File | Tests | Proves |
 | --- | --- | --- |

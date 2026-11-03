@@ -259,7 +259,7 @@ It checks the guardrail, runs each agent's test cases on a temporary copy, and l
 standard. See the [Evaluation readme](https://github.com/DFE-Digital/rsd-ai-libs/blob/main/src/GovUK.Dfe.AI.Agents.Evaluation/Readme.md#release-gate).
 
 Test cases are JSON files under `TestCases/<agent>/`, one per Responsible AI principle (copy the
-[templates](https://github.com/DFE-Digital/rsd-ai-libs/blob/main/docs/templates/TestCases/README.md)):
+[test case guide](https://github.com/DFE-Digital/rsd-ai-libs/blob/main/docs/TestCases.md)):
 
 ```json
 {

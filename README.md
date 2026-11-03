@@ -50,6 +50,7 @@ Guides that cover every package:
 | [Settings](docs/Settings.md)              | Every `AiAgents` setting in the core package, with its default                                 |
 | [Responsible AI](docs/ResponsibleAI.md)   | How the library supports the UK Government AI Playbook                                         |
 | [Quality gate](docs/QualityGate.md)       | The Responsible AI release standard: checks by principle, the Pass/Warning/Fail decision, policy, CI/CD |
+| [Test cases](docs/TestCases.md)         | How to write an agent's test cases: an example file for each principle, and every field |
 | [Security review](docs/SecurityReview.md) | Each trust boundary, what to check in your deployment, and a sign-off checklist                |
 
 ## UK Government AI Playbook

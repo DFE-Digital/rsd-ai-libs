@@ -267,7 +267,7 @@ public sealed class QualityGateTests : IDisposable
         });
 
     /// <summary>
-    /// One file per Responsible AI principle, in the standard format apps copy (docs/templates/TestCases): five cases per
+    /// One file per Responsible AI principle, in the standard format (docs/TestCases.md): five cases per
     /// user group, the fewest the gate compares, and an attack on the question and on the evidence.
     /// </summary>
     private void AddRepresentativeCases(string agent)

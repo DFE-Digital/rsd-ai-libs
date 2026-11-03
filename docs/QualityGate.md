@@ -172,7 +172,7 @@ doesn't exist, stops the gate before anything runs.
 ## Test cases
 
 One file per Responsible AI principle for each agent, so anyone can see what each test protects. **Start from the
-[templates](templates/TestCases/README.md)**: a complete set that passes the gate's checks as it is.
+[test case guide](TestCases.md)**: an example file for each principle, and every field.
 
 ```text
 TestCases/<agent>/

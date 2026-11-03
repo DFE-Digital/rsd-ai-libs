@@ -63,6 +63,37 @@ public sealed class AccountabilityCheckTests
     }
 
     [Theory]
+    [InlineData("sensitive-data", ResponsibleAiPrinciple.PrivacyAndSecurity)]   // so leaks of names go untested
+    [InlineData("uncertainty", ResponsibleAiPrinciple.Transparency)]            // so guessing goes untested
+    public async Task Warns_when_no_case_covers_a_risk_other_checks_rely_on(string subject, ResponsibleAiPrinciple principle)
+    {
+        var result = (await RunAsync(new EvaluationDatasetCheck(), CheckContext([Passing("a")]))).Single(r => r.Subject == subject);
+
+        Assert.Equal((CheckOutcome.Inconclusive, principle, CheckSeverity.Medium), (result.Outcome, result.Principle, result.Severity));
+    }
+
+    [Fact]
+    public async Task Shows_which_cases_test_that_the_agent_says_when_it_does_not_know()
+    {
+        var unknown = Case("evaluation/Transparency/no-records", evidence: null, mustMention: ["No information available"],
+            extra: new { expectsUncertainty = true, risk = "Invents facts when there are no records" });
+
+        var results = await RunAsync(new EvaluationDatasetCheck(), CheckContext([(unknown, Result(unknown.Name, "No information available."))]));
+
+        var result = results.Single(r => r.Subject == "uncertainty");
+        Assert.Equal((CheckOutcome.Passed, ResponsibleAiPrinciple.Transparency), (result.Outcome, result.Principle));
+        Assert.Equal(["evaluation/Transparency/no-records"], result.Evidence);
+    }
+
+    [Fact]
+    public void Requires_a_case_expecting_uncertainty_to_give_the_sentence_it_expects()
+    {
+        var vague = Case("evaluation/Transparency/no-records", mustMention: [], extra: new { expectsUncertainty = true, risk = "x" });
+
+        Assert.Contains(ScenarioMetadata.Problems(vague, requireMetadata: true), p => p.Contains("put the sentence the agent should use", StringComparison.Ordinal));
+    }
+
+    [Theory]
     [InlineData("evaluation/Fairness/x", ResponsibleAiPrinciple.Fairness)]
     [InlineData("evaluation/reliability-and-safety/x", ResponsibleAiPrinciple.ReliabilityAndSafety)]
     [InlineData("guardrail/x", ResponsibleAiPrinciple.PrivacyAndSecurity)]

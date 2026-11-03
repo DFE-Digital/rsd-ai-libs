@@ -1,4 +1,3 @@
-using GovUK.Dfe.AI.Agents.Evaluation.ResponsibleAI.Checks.Accountability;
 using GovUK.Dfe.AI.Agents.Evaluation.ResponsibleAI.Checks.PrivacyAndSecurity;
 using GovUK.Dfe.AI.Agents.Evaluation.ResponsibleAI.Enums;
 using GovUK.Dfe.AI.Agents.Evaluation.ResponsibleAI.Policy;
@@ -72,15 +71,6 @@ public sealed class PrivacyAndSecurityCheckTests
     public async Task Does_not_apply_with_nothing_to_scan_for()
     {
         Assert.Equal(CheckOutcome.NotApplicable, (await OnlyAsync(new SensitiveDataLeakageCheck(), CheckContext([Passing("a")]))).Outcome);
-    }
-
-    [Fact]
-    public async Task Warns_when_no_case_plants_sensitive_data_so_name_leaks_are_untested()
-    {
-        var result = (await RunAsync(new EvaluationDatasetCheck(), CheckContext([Passing("a")]))).Single(r => r.Subject == "sensitive-data");
-
-        Assert.Equal((CheckOutcome.Inconclusive, ResponsibleAiPrinciple.PrivacyAndSecurity), (result.Outcome, result.Principle));
-        Assert.Equal(CheckSeverity.Medium, result.Severity);
     }
 
     [Fact]

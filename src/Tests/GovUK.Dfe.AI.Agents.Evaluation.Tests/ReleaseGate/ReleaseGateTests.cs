@@ -7,6 +7,7 @@ using NSubstitute.ExceptionExtensions;
 using Xunit;
 using GovUK.Dfe.AI.Agents.Evaluation.ValueObjects;
 using GovUK.Dfe.AI.Agents.Evaluation.Exceptions;
+using GovUK.Dfe.AI.Agents.Evaluation.Options;
 
 namespace GovUK.Dfe.AI.Agents.Evaluation.Tests.ReleaseGate;
 
@@ -180,6 +181,19 @@ public sealed class ReleaseGateTests : IDisposable
 
         Assert.Contains("Evaluation:ReleaseGate:MinimumScore (from 1 to 5)", ex.Message, StringComparison.Ordinal);
         Assert.Contains("Evaluation:ReleaseGate:Repeats (1 or more)", ex.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(null, 60)]          // no RunTimeout: an hour
+    [InlineData(2.0, 60)]           // a short RunTimeout: still an hour
+    [InlineData(120.0, 122)]        // a RunTimeout over an hour: it, plus 2 minutes
+    public void Cleans_up_only_test_agents_the_live_app_cannot_still_be_using(double? runTimeoutMinutes, double expectedMinutes)
+    {
+        var settings = new ReleaseGateSettings();
+
+        settings.AllowForRunTimeout(runTimeoutMinutes is { } minutes ? TimeSpan.FromMinutes(minutes) : null);
+
+        Assert.Equal(TimeSpan.FromMinutes(expectedMinutes), settings.LeftoverTestAgentAge);
     }
 
     [Fact]

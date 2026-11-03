@@ -25,7 +25,7 @@ internal sealed class QualityCheckRunner(
     IEnumerable<IQualityCheck> checks,
     IEnumerable<IGuardrailCheck> guardrailChecks,
     GuardrailBlocklists blocklists,
-    ILogger<ResponsibleAiQualityGate> logger)
+    ILogger<QualityCheckRunner> logger)
 {
     /// <summary>Ids the gate adds itself; the policy can't turn them off.</summary>
     private static readonly string[] GateIds = [QualityCheckIds.PrincipleCoverage, QualityCheckIds.ReleaseGateConsistency];

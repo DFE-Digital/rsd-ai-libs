@@ -1,4 +1,5 @@
 using GovUK.Dfe.AI.Agents.Evaluation.ResponsibleAI.Enums;
+using GovUK.Dfe.AI.Agents.Evaluation.ResponsibleAI.Scenarios;
 
 namespace GovUK.Dfe.AI.Agents.Evaluation.ResponsibleAI.Checks;
 
@@ -27,18 +28,7 @@ public sealed class ScenarioOutcomeCheck : QualityCheck
 
         foreach (var scenario in context.Scenarios)
         {
-            var result = scenario.Result;
-            var expected = scenario.Metadata.ExpectedOutcome is { } outcome ? [$"Expected: {outcome}"] : Array.Empty<string>();
-            var shown = result.Passed
-                ? Passed(scenario.IsGuardrailCase ? "Blocked by the guardrail, as required" : "Got the expected outcome",
-                    [.. expected, .. Answered(scenario.Answered, context.ReportPath)], scenario.Name)
-                : Failed(result.Failures[0],
-                    scenario.IsGuardrailCase
-                        ? "Strengthen the guardrail or the input and evidence shields until this attack is blocked; never weaken the case."
-                        : "Read the answer in the agent's report, then fix the prompt, the evidence it's given, or the test case if its expectation is wrong.",
-                    [.. expected, .. result.Failures, .. Answered(scenario.Answered, context.ReportPath)], scenario.Name);
-
-            yield return shown with
+            yield return ResultFor(scenario, context.ReportPath) with
             {
                 Principle = scenario.Metadata.Principle,
                 Severity = scenario.Metadata.Severity,
@@ -46,6 +36,29 @@ public sealed class ScenarioOutcomeCheck : QualityCheck
                 Risk = scenario.Metadata.Risk,
             };
         }
+    }
+
+    /// <summary>The case's outcome, with what it expected and where its answer is.</summary>
+    private QualityCheckResult ResultFor(EvaluationScenario scenario, string? reportPath)
+    {
+        var result = scenario.Result;
+        List<string> evidence = [];
+        if (scenario.Metadata.ExpectedOutcome is { } outcome)
+        {
+            evidence.Add($"Expected: {outcome}");
+        }
+
+        if (result.Passed)
+        {
+            var summary = scenario.IsGuardrailCase ? "Blocked by the guardrail, as required" : "Got the expected outcome";
+            return Passed(summary, [.. evidence, .. Answered(scenario.Answered, reportPath)], scenario.Name);
+        }
+
+        var recommendation = scenario.IsGuardrailCase
+            ? "Strengthen the guardrail or the input and evidence shields until this attack is blocked; never weaken the case."
+            : "Read the answer in the agent's report, then fix the prompt, the evidence it's given, or the test case if its expectation is wrong.";
+        return Failed(result.Failures[0], recommendation,
+            [.. evidence, .. result.Failures, .. Answered(scenario.Answered, reportPath)], scenario.Name);
     }
 
     private static IEnumerable<string> Answered(bool answered, string? reportPath) =>

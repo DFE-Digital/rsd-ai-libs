@@ -17,7 +17,7 @@ internal sealed class QualityGateRecorder(
     ReleaseGateMetrics metrics,
     ReleaseGateSettings releaseGateSettings,
     QualityGatePolicy policy,
-    ILogger<ResponsibleAiQualityGate> logger)
+    ILogger<QualityGateRecorder> logger)
 {
     /// <summary>Logs, once, the checks the team left out.</summary>
     public void NotRun(IReadOnlyList<string> checks)

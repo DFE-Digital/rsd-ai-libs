@@ -25,7 +25,13 @@ public sealed record AgentTestResult(string CaseName, string? Output, IReadOnlyL
 
     /// <summary>Every answer the case gave: <see cref="Outputs"/>, or <see cref="Output"/> for a single run.</summary>
     [System.Text.Json.Serialization.JsonIgnore]
-    public IReadOnlyList<string> AllOutputs => Outputs.Count > 0 ? Outputs : Output is { } output ? [output] : [];
+    public IReadOnlyList<string> AllOutputs
+    {
+        get
+        {
+            return Outputs.Count > 0 ? Outputs : Output is { } output ? [output] : [];
+        }
+    }
 
     /// <summary>
     /// A Foundry guardrail blocked the run, as the case allowed or required (<see cref="AgentTestCase.GuardrailMayBlock"/>,

@@ -28,6 +28,13 @@ internal sealed class PromptShieldsClient : IDisposable
     internal const int MaxPromptLength = 1_000;
 
     private const int MaxParallelCalls = 4;
+
+    /// <summary>
+    /// Most calls in flight at once across every scan in the app, as this client is shared: many agent runs at once (e.g. a
+    /// release gate running several test cases in parallel) wait for a turn instead of overloading Prompt Shields, which
+    /// then answers slowly or not at all.
+    /// </summary>
+    internal const int MaxConcurrentCalls = 8;
     private const int MaxAttempts = 3;
     private static readonly TimeSpan MaxRetryDelay = TimeSpan.FromSeconds(10);
     private static readonly string[] Scopes = ["https://cognitiveservices.azure.com/.default"];
@@ -35,6 +42,7 @@ internal sealed class PromptShieldsClient : IDisposable
     private readonly Uri _shieldPrompt;
     private readonly TokenCredential _credential;
     private readonly HttpClient _http;
+    private readonly SemaphoreSlim _calls = new(MaxConcurrentCalls, MaxConcurrentCalls);
 
     public PromptShieldsClient(Uri endpoint, TokenCredential credential, HttpMessageHandler? handler = null)
     {
@@ -125,7 +133,26 @@ internal sealed class PromptShieldsClient : IDisposable
         while (true)
         {
             attempt++;
-            using var response = await SendAsync(userPrompt, documents, cancellationToken).ConfigureAwait(false);
+            HttpResponseMessage sent;
+            try
+            {
+                sent = await SendAsync(userPrompt, documents, cancellationToken).ConfigureAwait(false);
+            }
+            catch (TaskCanceledException ex) when (!cancellationToken.IsCancellationRequested)
+            {
+                // The client's own timeout, not the caller cancelling: retried like a busy service. When every attempt times
+                // out it's a TimeoutException, so callers report it as a failure, never mistake it for cancellation.
+                if (attempt >= MaxAttempts)
+                {
+                    throw new TimeoutException(string.Format(System.Globalization.CultureInfo.InvariantCulture,
+                        Constants.ErrorMessages.PromptShieldsTimedOut, (int)_http.Timeout.TotalSeconds, MaxAttempts), ex);
+                }
+
+                await Task.Delay(TimeSpan.FromSeconds(attempt), cancellationToken).ConfigureAwait(false);
+                continue;
+            }
+
+            using var response = sent;
             if (response.IsSuccessStatusCode)
             {
                 return await response.Content.ReadFromJsonAsync<ShieldResult>(cancellationToken).ConfigureAwait(false)
@@ -149,7 +176,17 @@ internal sealed class PromptShieldsClient : IDisposable
             Content = JsonContent.Create(new ShieldRequest(userPrompt, documents)),
         };
         request.Headers.Authorization = new("Bearer", token.Token);
-        return await _http.SendAsync(request, cancellationToken).ConfigureAwait(false);
+
+        // Waiting for a turn isn't timed: the client's timeout covers only the call itself.
+        await _calls.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            return await _http.SendAsync(request, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            _calls.Release();
+        }
     }
 
     private static bool IsTransient(HttpStatusCode status) => status is HttpStatusCode.TooManyRequests or >= HttpStatusCode.InternalServerError;
@@ -168,7 +205,11 @@ internal sealed class PromptShieldsClient : IDisposable
             string.Format(Constants.ErrorMessages.PromptShieldsFailed, (int)response.StatusCode, detail), null, response.StatusCode);
     }
 
-    public void Dispose() => _http.Dispose();
+    public void Dispose()
+    {
+        _http.Dispose();
+        _calls.Dispose();
+    }
 
     private sealed record ShieldRequest(
         [property: JsonPropertyName("userPrompt")] string UserPrompt,

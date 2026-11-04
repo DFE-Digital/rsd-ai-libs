@@ -92,7 +92,7 @@ internal sealed class ResponsibleAiQualityGate(
         {
             return (await specs.GetSpecAsync(definition, cancellationToken), null);
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
         {
             return (null, ex.GetBaseException().Message);
         }

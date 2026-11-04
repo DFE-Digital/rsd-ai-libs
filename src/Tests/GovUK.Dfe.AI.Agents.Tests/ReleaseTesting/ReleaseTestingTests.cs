@@ -104,6 +104,37 @@ public sealed class ReleaseTestingTests
     }
 
     [Fact]
+    public async Task TestRunner_FailsOnlyTheCase_WhenItsRunTimesOut_AndRunsTheRest()
+    {
+        // An HttpClient timeout is a TaskCanceledException, though nobody cancelled: it must not stop the whole run.
+        var agents = Substitute.For<IAgentService>();
+        agents.RunAsync(Arg.Any<AgentDefinition>(), "Times out.", Arg.Any<AgentEvidence?>(), Arg.Any<CancellationToken>())
+            .ThrowsAsync(new TaskCanceledException("The request was canceled due to the configured HttpClient.Timeout of 30 seconds elapsing."));
+        agents.RunAsync(Arg.Any<AgentDefinition>(), GoodSchool.Prompt, Arg.Any<AgentEvidence?>(), Arg.Any<CancellationToken>())
+            .Returns(new AgentResult { AgentName = "ofsted-agent", Output = "Rated good in 2024." });
+
+        var report = await new AgentTestRunner(agents).RunAsync(Ofsted, [new AgentTestCase("slow", "Times out."), GoodSchool],
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Equal([false, true], report.Results.Select(r => r.Failures.Count == 0));
+        Assert.Contains("HttpClient.Timeout", Assert.Single(report.Results[0].Failures), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task TestRunner_StopsWhenTheCallerCancels()
+    {
+        using var cancel = new CancellationTokenSource();
+        var agents = Substitute.For<IAgentService>();
+        agents.RunAsync(default!, default!, default, default).ReturnsForAnyArgs<Task<AgentResult>>(_ =>
+        {
+            cancel.Cancel();
+            throw new OperationCanceledException(cancel.Token);
+        });
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => new AgentTestRunner(agents).RunAsync(Ofsted, [GoodSchool], cancellationToken: cancel.Token));
+    }
+
+    [Fact]
     public async Task TestRunner_CanTestTheDeployedVersion()
     {
         var agents = Answers("Rated Good in 2024.");

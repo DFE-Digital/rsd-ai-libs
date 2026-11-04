@@ -76,7 +76,7 @@ internal sealed class AgentTestRunner(IAgentService agents, IAgentRunEvaluator? 
         {
             result = await agents.RunAsync(definition, testCase.Prompt, testCase.Evidence, cancellationToken).ConfigureAwait(false);
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
         {
             // A guardrail block the case allows or requires is the right outcome: it passes, with nothing to score. A
             // block on any other case is a false positive, reported as the guardrail's.
@@ -99,7 +99,7 @@ internal sealed class AgentTestRunner(IAgentService agents, IAgentRunEvaluator? 
         {
             output = definition.Presented(result.Output ?? string.Empty);
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
         {
             return new AgentTestResult(testCase.Name, result.Output,
                 [string.Format(CultureInfo.InvariantCulture, Constants.ErrorMessages.PresentOutputFailed, ex.GetBaseException().Message)], NoScores)

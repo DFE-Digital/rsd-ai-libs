@@ -118,7 +118,7 @@ internal sealed class QualityCheckRunner(
             var results = await check.EvaluateAsync(context, cancellationToken);
             return results.Count > 0 ? results : [Inconclusive(check, "The check gave no result")];
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
         {
             logger.CheckFailedToRun(ex, context.Agent.Name, check.Id);
             return [Inconclusive(check, $"The check couldn't run: {ex.GetBaseException().Message}")];

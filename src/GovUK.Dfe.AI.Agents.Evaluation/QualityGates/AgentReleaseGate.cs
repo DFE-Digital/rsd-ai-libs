@@ -83,7 +83,7 @@ internal sealed class AgentReleaseGate(
             {
                 await specs.GetSpecAsync(definition, cancellationToken);
             }
-            catch (Exception ex) when (ex is not OperationCanceledException)
+            catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
             {
                 logger.SpecNotTaken(ex, definition.Name);
             }
@@ -108,7 +108,7 @@ internal sealed class AgentReleaseGate(
             {
                 found = await check.CheckAsync(cancellationToken);
             }
-            catch (Exception ex) when (ex is not OperationCanceledException)
+            catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
             {
                 logger.GuardrailNotChecked(ex, check.Name);
                 found = [ReleaseGateMessages.GuardrailNotChecked(check.Name, ex.GetBaseException().Message)];

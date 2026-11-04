@@ -125,7 +125,7 @@ public sealed class ReleaseTestingTests
     {
         using var cancel = new CancellationTokenSource();
         var agents = Substitute.For<IAgentService>();
-        agents.RunAsync(default!, default!, default, default).ReturnsForAnyArgs<Task<AgentResult>>(_ =>
+        agents.RunAsync(Arg.Any<AgentDefinition>(), Arg.Any<string>(), Arg.Any<AgentEvidence?>(), Arg.Any<CancellationToken>()).Returns<Task<AgentResult>>(_ =>
         {
             cancel.Cancel();
             throw new OperationCanceledException(cancel.Token);

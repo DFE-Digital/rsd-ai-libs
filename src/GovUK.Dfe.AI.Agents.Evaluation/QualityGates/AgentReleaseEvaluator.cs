@@ -29,9 +29,10 @@ internal sealed class AgentReleaseEvaluator(
     ReleaseGateJudge judge,
     ReleaseGateMetrics metrics,
     ILogger<AgentReleaseEvaluator> logger,
-    IFoundryEvaluationPublisher? foundryEvaluations = null)
+    ReleaseReportWriter reports)
 {
-    private static readonly JsonSerializerOptions ReportJson = new(JsonSerializerDefaults.Web) { WriteIndented = true };
+    /// <summary>Reads a baseline, as <see cref="ReleaseReportWriter"/> writes reports.</summary>
+    private static readonly JsonSerializerOptions ReportJson = new(JsonSerializerDefaults.Web);
 
     private static readonly TimeSpan CleanupTimeout = TimeSpan.FromMinutes(1);
 
@@ -105,11 +106,13 @@ internal sealed class AgentReleaseEvaluator(
         // Repeats average out the judge's run-to-run noise; the case's facts must be right in every repeat.
         var report = await agentTestRunner.RunAsync(definition, [testCase], AgentTestTarget.Candidate,
             settings.Repeats, cancellationToken);
-        var result = report.Results[0];
+        // Failed if an answer repeats planted data, and masked, before anything logs or reports it.
+        var result = await reports.SecureAsync(testCase, report.Results[0], cancellationToken);
 
         // A case with "guardrailMayBlock": true passes when the Foundry guardrail blocks it, e.g. a planted instruction.
-        // A block on any other case fails it: that's a false positive worth knowing about.
-        if (result.BlockedByGuardrail)
+        // A block on any other case fails it: that's a false positive worth knowing about. Any repeat that answered
+        // instead is kept, so its answer is still checked.
+        if (result.BlockedByGuardrail && result.Passed)
         {
             logger.TestCaseBlockedByGuardrail(definition.Name, result.CaseName);
             metrics.TestCase(definition.Name, result, AgentOutcomes.BlockedByGuardrail);
@@ -139,13 +142,12 @@ internal sealed class AgentReleaseEvaluator(
         }
 
         var report = new AgentEvaluationReport(agentName, suite.Results);
-        var reportPath = await WriteReportAsync(report, cancellationToken);
-        if (foundryEvaluations is not null)
-        {
-            await foundryEvaluations.PublishAsync(agentName, [.. suite.Cases.Zip(suite.Results)], cancellationToken);
-        }
+        var reportPath = await reports.WriteAsync(agentName, suite.Cases, suite.Results, cancellationToken);
 
-        var (gated, baseline) = judge.HasJudge ? await ScoredAsync(suite, report, cancellationToken) : (report, null);
+        // Without a judge there are no scores to compare, but the baseline still shows which cases used to pass.
+        var (gated, baseline) = judge.HasJudge
+            ? await ScoredAsync(suite, report, cancellationToken)
+            : (report, await LoadBaselineAsync(agentName, cancellationToken));
 
         // Failed test cases by section, and with a judge: each metric averaging below the minimum, not scored, more than
         // the tolerance below the baseline, or scoring one group of cases much worse than another.
@@ -155,7 +157,13 @@ internal sealed class AgentReleaseEvaluator(
         var result = new AgentGateResult(agentName,
             [.. broken.Where(static b => b.Guardrail).Select(static b => b.Problem), .. gated.CaseFailures(ReleaseSections.Guardrail)],
             [.. broken.Where(static b => !b.Guardrail).Select(static b => b.Problem), .. gated.CaseFailures(ReleaseSections.Evaluation),
-                .. gated.ScoreFailuresAgainst(Gate(), baseline)]);
+                .. gated.ScoreFailuresAgainst(Gate(), baseline)])
+        {
+            TestCases = suite.Cases,
+            Report = gated,
+            Baseline = baseline,
+            ReportPath = reportPath,
+        };
         metrics.Agent(agentName, result.Passed);
         if (result.Passed)
         {
@@ -262,17 +270,6 @@ internal sealed class AgentReleaseEvaluator(
     }
 
     /// <returns>Where the report was written.</returns>
-    private async Task<string> WriteReportAsync(AgentEvaluationReport report, CancellationToken cancellationToken)
-    {
-        var directory = Path.GetFullPath(settings.ReportsDirectory);
-        Directory.CreateDirectory(directory);
-
-        var path = Path.Combine(directory, $"{report.AgentName}.json");
-        await using var stream = File.Create(path);
-        await JsonSerializer.SerializeAsync(stream, report, ReportJson, cancellationToken);
-        return path;
-    }
-
     /// <summary>One agent's test cases, and their results in the same order once they have run.</summary>
     private sealed class TestSuite(AgentDefinition definition, string directory, IReadOnlyList<AgentTestCase> cases)
     {

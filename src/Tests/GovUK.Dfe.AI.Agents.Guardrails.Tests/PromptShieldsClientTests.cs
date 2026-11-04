@@ -146,7 +146,87 @@ public sealed class PromptShieldsClientTests
         Assert.Equal(2, contentSafety.Requests.Count);
     }
 
-    private static PromptShieldsClient Shield(FakeContentSafety contentSafety)
+    [Fact]
+    public async Task RetriesACallThatTimesOut()
+    {
+        var contentSafety = new TimingOutContentSafety(timeouts: 1);
+        using var shield = Shield(contentSafety);
+
+        Assert.False(await shield.EvidenceHasAttackAsync("How many pupils?", "Pupils on roll: 420.", _cancellationToken));
+        Assert.Equal(2, contentSafety.Calls);
+    }
+
+    [Fact]
+    public async Task ACallThatKeepsTimingOut_IsATimeout_NotACancellation()
+    {
+        var contentSafety = new TimingOutContentSafety(timeouts: int.MaxValue);
+        using var shield = Shield(contentSafety);
+
+        // A cancellation would read as the caller stopping, e.g. ending a whole release gate run, not one failed scan.
+        var error = await Assert.ThrowsAsync<TimeoutException>(() => shield.EvidenceHasAttackAsync("How many pupils?", "Pupils on roll: 420.", _cancellationToken));
+        Assert.Contains("didn't answer", error.Message, StringComparison.Ordinal);
+        Assert.Equal(3, contentSafety.Calls);
+    }
+
+    [Fact]
+    public async Task ManyScansAtOnce_ShareALimitOnCallsInFlight()
+    {
+        var contentSafety = new TimingOutContentSafety(timeouts: 0, delay: TimeSpan.FromMilliseconds(50));
+        using var shield = Shield(contentSafety);
+        var evidence = new string('x', PromptShieldsClient.PartLength * 4);   // 4+ parts each, scanned 4 at a time
+
+        await Task.WhenAll(Enumerable.Range(0, 8).Select(_ => shield.EvidenceHasAttackAsync("How many pupils?", evidence, _cancellationToken)));
+
+        Assert.InRange(contentSafety.MostInFlight, 1, PromptShieldsClient.MaxConcurrentCalls);
+    }
+
+    /// <summary>Times out the first calls, as HttpClient does when its timeout passes; then answers "no attack".</summary>
+    private sealed class TimingOutContentSafety(int timeouts, TimeSpan delay = default) : HttpMessageHandler
+    {
+        private int _calls;
+        private int _inFlight;
+        private int _mostInFlight;
+
+        public int Calls => _calls;
+
+        public int MostInFlight => _mostInFlight;
+
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            var call = Interlocked.Increment(ref _calls);
+            var inFlight = Interlocked.Increment(ref _inFlight);
+            InterlockedMax(ref _mostInFlight, inFlight);
+            try
+            {
+                if (call <= timeouts)
+                {
+                    throw new TaskCanceledException("The request was canceled due to the configured HttpClient.Timeout of 30 seconds elapsing.",
+                        new TimeoutException());
+                }
+
+                await Task.Delay(delay, cancellationToken);
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent("""{ "userPromptAnalysis": { "attackDetected": false }, "documentsAnalysis": [ { "attackDetected": false } ] }""",
+                        System.Text.Encoding.UTF8, "application/json"),
+                };
+            }
+            finally
+            {
+                Interlocked.Decrement(ref _inFlight);
+            }
+        }
+
+        private static void InterlockedMax(ref int target, int value)
+        {
+            int current;
+            while ((current = Volatile.Read(ref target)) < value && Interlocked.CompareExchange(ref target, value, current) != current)
+            {
+            }
+        }
+    }
+
+    private static PromptShieldsClient Shield(HttpMessageHandler contentSafety)
     {
         var credential = Substitute.For<TokenCredential>();
         credential.GetTokenAsync(default, default).ReturnsForAnyArgs(new AccessToken("token-1", DateTimeOffset.UtcNow.AddHours(1)));

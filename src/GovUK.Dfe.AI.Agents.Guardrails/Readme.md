@@ -147,7 +147,7 @@ block, with the reason in `AgentGuardrailException.Reason`:
 | ----------------- | -------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- | ---------------------- |
 | `CheckBlocklists` | The question and the evidence against `Blocklists` | In the app, no call to Azure; first                                                                                   | `prompt` or `evidence` |
 | `ScanPrompts`     | The question, for jailbreak attempts               | [Prompt Shields](https://learn.microsoft.com/azure/ai-services/content-safety/concepts/jailbreak-detection), one call | `prompt`               |
-| `ScanEvidence`    | The evidence, for planted instructions             | Prompt Shields, one call per 9,000 characters, up to 4 at a time                                                      | `evidence`             |
+| `ScanEvidence`    | The evidence, for planted instructions             | Prompt Shields, one call per 9,000 characters, up to 4 at a time (8 across the app)                                   | `evidence`             |
 | `ScanToolOutput`  | Each tool's output, for planted instructions       | Prompt Shields, as evidence; a round's outputs side by side, after capping and redaction, before the model reads them | `tool_output`          |
 
 - **Endpoint:** `https://<resource>.cognitiveservices.azure.com/`, unless `ContentSafetyEndpoint` is set.
@@ -155,6 +155,10 @@ block, with the reason in `AgentGuardrailException.Reason`:
   about as much to each round of tool calls. Blocklists cost nothing.
 - **Fails closed:** if input or tool output can't be scanned, e.g. because the role is missing, the run fails rather than
   sending it.
+- **Busy service:** at most 8 Prompt Shields calls are in flight at once across the app, however many agents run in
+  parallel (e.g. a release gate's `MaxParallelTestRuns`); the rest wait their turn. A call that's throttled, fails
+  with a server error or takes over 30 seconds is retried up to 3 times. One that still times out fails its run with a
+  `TimeoutException`: in the release gate, that case fails and the others still run.
 - **Release gate:** test cases with `"guardrailMustBlock": true` prove each check works.
 - **Your own:** register an `IInputShield` for other checks of the question and evidence, or an `IToolOutputShield` for
   tool output.

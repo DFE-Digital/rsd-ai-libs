@@ -34,7 +34,7 @@ public sealed class ReleaseCheckTests : IDisposable
     [Fact]
     public async Task Releases_every_agent_when_the_guardrail_is_in_place_and_every_case_passes()
     {
-        _host.AddCaseForEveryAgent(caseName: "evaluation/outcome", mustMention: ["Good"]);
+        _host.AddCaseForEveryAgent(id: "outcome", mustMention: ["Good"]);
 
         var results = await _host.Build().CheckReleaseAsync(ReleaseGateTestHost.Agents, Token);
 
@@ -45,28 +45,28 @@ public sealed class ReleaseCheckTests : IDisposable
     }
 
     [Fact]
-    public async Task Reports_each_failure_in_its_section_by_the_cases_folder()
+    public async Task Reports_each_failure_in_its_section()
     {
-        _host.AddCase("ofsted-agent", caseName: "guardrail/jailbreak", blocking: GuardrailBlocking.Must);
-        _host.AddCase("ofsted-agent", caseName: "evaluation/outcome", mustMention: ["Outstanding"]);
+        _host.AddCase("ofsted-agent", id: "jailbreak", blocking: GuardrailBlocking.Must);
+        _host.AddCase("ofsted-agent", id: "outcome", mustMention: ["Outstanding"]);
 
         var result = (await _host.Build().CheckReleaseAsync([ReleaseGateTestHost.Agents[0]], Token))[0];
 
-        Assert.StartsWith("Case guardrail/jailbreak: Not blocked by the guardrail", Assert.Single(result.GuardrailProblems), StringComparison.Ordinal);
-        Assert.Equal(["Case evaluation/outcome: Doesn't mention \"Outstanding\""], result.EvaluationProblems);
+        Assert.StartsWith("Case guardrail/reliability-and-safety/jailbreak: Not blocked by the guardrail", Assert.Single(result.GuardrailProblems), StringComparison.Ordinal);
+        Assert.Equal(["Case evaluation/reliability-and-safety/outcome: Doesn't mention \"Outstanding\""], result.EvaluationProblems);
         Assert.Contains((LogLevel.Warning, "ofsted-agent: guardrail failed (1 problems), evaluation failed (1 problems)"), _host.Logs);
     }
 
     [Fact]
     public async Task Reports_an_evaluation_case_the_guardrail_blocked_by_mistake_as_the_guardrails()
     {
-        _host.AddCase("ofsted-agent", caseName: "evaluation/outcome", mustMention: ["Good"]);
+        _host.AddCase("ofsted-agent", id: "outcome", mustMention: ["Good"]);
         _host.AgentService.Configure().RunAsync(default!, default!, default, Token)
             .ThrowsAsyncForAnyArgs(new AgentGuardrailException("ofsted-agent", "prompt"));
 
         var result = (await _host.Build().CheckReleaseAsync([ReleaseGateTestHost.Agents[0]], Token))[0];
 
-        Assert.StartsWith("Case evaluation/outcome: Blocked by the guardrail, which this case doesn't allow",
+        Assert.StartsWith("Case evaluation/reliability-and-safety/outcome: Blocked by the guardrail, which this case doesn't allow",
             Assert.Single(result.GuardrailProblems), StringComparison.Ordinal);
         Assert.Empty(result.EvaluationProblems);
     }
@@ -77,7 +77,7 @@ public sealed class ReleaseCheckTests : IDisposable
     public async Task Tests_nothing_and_fails_every_agent_when_the_guardrail_is_not_in_place_or_cannot_be_checked(
         bool unreadable, string problem)
     {
-        _host.AddCaseForEveryAgent(caseName: "evaluation/outcome", mustMention: ["Good"]);
+        _host.AddCaseForEveryAgent(id: "outcome", mustMention: ["Good"]);
         if (unreadable)
         {
             _guardrail.CheckAsync(Token).ThrowsAsyncForAnyArgs(new InvalidOperationException("Reader role missing"));
@@ -128,7 +128,7 @@ public sealed class ReleaseCheckTests : IDisposable
     public async Task Without_a_guardrail_check_fails_every_agent_unless_none_is_required(bool required)
     {
         _host.GuardrailChecks.Clear();
-        _host.AddCaseForEveryAgent(caseName: "evaluation/outcome", mustMention: ["Good"]);
+        _host.AddCaseForEveryAgent(id: "outcome", mustMention: ["Good"]);
 
         var results = await _host.Build(settings: new() { ["RequireGuardrail"] = required.ToString() })
             .CheckReleaseAsync(ReleaseGateTestHost.Agents, Token);
@@ -144,19 +144,16 @@ public sealed class ReleaseCheckTests : IDisposable
     [Fact]
     public async Task Fails_cases_that_break_the_conventions_each_in_its_section()
     {
-        _host.AddCase("ofsted-agent", caseName: "guardrail/planted-instruction", blocking: GuardrailBlocking.May);
-        _host.AddCase("ofsted-agent", caseName: "evaluation/outcome", blocking: GuardrailBlocking.May);
-        _host.AddCase("ofsted-agent", caseName: "outcome");
+        _host.AddCase("ofsted-agent", id: "jailbreak", group: "academy", blocking: GuardrailBlocking.Must);
+        _host.AddCase("ofsted-agent", id: "outcome", blocking: GuardrailBlocking.May);
 
         var result = (await _host.Build().CheckReleaseAsync([ReleaseGateTestHost.Agents[0]], Token))[0];
 
-        Assert.Equal(["Test case guardrail/planted-instruction must set \"guardrailMustBlock\": true, so it proves the guardrail blocks it."],
+        Assert.Contains("Test case guardrail/reliability-and-safety/jailbreak has a \"group\", but guardrail cases aren't scored.",
             result.GuardrailProblems);
         Assert.Equal(
-        [
-            "Test case evaluation/outcome is an evaluation case, so it can't allow a guardrail block: move it to guardrail/.",
-            "Test case outcome must be in its agent's guardrail/ or evaluation/ folder.",
-        ], result.EvaluationProblems);
+            ["Test case evaluation/reliability-and-safety/outcome allows a guardrail block but isn't an attack: move it to the file's \"guardrail\" list if it is one, or remove \"guardrailMayBlock\"."],
+            result.EvaluationProblems);
     }
 
     private void GuardrailHas(params string[] problems) =>

@@ -18,6 +18,27 @@ public sealed record AgentTestResult(string CaseName, string? Output, IReadOnlyL
     public string? Group { get; init; }
 
     /// <summary>
+    /// The answer of every run that answered when the case ran more than once (<c>Repeats</c>), so each can be checked,
+    /// e.g. for leaked data, even when another run was blocked; empty for a single run, whose answer is <see cref="Output"/>.
+    /// </summary>
+    public IReadOnlyList<string> Outputs { get; init; } = [];
+
+    /// <summary>Every answer the agent gave: <see cref="Outputs"/>, or for a single run that wasn't blocked, <see cref="Output"/>.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public IReadOnlyList<string> Answers
+    {
+        get
+        {
+            if (Outputs.Count > 0)
+            {
+                return Outputs;
+            }
+
+            return !BlockedByGuardrail && Output is { } output ? [output] : [];
+        }
+    }
+
+    /// <summary>
     /// A Foundry guardrail blocked the run, as the case allowed or required (<see cref="AgentTestCase.GuardrailMayBlock"/>,
     /// <see cref="AgentTestCase.GuardrailMustBlock"/>).
     /// </summary>

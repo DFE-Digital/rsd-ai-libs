@@ -4,9 +4,9 @@ using GovUK.Dfe.AI.Agents.Quality;
 namespace GovUK.Dfe.AI.Agents.Options;
 
 /// <summary>
-/// The two sections a release is judged in, so every app reports them alike. Test cases are sorted by folder: an agent's
-/// <c>guardrail/</c> cases prove the guardrail blocks attacks, and every other case, e.g. under <c>evaluation/</c>, tests
-/// its answers.
+/// The two sections a release is judged in, so every app reports them alike. A test case's section starts its name: a
+/// test that sets <c>"guardrailMustBlock": true</c> is a <c>guardrail/</c> case, proving the guardrail blocks an attack, and
+/// every other is an <c>evaluation/</c> case, testing the agent's answers.
 /// </summary>
 public static class ReleaseSections
 {
@@ -22,7 +22,7 @@ public static class ReleaseSections
     /// <summary>The start of an evaluation test case's name, e.g. <c>evaluation/ks2-trend</c>.</summary>
     public const string EvaluationFolder = Evaluation + "/";
 
-    /// <summary>Whether a test case is in the guardrail section, by its folder.</summary>
+    /// <summary>Whether a test case is in the guardrail section, by its name.</summary>
     public static bool IsGuardrailCase(string caseName)
     {
         ArgumentNullException.ThrowIfNull(caseName);
@@ -30,8 +30,8 @@ public static class ReleaseSections
     }
 
     /// <summary>
-    /// How a test case breaks the conventions every app's cases follow, so each section means the same everywhere: it's
-    /// in a <c>guardrail/</c> or <c>evaluation/</c> folder; a guardrail case requires the block
+    /// How a test case breaks the conventions every app's cases follow, so each section means the same everywhere: its name
+    /// starts with <c>guardrail/</c> or <c>evaluation/</c>; a guardrail case requires the block
     /// (<c>"guardrailMustBlock": true</c>), as one that merely allows it passes unprotected, and isn't in a scored group;
     /// an evaluation case allows no block, so a block is reported as the guardrail's mistake. Empty: it follows them.
     /// </summary>
@@ -52,11 +52,11 @@ public static class ReleaseSections
 
         if (!name.StartsWith(EvaluationFolder, StringComparison.Ordinal))
         {
-            return [$"Test case {name} must be in its agent's {GuardrailFolder} or {EvaluationFolder} folder."];
+            return [$"Test case {name} must be named {GuardrailFolder}... or {EvaluationFolder}..., as its agent's test files name it."];
         }
 
         return testCase.GuardrailMayBlock || testCase.GuardrailMustBlock
-            ? [$"Test case {name} is an evaluation case, so it can't allow a guardrail block: move it to {GuardrailFolder}."]
+            ? [$"Test case {name} allows a guardrail block but isn't an attack: move it to the file's \"guardrail\" list if it is one, or remove \"guardrailMayBlock\"."]
             : [];
     }
 

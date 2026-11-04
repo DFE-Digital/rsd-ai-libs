@@ -16,14 +16,18 @@ public sealed record AgentEvaluationReport(string AgentName, IReadOnlyList<Agent
         .GroupBy(static score => score.Key)
         .ToDictionary(static group => group.Key, static group => group.Average(static score => score.Value));
 
-    /// <summary>Each group's average score per metric, from the cases that name a <see cref="AgentTestCase.Group"/>.</summary>
+    /// <summary>
+    /// Each group's average score per metric, from the cases that name a <see cref="AgentTestCase.Group"/>. Groups are
+    /// matched ignoring case, so "Special" and "special" are one group.
+    /// </summary>
     public IReadOnlyDictionary<string, IReadOnlyDictionary<string, double>> AverageScoresByGroup => Results
         .Where(static result => result.Group is not null)
-        .GroupBy(static result => result.Group!)
+        .GroupBy(static result => result.Group!, StringComparer.OrdinalIgnoreCase)
         .ToDictionary(static group => group.Key, static group => (IReadOnlyDictionary<string, double>)group
             .SelectMany(static result => result.Scores)
             .GroupBy(static score => score.Key)
-            .ToDictionary(static metric => metric.Key, static metric => metric.Average(static score => score.Value)));
+            .ToDictionary(static metric => metric.Key, static metric => metric.Average(static score => score.Value)),
+            StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// Metrics whose best and worst group averages differ by more than <paramref name="maxGap"/>, e.g.
@@ -32,6 +36,7 @@ public sealed record AgentEvaluationReport(string AgentName, IReadOnlyList<Agent
     /// <param name="metrics">The metrics to compare; none means every metric.</param>
     public IReadOnlyList<string> GroupGaps(double maxGap, params string[] metrics)
     {
+        ArgumentNullException.ThrowIfNull(metrics);
         var byGroup = AverageScoresByGroup;
         var names = metrics.Length > 0 ? metrics : [.. byGroup.Values.SelectMany(static scores => scores.Keys).Distinct().Order()];
         var gaps = new List<string>();

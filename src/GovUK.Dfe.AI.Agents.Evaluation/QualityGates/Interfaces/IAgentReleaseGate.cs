@@ -28,7 +28,8 @@ public interface IAgentReleaseGate
 
     /// <summary>
     /// Starts a release: until it's disposed, every metric recorded with <c>IAgentMetrics</c> carries its id, so open it
-    /// before the guardrail check and dispose it after provisioning, and one query finds the whole release.
+    /// before the guardrail check and dispose it after provisioning, and one query finds the whole release. Each agent's
+    /// spec is built once in it, so what's provisioned inside the run is exactly what was tested.
     /// </summary>
     IReleaseRun BeginRun();
 }

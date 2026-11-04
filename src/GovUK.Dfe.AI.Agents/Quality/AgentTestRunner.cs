@@ -39,7 +39,11 @@ internal sealed class AgentTestRunner(IAgentService agents, IAgentRunEvaluator? 
         return new AgentEvaluationReport(definition.Name, results);
     }
 
-    /// <summary>One result per case: each metric's average across the runs, and every distinct failure from any of them.</summary>
+    /// <summary>
+    /// One result per case: each metric's average across the runs, every distinct failure from any of them, and every
+    /// answer, so none goes unchecked. A metric some answered run wasn't scored on is left out, so it shows as unscored
+    /// rather than as the average of the runs that were.
+    /// </summary>
     private static AgentTestResult Combine(List<AgentTestResult> runs)
     {
         if (runs.Count == 1)
@@ -51,12 +55,15 @@ internal sealed class AgentTestRunner(IAgentService agents, IAgentRunEvaluator? 
         var failures = runs.SelectMany(static run => run.Failures).GroupBy(static failure => failure)
             .Select(group => group.Count() == runs.Count ? group.Key : $"{group.Key} (in {group.Count()} of {runs.Count} runs)")
             .ToList();
-        var scores = runs.SelectMany(static run => run.Scores).GroupBy(static score => score.Key)
+        var answered = runs.Where(static run => run.Output is not null).ToList();
+        var scores = answered.SelectMany(static run => run.Scores).GroupBy(static score => score.Key)
+            .Where(metric => metric.Count() == answered.Count)
             .ToDictionary(static metric => metric.Key, static metric => metric.Average(static score => score.Value));
 
         return new AgentTestResult(first.CaseName, runs[^1].Output, failures, scores)
         {
             Group = first.Group,
+            Outputs = [.. answered.Select(static run => run.Output!)],
             BlockedByGuardrail = runs.Exists(static run => run.BlockedByGuardrail),
             BlockedByGuardrailInError = runs.Exists(static run => run.BlockedByGuardrailInError),
         };
@@ -69,7 +76,7 @@ internal sealed class AgentTestRunner(IAgentService agents, IAgentRunEvaluator? 
         {
             result = await agents.RunAsync(definition, testCase.Prompt, testCase.Evidence, cancellationToken).ConfigureAwait(false);
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
         {
             // A guardrail block the case allows or requires is the right outcome: it passes, with nothing to score. A
             // block on any other case is a false positive, reported as the guardrail's.
@@ -86,7 +93,21 @@ internal sealed class AgentTestRunner(IAgentService agents, IAgentRunEvaluator? 
             };
         }
 
-        var output = result.Output ?? string.Empty;
+        // The answer as the app's users see it, so the case's facts and the judge's scores are about what they read.
+        string output;
+        try
+        {
+            output = definition.Presented(result.Output ?? string.Empty);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
+        {
+            return new AgentTestResult(testCase.Name, result.Output,
+                [string.Format(CultureInfo.InvariantCulture, Constants.ErrorMessages.PresentOutputFailed, ex.GetBaseException().Message)], NoScores)
+            {
+                Group = testCase.Group,
+            };
+        }
+
         List<string> failures =
         [
             .. testCase.GuardrailMustBlock ? [Constants.ErrorMessages.GuardrailDidNotBlock] : Array.Empty<string>(),
@@ -94,9 +115,14 @@ internal sealed class AgentTestRunner(IAgentService agents, IAgentRunEvaluator? 
             .. testCase.MustNotMention.Where(fact => output.Contains(fact, StringComparison.OrdinalIgnoreCase)).Select(fact => $"Mentions \"{fact}\""),
         ];
 
-        var scores = evaluator is null
-            ? NoScores
-            : await evaluator.EvaluateAsync(new CompletedAgentRun { AgentName = definition.Name, RunId = result.RunId, CompletedAt = result.CompletedAt, AgentVersion = result.AgentVersion, Model = result.Model, Instructions = specs?.InstructionsFor(definition), Prompt = testCase.Prompt, Evidence = testCase.Evidence, Output = output }, cancellationToken).ConfigureAwait(false);
+        if (evaluator is null)
+        {
+            return new AgentTestResult(testCase.Name, output, failures, NoScores) { Group = testCase.Group };
+        }
+
+        // The instructions the agent ran with, from the release's snapshot when one is open, so the judge scores against them.
+        var instructions = specs is null ? null : await specs.InstructionsForAsync(definition, cancellationToken).ConfigureAwait(false);
+        var scores = await evaluator.EvaluateAsync(new CompletedAgentRun { AgentName = definition.Name, RunId = result.RunId, CompletedAt = result.CompletedAt, AgentVersion = result.AgentVersion, Model = result.Model, Instructions = instructions, Prompt = testCase.Prompt, Evidence = testCase.Evidence, Output = output }, cancellationToken).ConfigureAwait(false);
 
         return new AgentTestResult(testCase.Name, output, failures, scores) { Group = testCase.Group };
     }

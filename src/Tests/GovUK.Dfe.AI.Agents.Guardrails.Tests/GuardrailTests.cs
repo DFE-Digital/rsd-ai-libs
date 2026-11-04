@@ -465,18 +465,6 @@ public sealed class GuardrailTests
     }
 
     [Fact]
-    public void ScanToolOutput_WithAnEndpointThatIsntHttps_FailsStartup()
-    {
-        var guardrail = ValidGuardrail();
-        guardrail["ScanToolOutput"] = "true";
-        guardrail["ContentSafetyEndpoint"] = "http://content-safety-1.cognitiveservices.azure.com/";
-
-        var ex = Assert.Throws<InvalidOperationException>(() => Build(guardrail));
-
-        Assert.Contains("ScanToolOutput", ex.Message, StringComparison.Ordinal);
-    }
-
-    [Fact]
     public void CheckBlocklists_WithoutABlocklist_FailsStartup()
     {
         var guardrail = ValidGuardrail();
@@ -497,16 +485,20 @@ public sealed class GuardrailTests
         Assert.Equal(new Uri(expected), settings.ContentSafetyEndpointFor("https://foundry-1.services.ai.azure.com/api/projects/test"));
     }
 
-    [Fact]
-    public void ScanEvidence_WithAnEndpointThatIsntHttps_FailsStartup()
+    [Theory]
+    [InlineData("ScanPrompts")]
+    [InlineData("ScanEvidence")]
+    [InlineData("ScanToolOutput")]
+    public void APromptShieldsScan_WithAnEndpointThatIsntHttps_FailsStartup(string scan)
     {
         var guardrail = ValidGuardrail();
-        guardrail["ScanEvidence"] = "true";
+        guardrail[scan] = "true";
         guardrail["ContentSafetyEndpoint"] = "http://content-safety-1.cognitiveservices.azure.com/";
 
         var ex = Assert.Throws<InvalidOperationException>(() => Build(guardrail));
 
-        Assert.Contains("AiAgents:Guardrails:ContentSafetyEndpoint", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("AiAgents:Guardrails:ContentSafetyEndpoint (an https URL, needed for ScanPrompts, ScanEvidence and ScanToolOutput)",
+            ex.Message, StringComparison.Ordinal);
     }
 
     [Fact]

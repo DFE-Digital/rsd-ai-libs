@@ -42,9 +42,10 @@ public sealed class ReleaseGateSettings
     public int MaxParallelTestRuns { get; set; } = 4;
 
     /// <summary>
-    /// Fixed refusal sentences from the agents' system prompts, e.g. "outside what I can answer". A case whose
-    /// <c>mustMention</c> includes one is checked by that sentence, and left out of the score averages, baselines and group
-    /// gaps: relevance marks any refusal as irrelevant, however correct.
+    /// Optional, kept for existing apps: prefer <c>"expectsUncertainty": true</c> on the test case. Fixed refusal sentences
+    /// from the agents' system prompts, e.g. "outside what I can answer". A case whose <c>mustMention</c> includes one is
+    /// checked by that sentence, and left out of the score averages, baselines and group gaps: relevance marks any refusal
+    /// as irrelevant, however correct.
     /// </summary>
     public List<string> RefusalPhrases { get; set; } = [];
 
@@ -95,7 +96,14 @@ public sealed class ReleaseGateSettings
     /// <summary>NaN fails too, as no comparison with it is true.</summary>
     private static bool IsZeroOrMore(double value) => value >= 0;
 
-    /// <summary>Whether a test case expects a fixed refusal, so its scores are left out.</summary>
+    /// <summary>
+    /// Whether a test case expects the agent to say it doesn't know, so its scores are left out: the case says so itself
+    /// with <c>"expectsUncertainty": true</c>, or, as before, mentions one of <see cref="RefusalPhrases"/>.
+    /// </summary>
     internal bool ExpectsRefusal(AgentTestCase testCase) =>
-        testCase.MustMention.Any(text => RefusalPhrases.Any(refusal => text.Contains(refusal, StringComparison.OrdinalIgnoreCase)));
+        (testCase.Extra.TryGetValue(ExpectsUncertaintyField, out var flag) && flag.ValueKind == System.Text.Json.JsonValueKind.True)
+        || testCase.MustMention.Any(text => RefusalPhrases.Any(refusal => text.Contains(refusal, StringComparison.OrdinalIgnoreCase)));
+
+    /// <summary>The test case field that marks a case expecting the agent to say it doesn't know.</summary>
+    internal const string ExpectsUncertaintyField = "expectsUncertainty";
 }

@@ -19,6 +19,12 @@ internal sealed class ReleaseGateMetrics(IAgentMetrics metrics)
     private static readonly AgentCounter Agents = new(ReleaseGateTelemetry.AgentsMetric,
         "Agents through the release gate, by outcome.");
 
+    private static readonly AgentCounter QualityGateDecisions = new(ReleaseGateTelemetry.QualityGateDecisionsMetric,
+        "Agents through the Responsible AI quality gate, by decision and whether release is permitted.");
+
+    private static readonly AgentCounter QualityGateFindings = new(ReleaseGateTelemetry.QualityGateFindingsMetric,
+        "Quality gate check results, by principle, check, severity and disposition.", "{finding}");
+
     public void TestCase(string agentName, AgentTestResult result, string outcome) =>
         metrics.Count(TestCases, agentName,
             Tag(ReleaseGateTelemetry.TestCaseTag, result.CaseName),
@@ -35,6 +41,18 @@ internal sealed class ReleaseGateMetrics(IAgentMetrics metrics)
 
     public void Agent(string agentName, bool passed) =>
         metrics.Count(Agents, agentName, Tag(ReleaseGateTelemetry.OutcomeTag, AgentOutcomes.Of(passed)));
+
+    public void QualityGateDecision(string agentName, string decision, bool releasePermitted) =>
+        metrics.Count(QualityGateDecisions, agentName,
+            Tag(ReleaseGateTelemetry.DecisionTag, decision),
+            Tag(ReleaseGateTelemetry.ReleasePermittedTag, releasePermitted ? "true" : "false"));
+
+    public void QualityGateFinding(string agentName, string principle, string checkId, string severity, string disposition) =>
+        metrics.Count(QualityGateFindings, agentName,
+            Tag(ReleaseGateTelemetry.PrincipleTag, principle),
+            Tag(ReleaseGateTelemetry.CheckTag, checkId),
+            Tag(ReleaseGateTelemetry.SeverityTag, severity),
+            Tag(ReleaseGateTelemetry.DispositionTag, disposition));
 
     /// <summary>Opens a run: every metric recorded with <see cref="IAgentMetrics"/> until it's disposed carries its id.</summary>
     public IDisposable Run(string runId) => metrics.BeginScope(Tag(ReleaseGateTelemetry.RunIdTag, runId));

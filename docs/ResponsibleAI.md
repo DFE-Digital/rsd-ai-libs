@@ -70,3 +70,9 @@ Each `AgentResult` has a `RunId` and `CompletedAt` (on the trace as `dfe.ai_agen
 as AI-generated, save an audit record from an `IAgentRunObserver`, and store user feedback against the run.
 
 For fairness, give release-gate test cases a `group` (e.g. `"special-schools"`) and set `MaxGroupGap`.
+
+## Releases are decided against the principles
+
+`AddResponsibleAiQualityGate()` decides each release from evidence filed under the six Responsible AI principles, with
+a risk-based policy, risk acceptances and human attestations (e.g. the DPIA), and an auditable report. See the
+[quality gate guide](QualityGate.md).

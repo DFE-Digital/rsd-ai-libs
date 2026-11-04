@@ -6,7 +6,7 @@
     <Nullable>enable</Nullable>
     <PackageReadmeFile>Readme.md</PackageReadmeFile>
     <Title>GovUK.Dfe.AI.Agents.Evaluation</Title>
-    <Description>Answer scoring for GovUK.Dfe.AI.Agents: a Foundry judge model scores groundedness and relevance, live and in release gates.</Description>
+    <Description>Answer scoring and release gates for GovUK.Dfe.AI.Agents: a Foundry judge model scores groundedness and relevance, live and in release gates, and a Responsible AI quality gate decides each release by principle and policy.</Description>
     <Authors>DFE-Digital</Authors>
     <NoWarn>$(NoWarn);OPENAI001</NoWarn>
   </PropertyGroup>
@@ -19,7 +19,7 @@
   <PropertyGroup>
     <!-- The lowest core version this add-on needs: its package depends on core >= this. Set it after core's first
          release, and raise it only when the add-on starts using something newer from core. -->
-    <CoreMinimumVersion>0.0.1</CoreMinimumVersion>
+    <CoreMinimumVersion>0.0.2-prerelease.92</CoreMinimumVersion>
   </PropertyGroup>
 
   <ItemGroup>

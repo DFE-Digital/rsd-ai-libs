@@ -296,10 +296,10 @@ internal sealed class AgentService(IAgentRunnerService agentRunner, IAgentRuntim
             Notify(new CompletedAgentRun
             {
                 AgentName = definition.Name, RunId = result.RunId, CompletedAt = result.CompletedAt, AgentVersion = result.AgentVersion,
-                Model = result.Model, Instructions = _specs.InstructionsFor(definition),
+                Model = result.Model, Instructions = await _specs.InstructionsForAsync(definition, cancellationToken).ConfigureAwait(false),
                 Prompt = await _runOptions.RedactAsync(prompt, cancellationToken).ConfigureAwait(false),
                 Evidence = evidenceText is null ? null : await _runOptions.RedactAsync(evidenceText, cancellationToken).ConfigureAwait(false),
-                Output = result.Output ?? string.Empty,
+                Output = PresentedOrRaw(definition, result.Output ?? string.Empty),
             });
         }
 
@@ -363,6 +363,23 @@ internal sealed class AgentService(IAgentRunnerService agentRunner, IAgentRuntim
     {
         var summary = results.ToTokenUsageSummary();
         workflow.Completed(summary.Total, failedAgents, summary.Cost, _runOptions.Pricing.Currency);
+    }
+
+    /// <summary>
+    /// The answer as users see it (<see cref="AgentDefinition.PresentOutput"/>), for observers such as the judge. The
+    /// app's step failing never fails the user's run: the observer gets the raw answer instead.
+    /// </summary>
+    private string PresentedOrRaw(AgentDefinition definition, string output)
+    {
+        try
+        {
+            return definition.Presented(output);
+        }
+        catch (Exception ex)
+        {
+            _logger.PresentOutputFailed(ex, definition.Name);
+            return output;
+        }
     }
 
     /// <summary>Tells each observer about a finished run; an observer's failure is logged, never the run's.</summary>

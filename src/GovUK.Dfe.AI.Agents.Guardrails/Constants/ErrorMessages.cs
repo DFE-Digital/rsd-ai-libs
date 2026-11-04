@@ -6,6 +6,7 @@ internal static class ErrorMessages
     internal const string GuardrailAccessDenied = "This app's identity needs {0} on the Foundry resource {1} to use its guardrails.";
     internal const string GuardrailUncheckable = "Couldn't check the Foundry guardrail '{0}' at startup, and FailWhenUnreachable is on. See the inner exception.";
     internal const string PromptShieldsFailed = "Prompt Shields couldn't scan the input ({0}), so it wasn't sent: {1}. The app's identity needs Cognitive Services User on the Foundry resource.";
+    internal const string PromptShieldsTimedOut = "Prompt Shields didn't answer within {0} seconds, {1} times. It may be overloaded: run fewer agents at once, or check the Content Safety resource's quota.";
     internal const string PromptShieldsNoResult = "Prompt Shields returned no result for the input, so it wasn't sent.";
     internal const string GuardrailNotApplied = "The Foundry guardrail '{0}' isn't in place: {1}. Run IFoundryGuardrailsService.ApplyAsync from your provisioning job.";
 

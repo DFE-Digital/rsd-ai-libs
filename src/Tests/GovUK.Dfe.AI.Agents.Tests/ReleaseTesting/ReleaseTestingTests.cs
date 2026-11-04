@@ -70,6 +70,40 @@ public sealed class ReleaseTestingTests
     }
 
     [Fact]
+    public async Task TestRunner_ChecksAndScoresTheAnswerAsUsersSeeIt_WhenTheAgentPresentsIt()
+    {
+        // The app reads a marker from the answer and takes it out before showing it, as a briefing tool does for a town.
+        var presented = Ofsted with { PresentOutput = output => output.Replace("{{city: Exampleton}}", string.Empty, StringComparison.Ordinal).TrimEnd() };
+        CompletedAgentRun? scored = null;
+        var evaluator = Substitute.For<IAgentRunEvaluator>();
+        evaluator.EvaluateAsync(Arg.Do<CompletedAgentRun>(run => scored = run), Arg.Any<CancellationToken>())
+            .Returns(new Dictionary<string, double> { ["Groundedness"] = 5 });
+        var testCase = GoodSchool with { MustNotMention = ["{{city:"] };
+
+        var report = await new AgentTestRunner(Answers("Rated good in 2024.\n{{city: Exampleton}}"), evaluator)
+            .RunAsync(presented, [testCase], cancellationToken: TestContext.Current.CancellationToken);
+
+        var result = Assert.Single(report.Results);
+        Assert.True(report.Passed, string.Join("; ", result.Failures));
+        Assert.Equal("Rated good in 2024.", result.Output);
+        Assert.Equal("Rated good in 2024.", scored!.Output);
+    }
+
+    [Fact]
+    public async Task TestRunner_FailsTheCase_WithTheReason_WhenPresentingTheAnswerThrows()
+    {
+        var broken = Ofsted with { PresentOutput = _ => throw new FormatException("no marker") };
+
+        var report = await new AgentTestRunner(Answers("Rated good in 2024."), ScoresGroundedness(5))
+            .RunAsync(broken, [GoodSchool], cancellationToken: TestContext.Current.CancellationToken);
+
+        var result = Assert.Single(report.Results);
+        Assert.False(report.Passed);
+        Assert.Contains("PresentOutput failed", Assert.Single(result.Failures), StringComparison.Ordinal);
+        Assert.Contains("no marker", result.Failures[0], StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task TestRunner_CanTestTheDeployedVersion()
     {
         var agents = Answers("Rated Good in 2024.");

@@ -216,6 +216,10 @@ Each test is reported as `<section>/<type>/<id>`, its section the list it's in: 
 for an attack, `guardrail/privacy-and-security/PRIV-002`. Any other JSON file in an agent's folder stops the release gate with an
 error naming the file.
 
+If your app changes the answer before showing it (a marker it reads, a section it removes), give its agent
+`PresentOutput`, so every check here is against what users read
+([Checked as users see it](../src/GovUK.Dfe.AI.Agents/Readme.md#checked-as-users-see-it)).
+
 ## Check them in a unit test
 
 So a mistake fails the build, not the release:

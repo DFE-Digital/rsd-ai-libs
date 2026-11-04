@@ -167,6 +167,7 @@ fenced as data so it can't act as an instruction.
 | `ToolsRequiringApproval`        | Tools that run only once a person approves ([how](https://github.com/DFE-Digital/rsd-ai-libs/blob/main/docs/ResponsibleAI.md#a-person-approves-changes)) |
 | `OutputSchema`                  | A strict JSON schema for a typed answer; read it with `ReadOutputAs<T>()`. No dictionaries: use a list of records with a key                             |
 | `Validate`, `RequiredCitations` | [Answer checks](#answer-checks)                                                                                                                          |
+| `PresentOutput`                 | [Checked as users see it](#checked-as-users-see-it)                                                                                                      |
 
 ### Streaming
 
@@ -232,6 +233,26 @@ When evidence is numbered, as search results are, `RequiredCitations` decides wh
 - Pass a search result itself as evidence (`evidence: searchResult`, not `searchResult.Text`) so its sources come too.
 - Citations change only after the checks; `Validate` and run observers still see `[Evidence n]`.
 - Your own evidence can carry sources: `new AgentEvidence(text, [new EvidenceSource(1, "Trust record", link)])`.
+
+### Checked as users see it
+
+If your app changes the answer before showing it, e.g. reads a marker such as `{{city: Exampleton}}` and takes it
+out, or removes a section, give the same step as `PresentOutput`:
+
+```csharp
+public static readonly AgentDefinition Briefing = new("briefing-agent", "Briefing")
+{
+    PresentOutput = BriefingPresenter.AsShown,   // the function your app uses before showing the answer
+};
+```
+
+- **The release gate's test cases** (`mustMention`, `mustNotMention`, `sensitiveData`) and **the judge**, in the gate
+  and on sampled live runs, check that, so they test what users read, not text they never see.
+- **A run still returns the raw answer**, so your app can read its marker and call the same step itself.
+- **If it throws**, the test case fails with the reason; a sampled live run is scored on the raw answer, and a warning
+  is logged. The user's run never fails because of it.
+- Don't wrap `IAgentService` to do this: a guardrail block would then pass through your code, and the debugger stops on
+  it on every attack case.
 
 ### Every answer is cleaned
 

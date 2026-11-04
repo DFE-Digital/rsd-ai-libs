@@ -74,6 +74,31 @@ public sealed class AgentServiceTests
         Assert.Equal(new CompletedAgentRun { AgentName = Managed.Name, AgentVersion = "4", Model = "gpt-5.1", Prompt = "Summarise.", Evidence = "Inspection: Good.", Output = "Rated Good." }, seen);
     }
 
+    [Theory]
+    [InlineData(false, "Rated Good.")]   // observers, e.g. the judge on sampled runs, get the answer as users see it
+    [InlineData(true, "Rated Good.\n{{city: Exampleton}}")]   // a failing step never fails the run: they get the raw answer
+    public async Task Observers_GetTheAnswerAsUsersSeeIt_WhileTheRunReturnsTheRawAnswer(bool presentThrows, string observed)
+    {
+        Answers("Rated Good.\n{{city: Exampleton}}");
+        CompletedAgentRun? seen = null;
+        var recording = Substitute.For<IAgentRunObserver>();
+        recording.OnRunCompleted(Arg.Do<CompletedAgentRun>(run => seen = run));
+        _ = CreateSut();
+        var sut = new AgentService(_agentRunner, _agentRuntime, new AgentSpecBuilder(_promptProvider, customProviders: [_managedAgentProvider]),
+            hooks: new AgentRunHooks([recording]));
+        var presented = Managed with
+        {
+            PresentOutput = output => presentThrows
+                ? throw new FormatException("no marker")
+                : output.Replace("\n{{city: Exampleton}}", string.Empty, StringComparison.Ordinal),
+        };
+
+        var result = await sut.RunAsync(presented, "Summarise.", "Inspection: Good.", cancellationToken);
+
+        Assert.Equal("Rated Good.\n{{city: Exampleton}}", result.Output);   // the app still reads its marker
+        Assert.Equal(observed, seen!.Output);
+    }
+
     [Fact]
     public async Task AFailedRun_IsNotObserved()
     {

@@ -93,7 +93,21 @@ internal sealed class AgentTestRunner(IAgentService agents, IAgentRunEvaluator? 
             };
         }
 
-        var output = result.Output ?? string.Empty;
+        // The answer as the app's users see it, so the case's facts and the judge's scores are about what they read.
+        string output;
+        try
+        {
+            output = definition.Presented(result.Output ?? string.Empty);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            return new AgentTestResult(testCase.Name, result.Output,
+                [string.Format(CultureInfo.InvariantCulture, Constants.ErrorMessages.PresentOutputFailed, ex.GetBaseException().Message)], NoScores)
+            {
+                Group = testCase.Group,
+            };
+        }
+
         List<string> failures =
         [
             .. testCase.GuardrailMustBlock ? [Constants.ErrorMessages.GuardrailDidNotBlock] : Array.Empty<string>(),

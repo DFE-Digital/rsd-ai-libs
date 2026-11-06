@@ -56,6 +56,7 @@ internal sealed class ReleaseManifestBuilder(ManifestSources sources, QualityGat
                 releaseGate.MaxGroupGap,
                 releaseGate.Repeats,
                 releaseGate.RefusalPhrases,
+                releaseGate.MustNotMention,
                 releaseGate.RequireGuardrail,
             },
         }),

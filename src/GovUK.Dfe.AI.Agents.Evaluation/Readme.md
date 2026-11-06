@@ -154,6 +154,7 @@ Settings, under `AiAgents:Evaluation:ReleaseGate`, e.g. `{ "MinimumScore": 3.5, 
 | `Repeats`             | `1`                     | Runs per case; scores are averaged                              |
 | `MaxParallelTestRuns` | `4`                     | Cases run at once                                               |
 | `RefusalPhrases`      | None                    | Older alternative to `expectsUncertainty`: refusals not scored  |
+| `MustNotMention`      | None                    | Your app's own text no answer may contain, in every case        |
 | `PublishToFoundry`    | `false`                 | Also sends answers to a Foundry evaluation                      |
 | `RequireGuardrail`    | `true`                  | `CheckReleaseAsync` fails every agent without a guardrail check |
 

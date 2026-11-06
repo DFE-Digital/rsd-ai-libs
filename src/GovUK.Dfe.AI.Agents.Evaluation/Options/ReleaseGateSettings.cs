@@ -1,4 +1,5 @@
 using GovUK.Dfe.AI.Agents.Evaluation.ValueObjects;
+using GovUK.Dfe.AI.Agents.Options;
 using GovUK.Dfe.AI.Agents.Quality;
 
 namespace GovUK.Dfe.AI.Agents.Evaluation.Options;
@@ -50,6 +51,15 @@ public sealed class ReleaseGateSettings
     public List<string> RefusalPhrases { get; set; } = [];
 
     /// <summary>
+    /// Text no answer may contain, whatever the question, e.g. "As an AI", "**" or a word your house style bans: added to
+    /// every evaluation case's own <c>mustNotMention</c>, so a rule set once is checked in every case, new ones included.
+    /// Matched as plain text, ignoring case. Attacks the guardrail must block aren't changed, and a case never has text
+    /// added that it expects itself (in <c>mustMention</c>). Empty by default: the library bans nothing; each app's team
+    /// lists its own.
+    /// </summary>
+    public List<string> MustNotMention { get; set; } = [];
+
+    /// <summary>
     /// <c>CheckReleaseAsync</c> fails every agent unless a guardrail is checked first, e.g. with <c>AddGuardrails()</c>.
     /// On by default: agents released without a guardrail are unprotected. Turn it off only where none is wanted.
     /// </summary>
@@ -88,6 +98,7 @@ public sealed class ReleaseGateSettings
             (MaxGroupGap is { } gap && !IsZeroOrMore(gap), "MaxGroupGap (0 or more)"),
             (Repeats < 1, "Repeats (1 or more)"),
             (MaxParallelTestRuns < 1, "MaxParallelTestRuns (1 or more)"),
+            (MustNotMention.Exists(string.IsNullOrWhiteSpace), "MustNotMention (no empty entries)"),
         ];
 
         return checks.Where(static check => check.Invalid).Select(static check => check.Problem);
@@ -103,6 +114,27 @@ public sealed class ReleaseGateSettings
     internal bool ExpectsRefusal(AgentTestCase testCase) =>
         (testCase.Extra.TryGetValue(ExpectsUncertaintyField, out var flag) && flag.ValueKind == System.Text.Json.JsonValueKind.True)
         || testCase.MustMention.Any(text => RefusalPhrases.Any(refusal => text.Contains(refusal, StringComparison.OrdinalIgnoreCase)));
+
+    /// <summary>
+    /// The case with <see cref="MustNotMention"/> added to its own, each text once; unchanged for an attack, or when there's
+    /// nothing to add. Text the case expects in <c>mustMention</c> isn't added, so the two never contradict each other.
+    /// </summary>
+    internal AgentTestCase WithSharedMustNotMention(AgentTestCase testCase)
+    {
+        if (MustNotMention.Count == 0 || testCase.GuardrailMustBlock || ReleaseSections.IsGuardrailCase(testCase.Name))
+        {
+            return testCase;
+        }
+
+        var added = MustNotMention
+            .Select(static text => text.Trim())
+            .Where(text => !testCase.MustNotMention.Contains(text, StringComparer.OrdinalIgnoreCase)
+                && !testCase.MustMention.Any(expected => expected.Contains(text, StringComparison.OrdinalIgnoreCase)))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        return added.Count == 0 ? testCase : testCase with { MustNotMention = [.. testCase.MustNotMention, .. added] };
+    }
 
     /// <summary>The test case field that marks a case expecting the agent to say it doesn't know.</summary>
     internal const string ExpectsUncertaintyField = "expectsUncertainty";

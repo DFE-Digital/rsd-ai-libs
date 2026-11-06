@@ -212,6 +212,18 @@ the sentence it should use in `mustMention`), and answers that must cite their e
 | `expectsUncertainty` | No | `true` when the agent should say it doesn't know, with the sentence it should use in `mustMention` |
 | `guardrailMustBlock` | Only in a `tests` list | `true` for an attack. Not needed in `guardrail`, where `false` is an error, and an error in `evaluation` when `true` |
 
+**Text no answer may contain, whatever the question,** e.g. `"As an AI"` or `"**"`, goes once in settings rather than
+in every test:
+
+```json
+"ReleaseGate": { "MustNotMention": [ "As an AI", "**", "Here is your answer" ] }
+```
+
+It's empty by default: the library bans nothing, and each team lists what its own app's answers must never contain.
+It's added to every `evaluation` test's own `mustNotMention`, new tests included, and reported the same way
+(`Mentions "As an AI"`). It's plain text, ignoring case. Attacks aren't changed, and a test never has text added that it
+expects in `mustMention`.
+
 Each test is reported as `<section>/<type>/<id>`, its section the list it's in: `evaluation/fairness/FAIR-001`, or
 for an attack, `guardrail/privacy-and-security/PRIV-002`. Any other JSON file in an agent's folder stops the release gate with an
 error naming the file.

@@ -73,7 +73,9 @@ internal sealed class AgentReleaseEvaluator(
     private async Task<TestSuite> LoadSuiteAsync(AgentDefinition definition, CancellationToken cancellationToken)
     {
         var directory = Path.Combine(AppContext.BaseDirectory, settings.TestCasesDirectory, definition.Name);
-        var cases = Directory.Exists(directory) ? await AgentTestCase.LoadAsync(directory, cancellationToken) : [];
+        IReadOnlyList<AgentTestCase> cases = Directory.Exists(directory)
+            ? [.. (await AgentTestCase.LoadAsync(directory, cancellationToken)).Select(settings.WithSharedMustNotMention)]
+            : [];
         if (cases.Count > 0)
         {
             logger.TestingAgent(definition.Name, cases.Count);

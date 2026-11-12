@@ -4,7 +4,7 @@ namespace GovUK.Dfe.AI.Agents.Guardrails.Enums;
 [Flags]
 public enum GuardrailTargets
 {
-    /// <summary>On each model deployment in <c>Deployments</c>, in this Foundry resource.</summary>
+    /// <summary>On each model deployment in <c>Deployment</c>, in this Foundry resource.</summary>
     Deployments = 1,
 
     /// <summary>

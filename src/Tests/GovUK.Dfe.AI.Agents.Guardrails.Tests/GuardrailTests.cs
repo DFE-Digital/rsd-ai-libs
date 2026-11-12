@@ -40,7 +40,7 @@ public sealed class GuardrailTests
         SubscriptionId = Subscription,
         ResourceGroup = "rg-1",
         Name = "briefing-guardrail",
-        Deployments = ["gpt-5.1", "gpt-4o"],
+        Deployment = "gpt-5.1, gpt-4o",
         RequireAtStartup = requireAtStartup,
         Blocklists = { ["case-references"] = new() { Terms = ["Project Falcon"], Patterns = [@"CASE-\d{6}"] } },
     };
@@ -318,7 +318,7 @@ public sealed class GuardrailTests
     public void OnAgents_TheGuardrailIsEveryNewVersionsDefault_AndPinnedAndExternalVersionsAreChecked()
     {
         var guardrails = ValidGuardrail();
-        guardrails.Remove("Deployments:0");
+        guardrails.Remove("Deployment");
         guardrails["Targets"] = "Agents";
 
         var services = Build(guardrails, extra: new()
@@ -335,19 +335,67 @@ public sealed class GuardrailTests
     }
 
     [Fact]
-    public void OnDeployments_DeploymentsAreStillNeeded()
+    public void OnDeployments_DeploymentIsStillNeeded()
     {
         var guardrails = ValidGuardrail();
-        guardrails.Remove("Deployments:0");
+        guardrails.Remove("Deployment");
+        guardrails["Targets"] = "Deployments";
 
         var ex = Assert.Throws<InvalidOperationException>(() => Build(guardrails));
 
-        Assert.Contains("AiAgents:Guardrails:Deployments", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("AiAgents:Guardrails:Deployment", ex.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TargetsUnset_AndTheDefaultModelIsOnAConnection_TheGuardrailGoesOnTheAgents_WithNoDeployment()
+    {
+        var guardrails = ValidGuardrail();
+        guardrails.Remove("Deployment");
+
+        var settings = SettingsIn(Build(guardrails));   // Build's Foundry:DefaultModel is "myconnection/gpt-5.1"
+
+        Assert.Equal(GuardrailTargets.Agents, settings.Targets);
+        Assert.Empty(settings.DeploymentNames);
+    }
+
+    [Fact]
+    public void TargetsUnset_AndTheDefaultModelIsADeployment_TheGuardrailGoesOnTheDeployments()
+    {
+        var settings = SettingsIn(Build(ValidGuardrail(), extra: new() { ["AiAgents:Foundry:DefaultModel"] = "gpt-5.1" }));
+
+        Assert.Equal(GuardrailTargets.Deployments, settings.Targets);
+    }
+
+    [Theory]
+    [InlineData("gpt-5.1", new[] { "gpt-5.1" })]
+    [InlineData("gpt-5.1, gpt-4o", new[] { "gpt-5.1", "gpt-4o" })]
+    public void Deployment_IsPlainText_OneOrSeveralSeparatedByCommas(string value, string[] expected)
+    {
+        var guardrails = ValidGuardrail();
+        guardrails["Deployment"] = value;
+        guardrails["Targets"] = "Deployments";
+
+        Assert.Equal(expected, SettingsIn(Build(guardrails)).DeploymentNames);
+    }
+
+    private static GuardrailSettings SettingsIn(IServiceCollection services)
+        => (GuardrailSettings)services.Single(service => service.ServiceType == typeof(GuardrailSettings)).ImplementationInstance!;
+
+    [Fact]
+    public void Deployments_AnEmptyEntryInTheText_IsReported()
+    {
+        var guardrails = ValidGuardrail();
+        guardrails["Deployment"] = "gpt-5.1,";
+        guardrails["Targets"] = "Deployments";
+
+        var ex = Assert.Throws<InvalidOperationException>(() => Build(guardrails));
+
+        Assert.Contains("AiAgents:Guardrails:Deployment", ex.Message, StringComparison.Ordinal);
     }
 
     private static Dictionary<string, string?> ValidGuardrail() => new()
     {
-        ["SubscriptionId"] = Subscription, ["ResourceGroup"] = "rg-1", ["Name"] = "briefing-guardrail", ["Deployments:0"] = "gpt-5.1",
+        ["SubscriptionId"] = Subscription, ["ResourceGroup"] = "rg-1", ["Name"] = "briefing-guardrail", ["Deployment"] = "gpt-5.1",
     };
 
     /// <summary>Registers with these <c>AiAgents:Guardrails</c> settings; by default every service signs in with one code credential.</summary>
@@ -355,11 +403,16 @@ public sealed class GuardrailTests
     private static IServiceCollection Build(Dictionary<string, string?> guardrails, Action<AgentsBuilder>? configure = null,
         Dictionary<string, string?>? extra = null)
     {
-        var settings = new Dictionary<string, string?>(extra ?? [])
+        var settings = new Dictionary<string, string?>
         {
             ["AiAgents:Foundry:Endpoint"] = FoundryEndpoint,
             ["AiAgents:Foundry:DefaultModel"] = "myconnection/gpt-5.1",
         };
+        foreach (var (key, value) in extra ?? [])
+        {
+            settings[key] = value;
+        }
+
         foreach (var (key, value) in guardrails)
         {
             settings[$"AiAgents:Guardrails:{key}"] = value;
@@ -375,7 +428,7 @@ public sealed class GuardrailTests
     [InlineData(new string[] { }, new[] { "CASE-(" }, "has a pattern that isn't a valid regular expression")]
     public void AnInvalidBlocklist_IsReported_WithWhatsWrong(string[] terms, string[] patterns, string expected)
     {
-        var settings = new GuardrailSettings { SubscriptionId = Subscription, ResourceGroup = "rg-1", Name = "briefing-guardrail", Deployments = ["gpt-5.1"] };
+        var settings = new GuardrailSettings { SubscriptionId = Subscription, ResourceGroup = "rg-1", Name = "briefing-guardrail", Deployment = "gpt-5.1" };
         settings.Blocklists["case-references"] = new GuardrailBlocklistSettings { Terms = [.. terms], Patterns = [.. patterns] };
 
         Assert.Equal([$"Blocklists:case-references ({expected})"], settings.Problems(FoundryEndpoint));
@@ -396,7 +449,7 @@ public sealed class GuardrailTests
     [Fact]
     public void AnEndpointThatDoesntNameTheResource_AsksForAccountName()
     {
-        var settings = new GuardrailSettings { SubscriptionId = Subscription, ResourceGroup = "rg-1", Name = "g", Deployments = ["gpt-5.1"] };
+        var settings = new GuardrailSettings { SubscriptionId = Subscription, ResourceGroup = "rg-1", Name = "g", Deployment = "gpt-5.1" };
 
         Assert.Equal(["AccountName (Foundry:Endpoint doesn't name the resource, so set it here)"], settings.Problems("https://localhost:5001/project"));
     }
@@ -530,6 +583,7 @@ public sealed class GuardrailTests
         var ex = Assert.Throws<InvalidOperationException>(() => Build(new()
         {
             ["SubscriptionId"] = "sub-1",
+            ["Targets"] = "Deployments",
             ["Blocklists:case refs:Terms:0"] = "Project Falcon",
             ["Blocklists:case-references:Patterns:0"] = "CASE-(",
         }));
@@ -539,7 +593,7 @@ public sealed class GuardrailTests
         foreach (var problem in new[]
                  {
                      "AiAgents:Guardrails:SubscriptionId (the subscription's ID, a GUID)", "AiAgents:Guardrails:ResourceGroup",
-                     "AiAgents:Guardrails:Name", "AiAgents:Guardrails:Deployments",
+                     "AiAgents:Guardrails:Name", "AiAgents:Guardrails:Deployment",
                      "AiAgents:Guardrails:Blocklists:case refs (a name of letters, digits",
                      "AiAgents:Guardrails:Blocklists:case-references (has a pattern that isn't a valid regular expression)",
                  })

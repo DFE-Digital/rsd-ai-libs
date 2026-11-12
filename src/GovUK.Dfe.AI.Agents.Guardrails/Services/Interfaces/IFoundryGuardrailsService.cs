@@ -6,7 +6,7 @@ namespace GovUK.Dfe.AI.Agents.Guardrails.Services.Interfaces;
 public interface IFoundryGuardrailsService
 {
     /// <summary>
-    /// For a provisioning job: creates or updates the guardrail, gives it to every deployment in <c>Deployments</c> (when
+    /// For a provisioning job: creates or updates the guardrail, gives it to every deployment in <c>Deployment</c> (when
     /// <c>Targets</c> include them), then checks the result. Needs Cognitive Services Contributor on the Foundry resource.
     /// </summary>
     /// <exception cref="InvalidOperationException">The identity lacks the role.</exception>

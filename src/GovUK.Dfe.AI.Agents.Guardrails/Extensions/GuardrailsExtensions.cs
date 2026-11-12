@@ -55,8 +55,6 @@ public static class GuardrailsExtensions
 
             var settings = section.Get<GuardrailSettings>() ?? new GuardrailSettings();
 
-            // A model on a connection isn't a deployment in this resource, so unless Targets says otherwise the guardrail goes on
-            // the agents, and no Deployment is needed.
             if (section[nameof(GuardrailSettings.Targets)] is null && context.Options.Foundry.ModelConnection is not null)
             {
                 settings.Targets = GuardrailTargets.Agents;

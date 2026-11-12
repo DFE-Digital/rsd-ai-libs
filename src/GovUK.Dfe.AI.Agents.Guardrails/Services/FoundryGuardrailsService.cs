@@ -76,7 +76,7 @@ internal sealed class FoundryGuardrailsService(IGuardrailStore store, GuardrailS
 
     private async Task AssignToDeploymentsAsync(string guardrail, CancellationToken cancellationToken)
     {
-        foreach (var deployment in settings.Deployments)
+        foreach (var deployment in settings.DeploymentNames)
         {
             var (exists, current) = await store.GetDeploymentAsync(deployment, cancellationToken).ConfigureAwait(false);
             if (exists && current != guardrail)
@@ -156,7 +156,7 @@ internal sealed class FoundryGuardrailsService(IGuardrailStore store, GuardrailS
     private async Task<List<string>> DeploymentProblemsAsync(string guardrail, CancellationToken cancellationToken)
     {
         var problems = new List<string>();
-        foreach (var deployment in settings.Deployments)
+        foreach (var deployment in settings.DeploymentNames)
         {
             var (exists, current) = await store.GetDeploymentAsync(deployment, cancellationToken).ConfigureAwait(false);
             if (!exists)

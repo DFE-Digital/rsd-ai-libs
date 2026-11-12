@@ -60,11 +60,21 @@ public sealed partial class GuardrailSettings
     /// <summary>The guardrail's name in Foundry, e.g. "briefing-guardrail".</summary>
     public string? Name { get; set; }
 
-    /// <summary>Where the guardrail goes: <c>Deployments</c> (default), <c>Agents</c>, or both.</summary>
+    /// <summary>
+    /// Where the guardrail goes: <c>Deployments</c>, <c>Agents</c>, or both. Unset: <c>Agents</c> when
+    /// <c>Foundry:DefaultModel</c> is on a connection (<c>&lt;connection&gt;/&lt;model&gt;</c>), else <c>Deployments</c>.
+    /// </summary>
     public GuardrailTargets Targets { get; set; } = GuardrailTargets.Deployments;
 
-    /// <summary>The model deployments agents use, e.g. "gpt-5.1". Each must carry the guardrail. Needed when <see cref="Targets"/> include <c>Deployments</c>.</summary>
-    public List<string> Deployments { get; set; } = [];
+    /// <summary>
+    /// The model deployment agents use, as plain text, e.g. "gpt-5.1"; several are separated by commas. Each must carry the
+    /// guardrail. Needed only when <see cref="Targets"/> include <c>Deployments</c>.
+    /// </summary>
+    public string? Deployment { get; set; }
+
+    /// <summary><see cref="Deployment"/> split on commas.</summary>
+    internal IReadOnlyList<string> DeploymentNames
+        => string.IsNullOrWhiteSpace(Deployment) ? [] : Deployment.Split(',', StringSplitOptions.TrimEntries);
 
     /// <summary>The agent versions this app runs as they are, which must carry the guardrail; worked out when the package is registered.</summary>
     internal IReadOnlyList<AgentInUse> Agents { get; set; } = [];
@@ -173,8 +183,8 @@ public sealed partial class GuardrailSettings
                 "ContentSafetyEndpoint (an https URL, needed for ScanPrompts, ScanEvidence and ScanToolOutput)"),
             (CheckBlocklists && Blocklists.Count == 0, "Blocklists (CheckBlocklists needs at least one)"),
             (Targets == 0 || (Targets & ~AllTargets) != 0, "Targets (Deployments, Agents, or both)"),
-            (Deployments.Exists(string.IsNullOrWhiteSpace) || (Targets.HasFlag(GuardrailTargets.Deployments) && Deployments.Count == 0),
-                "Deployments"),
+            (DeploymentNames.Any(string.IsNullOrWhiteSpace) || (Targets.HasFlag(GuardrailTargets.Deployments) && DeploymentNames.Count == 0),
+                "Deployment (e.g. \"gpt-5.1\"; several are separated by commas)"),
         ];
 
         return checks.Where(static check => check.Invalid).Select(static check => check.Problem).Concat(BlocklistProblems());

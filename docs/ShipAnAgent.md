@@ -74,7 +74,7 @@ Each risk has one control that stops it. Turn on every row that applies to your 
     "SubscriptionId": "<subscription id>",
     "ResourceGroup": "<resource group>",
     "Name": "my-service-guardrail",
-    "Deployments": [ "gpt-5.1" ],
+    "Deployment": "gpt-5.1",
     "ScanEvidence": true,
     "ScanToolOutput": true,
     "CheckBlocklists": true,

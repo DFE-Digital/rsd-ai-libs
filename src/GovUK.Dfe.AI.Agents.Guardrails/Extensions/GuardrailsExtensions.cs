@@ -54,6 +54,12 @@ public static class GuardrailsExtensions
             }
 
             var settings = section.Get<GuardrailSettings>() ?? new GuardrailSettings();
+
+            if (section[nameof(GuardrailSettings.Targets)] is null && context.Options.Foundry.ModelConnection is not null)
+            {
+                settings.Targets = GuardrailTargets.Agents;
+            }
+
             var problems = settings.Problems(context.Options.Foundry.Endpoint).ToList();
             problems.ForEach(problem => context.ReportProblem($"{SectionName}:{problem}"));
             var credential = context.CredentialFor(SectionName, settings.Authentication, $"{SectionName}:Authentication");

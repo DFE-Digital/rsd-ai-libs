@@ -23,7 +23,7 @@ dotnet add package GovUK.Dfe.AI.Agents.Guardrails
     "SubscriptionId": "<subscription id>",
     "ResourceGroup": "<resource group>",
     "Name": "briefing-guardrail",
-    "Deployments": [ "gpt-5.1" ]
+    "Deployment": "gpt-5.1"
   }
 }
 ```
@@ -60,19 +60,18 @@ builder.Services.AddAgents(builder.Configuration, agents => agents
 
 ## Models through a connection
 
-When `Foundry:DefaultModel` is `<connection>/<model>`, the deployments aren't in your Foundry resource, so put the
-guardrail on the agents:
+When `Foundry:DefaultModel` is `<connection>/<model>`, the deployments aren't in your Foundry resource, so the guardrail
+goes on the agents. That's the default then; no `Targets` or `Deployment` is needed:
 
 ```json
 "Guardrails": {
   "SubscriptionId": "<subscription id>",
   "ResourceGroup": "<resource group>",
-  "Name": "briefing-guardrail",
-  "Targets": "Agents"
+  "Name": "briefing-guardrail"
 }
 ```
 
-- No `Deployments`; `ApplyAsync` creates or updates only the guardrail and blocklists.
+- `ApplyAsync` creates or updates only the guardrail and blocklists.
 - Every agent version the app creates gets the guardrail, by its full Resource Manager ID (it becomes `Foundry:Guardrail`).
 - The startup check confirms each pinned or externally managed version has it, e.g.
   `agent 'rsd-trust-agent' version 4 uses no guardrail`. Fix by provisioning a new version.
@@ -85,8 +84,8 @@ guardrail on the agents:
 | `SubscriptionId`, `ResourceGroup` | Required                           | Where the Foundry resource is                                                                                                             |
 | `AccountName`                     | The resource in `Foundry:Endpoint` | Set only if the deployments are on another Foundry resource                                                                               |
 | `Name`                            | Required                           | The guardrail's name in Foundry                                                                                                           |
-| `Targets`                         | `Deployments`                      | Where the guardrail goes: `Deployments`, `Agents`, or both                                                                                |
-| `Deployments`                     | Required for `Deployments`         | Every model deployment your agents use                                                                                                    |
+| `Targets`                         | `Agents` on a connection           | Where the guardrail goes: `Deployments`, `Agents`, or both. Otherwise `Deployments`                                                       |
+| `Deployment`                      | Required for `Deployments`         | Plain text, e.g. `"gpt-5.1"`; several are separated by commas                                                                             |
 | `BlockFrom`                       | `Medium`                           | Lowest harm severity blocked in prompts and answers. `Low` blocks the most                                                                |
 | `PromptShields`                   | `true`                             | Blocks jailbreak attempts                                                                                                                 |
 | `IndirectAttacks`                 | `true`                             | The guardrail's indirect attack filter; not relied on for evidence or your tools' output ([why](#which-setting-catches-indirect-attacks)) |
